@@ -1,0 +1,26 @@
+services:
+  nuxt:
+    build:
+      context: ./nuxt-app
+      dockerfile: ../docker/prod/nuxt.dockerfile
+    container_name: nuxt-ssr
+    restart: always
+    networks:
+      - npm_network
+    environment:
+      NODE_ENV: production
+      NUXT_PUBLIC_API_BASE: https://api.abdallahweb.com
+
+  nginx:
+    image: nginx:alpine
+    container_name: nuxt-nginx-prod
+    volumes:
+      - ./docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - nuxt
+    networks:
+      - npm_network
+
+networks:
+  npm_network:
+    external: true
