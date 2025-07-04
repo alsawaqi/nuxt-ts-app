@@ -194,12 +194,16 @@ watch(hideBanner, (val) => {
     </button>
 
     <!-- Logo -->
+     <NuxtLink to="/" class="flex items-center">
+
+
+    
     <img
       src="/logonew3.png"
       alt="ISC Logo"
       class="h-12 md:h-14 mx-auto md:mx-0 absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none"
     />
-
+ </NuxtLink>
     <!-- Shared Nav: hidden in mobile menu, visible in desktop -->
     <nav class="hidden md:flex space-x-6 text-base font-semibold text-teal-700 ml-auto pr-4 text-white">
       <button
@@ -470,19 +474,31 @@ watch(hideBanner, (val) => {
             <div
               v-else
                :class="[
-              viewMode === 'grid'
-                ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
-                : 'flex flex-col gap-4'
-            ]"
+                viewMode === 'grid'
+                  ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
+                  : 'flex flex-col gap-4'
+              ]"
             >
+
+            
               <div
                 class="bg-green-50 border rounded-lg p-4 flex flex-col items-center hover:shadow cursor-pointer"
                 v-for="subSub in subSubCategories"
                 :key="subSub.id"
               >
+
+              <NuxtLink :to="`/departments/${subSub.slug}`">
+
+
+
+            
                 <img :src="`${$r2Url}/`+ subSub.image_path"alt="SubSubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
                 <h3 class="text-center font-medium text-sm">{{ subSub.name }}</h3>
+
+                </NuxtLink>
               </div>
+
+
             </div>
 
       </section>
