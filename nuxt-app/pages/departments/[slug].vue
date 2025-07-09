@@ -8,7 +8,7 @@ const { $axios ,$r2Url } = useNuxtApp();
   const showFilters = ref<boolean>(false);
   const slug = useParam('slug')
   const isloadingsubsubdepartments = ref<boolean>(true);
-
+  const isloadingproducts = ref<boolean>(true);
 
  interface FilterValue {
   id: number;
@@ -37,8 +37,22 @@ interface SubSubDepartmentResponse {
   filters: FilterCategory[];
 }
 
+interface ProductImage{
+    image_path: string;
+}
+
+
+interface Products{
+      id: string;
+      name: string;
+      price: number;
+      slug: string;
+      image: ProductImage | null;  
+}
+
 const subsubdepartment = ref<SubSubDepartment | null>(null)
 const filters = ref<FilterCategory[]>([])
+const products = ref<Products[]>([]);
 
 // Holds the selected filter values for each filter category
 const selectedFilters = ref<Record<number, string[]>>({});
@@ -51,13 +65,12 @@ const getDepartment = async (): Promise<void> => {
     
     subsubdepartment.value = response.data.data;
     filters.value = response.data.filters;
-    // Optional: Initialize selected filter structure
+   
     for (const filter of filters.value) {
       selectedFilters.value[filter.id] = []
     }
 
-    console.log('Fetched department:', subsubdepartment.value)
-    console.log('Fetched filters:', filters.value)
+ 
   } catch (error) {
     console.error('Error fetching department:', error)
   } finally {
@@ -67,14 +80,51 @@ const getDepartment = async (): Promise<void> => {
 
 
 
-   watch(showFilters, (val) => {
+
+
+const getProducts = async (): Promise<void> => {
+  isloadingproducts.value = true;
+
+  try {
+
+     
+         const spec_ids = Object.values(selectedFilters.value)
+      .flat()
+      .map(id => Number(id)); // Ensure they are numbers
+
+
+    const response = await $axios.get<Products[]>(`/api/products/${slug}`, {
+      params: {
+        filters: selectedFilters.value,
+         spec_ids: spec_ids,
+      }
+    });
+    products.value = response.data;
+  } catch (error) {
+    console.error('Error fetching products:', error);
+  } finally {
+    isloadingproducts.value = false;
+  }
+}
+
+
+
+
+watch(selectedFilters, async(): Promise<void> => {
+ await getProducts();
+}, { deep: true });
+
+ watch(showFilters, async(val): Promise<void> => {
     if (typeof window !== 'undefined') {
       document.body.style.overflow = val ? 'hidden' : ''
     }
   });
 
-  onMounted(async () => {
+
+
+ onMounted(async () => {
     await getDepartment();
+    await getProducts();
   }); 
 
 
@@ -133,12 +183,12 @@ const getDepartment = async (): Promise<void> => {
               :key="option.id"
               class="block"
             >
-              <input
-                type="checkbox"
-                class="mr-2"
-                :value="option.value"
-                v-model="selectedFilters[category.id]"
-              />
+                <input
+            type="checkbox"
+            class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            :value="option.id"
+            v-model="selectedFilters[category.id]"
+          />
               {{ option.value }}
             </label>
           </div>
@@ -149,37 +199,37 @@ const getDepartment = async (): Promise<void> => {
       </div>
 
      <!-- Sidebar Filters -->
-    <aside class="hidden md:block w-full md:w-1/4 border border-gray-200 p-4 rounded shadow-sm space-y-6">
-      <h2 class="text-lg font-semibold">Filters</h2>
+    <aside class="hidden md:block w-full md:w-1/4">
+  <div class="bg-white border border-gray-300 rounded-lg shadow-xl p-6 sticky top-6 space-y-6">
 
-     
+    <h2 class="text-xl font-bold text-gray-800 border-b pb-2">
+      <i class="fas fa-filter mr-2"></i> Filters
+    </h2>
 
-    <hr class="my-4 border-gray-300">
+    <div v-for="category in filters" :key="category.id" class="bg-gray-50 rounded-md p-4 shadow-sm">
+      <h3 class="text-md font-semibold text-gray-700 mb-3">{{ category.name }}</h3>
 
-      <div v-for="category in filters" :key="category.id">
-          <h3>{{ category.name }}</h3>
-          <div class="space-y-1">
-            <label
-              v-for="option in category.values"
-              :key="option.id"
-              class="block"
-            >
-              <input
-                type="checkbox"
-                class="mr-2"
-                :value="option.value"
-                v-model="selectedFilters[category.id]"
-              />
-              {{ option.value }}
-            </label>
-          </div>
-            <hr class="my-4 border-gray-300">
-       </div>
+      <div class="space-y-2">
+        <label
+          v-for="option in category.values"
+          :key="option.id"
+          class="flex items-center text-gray-700 hover:text-blue-600 transition"
+        >
+          <input
+            type="checkbox"
+            class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            :value="option.id"
+            v-model="selectedFilters[category.id]"
+          />
+          <span class="text-sm">{{ option.value }}</span>
+        </label>
+      </div>
+    </div>
 
-     
-
-      
+  </div>
     </aside>
+
+
 
     <!-- Main Content -->
     <main class="w-full md:w-3/4 space-y-6">
@@ -204,35 +254,51 @@ const getDepartment = async (): Promise<void> => {
 
      
       <!-- Table -->
-      <div class="overflow-auto border border-gray-200 rounded shadow-sm">
-        <table class="min-w-full text-sm text-left">
-          <thead class="bg-gray-100 text-xs font-semibold">
-            <tr>
-              <th class="px-4 py-2 border-b">Size</th>
-              <th class="px-4 py-2 border-b">Min Wire</th>
-              <th class="px-4 py-2 border-b">Max Wire</th>
-              <th class="px-4 py-2 border-b">Insulation</th>
-              <th class="px-4 py-2 border-b">Shape</th>
-              <th class="px-4 py-2 border-b">Voltage</th>
-              <th class="px-4 py-2 border-b">Brand</th>
-              <th class="px-4 py-2 border-b">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="hover:bg-gray-50">
-              <td class="px-4 py-2 border-b">#6</td>
-              <td class="px-4 py-2 border-b">18 AWG</td>
-              <td class="px-4 py-2 border-b">14 AWG</td>
-              <td class="px-4 py-2 border-b">Nylon</td>
-              <td class="px-4 py-2 border-b">Block Fork</td>
-              <td class="px-4 py-2 border-b">600 V</td>
-              <td class="px-4 py-2 border-b">3M</td>
-              <td class="px-4 py-2 border-b text-blue-600 font-semibold">$106.99</td>
-            </tr>
-            <!-- More rows... -->
-          </tbody>
-        </table>
-      </div>
+    <div class="overflow-x-auto border border-gray-300 rounded-lg shadow-xl">
+  <table class="min-w-full text-sm text-left bg-white rounded-lg">
+    <thead class="bg-gradient-to-r from-cyan-400 via-lime-400 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
+      <tr>
+        <th class="px-5 py-3 border-b">#</th>
+        <th class="px-5 py-3 border-b">Image</th>
+        <th class="px-5 py-3 border-b">Name</th>
+        <th class="px-5 py-3 border-b">Price</th>
+        <th class="px-5 py-3 border-b">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr
+        v-for="(product, index) in products"
+        :key="product.id"
+        class="border-b hover:bg-blue-50 transition duration-150"
+      >
+        <td class="px-5 py-4 font-medium text-gray-800">{{ index + 1 }}</td>
+
+        <td class="px-5 py-4">
+          <div class="w-20 h-20 overflow-hidden rounded border border-gray-200">
+            <img
+              :src="product.image?.image_path ? `${$r2Url}/${product.image.image_path}` : 'https://via.placeholder.com/64'"
+              alt="Product Image"
+              class="object-cover w-full h-full"
+            />
+          </div>
+        </td>
+
+        <td class="px-5 py-4 text-gray-700">{{ product.name }}</td>
+        <td class="px-5 py-4 text-gray-700 font-semibold">{{ product.price }} OMR</td>
+
+       <td class="px-5 py-4">
+  <NuxtLink
+    :to="`/product/${product.slug}`"
+    class="inline-block bg-gradient-to-r from-cyan-400   to-blue-600 text-white text-xs font-semibold px-5 py-2 rounded-md shadow-md hover:opacity-90 transition duration-200"
+  >
+    View
+  </NuxtLink>
+</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
     </main>
   </div>
 </section>
