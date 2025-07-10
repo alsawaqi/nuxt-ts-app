@@ -87,10 +87,9 @@ const getProducts = async (): Promise<void> => {
 
   try {
 
-     
-         const spec_ids = Object.values(selectedFilters.value)
-      .flat()
-      .map(id => Number(id)); // Ensure they are numbers
+    const spec_ids = Object.values(selectedFilters.value)
+                            .flat()
+                            .map(id => Number(id)); // Ensure they are numbers
 
 
     const response = await $axios.get<Products[]>(`/api/products/${slug}`, {
