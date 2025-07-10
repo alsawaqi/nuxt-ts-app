@@ -56,9 +56,9 @@ const getProducts = async (): Promise<void> => {
     const response = await $axios.get(`/api/products/details/${slug}`)
  
       product.value =  {
-  ...response.data.product,
-  price: parseFloat(response.data.product.price)
-};
+                        ...response.data.product,
+                        price: parseFloat(response.data.product.price)
+                      };
       specifications.value = response.data.specifications;
  
   } catch (error) {
