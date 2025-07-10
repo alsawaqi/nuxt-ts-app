@@ -53,7 +53,7 @@ const specifications = ref<SpecificationGroup[]>([])
 
 const getProducts = async (): Promise<void> => {
   try {
-    const response = await $axios.get(`/api/products/${slug}`)
+    const response = await $axios.get(`/api/products/details/${slug}`)
  
       product.value =  {
   ...response.data.product,
