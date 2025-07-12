@@ -58,7 +58,7 @@ const getProducts = async (): Promise<void> => {
       product.value =  {
                         ...response.data.product,
                         price: parseFloat(response.data.product.price)
-                      };
+                       };
       specifications.value = response.data.specifications;
  
   } catch (error) {
@@ -78,7 +78,7 @@ onMounted(async(): Promise<void> => {
 
 </script>
 <template>
-  <section class="bg-white py-10 px-6 max-w-screen-2xl mx-auto">
+  <section class="bg-white py-10 px-6 max-w-screen-xl mx-auto">
      
     <div class="flex flex-col md:flex-row gap-6">
       <!-- Product Image -->

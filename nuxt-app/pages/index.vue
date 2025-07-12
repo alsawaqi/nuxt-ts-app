@@ -3,11 +3,12 @@ definePageMeta({
   layout: 'layout',
 })
 import { ref, watch,onMounted } from 'vue'
- import { Squares2X2Icon, ListBulletIcon } from '@heroicons/vue/24/solid'
+import { Squares2X2Icon, ListBulletIcon } from '@heroicons/vue/24/solid'
+import { useUserStore } from '~/stores/user'
 
-
-
-
+const { user, isAuthenticated } = useAuth()
+const userStore = useUserStore()
+ 
 const { $axios ,$r2Url } = useNuxtApp();
 
 
@@ -45,6 +46,19 @@ const selectedSubCategory = ref<number | null>(null)
 const isloadingBrand = ref<boolean>(false);
 const isloadingCategories = ref<boolean>(false);
 
+
+
+watch(hideTopbar, (val) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('hideTopbar', val.toString())
+  }
+})
+
+watch(hideBanner, (val) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('hideBanner', val.toString())
+  }
+})
 
 
 function resetToMainCategory() {
@@ -148,10 +162,19 @@ const getBrands = async () => {
   }
 }
 
+
+const logout = async () => {
+   await userStore.logout()
+}
+
+
+
+
+ 
+
+
 onMounted(async () => {
-
   await fetchData();
-
   await getBrands();
 
   if (typeof window !== 'undefined') {
@@ -160,20 +183,12 @@ onMounted(async () => {
 
     if (storedTopbar === 'true') hideTopbar.value = true
     if (storedBanner === 'true') hideBanner.value = true
+
+
   }
 })
 
-watch(hideTopbar, (val) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('hideTopbar', val.toString())
-  }
-})
 
-watch(hideBanner, (val) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('hideBanner', val.toString())
-  }
-})
 </script>
 <template>
   
@@ -195,16 +210,9 @@ watch(hideBanner, (val) => {
 
     <!-- Logo -->
      <NuxtLink to="/" class="flex items-center">
-
-
-    
-    <img
-      src="/logonew3.png"
-      alt="ISC Logo"
-      class="h-12 md:h-14 mx-auto md:mx-0 absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none"
-    />
- </NuxtLink>
-    <!-- Shared Nav: hidden in mobile menu, visible in desktop -->
+    <img src="/logonew3.png" alt="ISC Logo" class="h-12 md:h-14 mx-auto md:mx-0 absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none"/>
+    </NuxtLink>
+ 
     <nav class="hidden md:flex space-x-6 text-base font-semibold text-teal-700 ml-auto pr-4 text-white">
       <button
         @click="currentSection = 'categories'"
@@ -213,6 +221,8 @@ watch(hideBanner, (val) => {
       >
         Categories
       </button>
+
+
       <button
         @click="currentSection = 'brand'"
       :class="{ 'border-b-2 border-white': currentSection === 'brand' }"
@@ -224,7 +234,11 @@ watch(hideBanner, (val) => {
 
       
     </nav>
+  
 
+      <h1 class="border-b-2 border-white" v-if="isAuthenticated">Welcome, {{ user?.User_Name ?? 'Guest' }}</h1>
+
+      
     
   </div>
 
@@ -273,7 +287,7 @@ watch(hideBanner, (val) => {
       </a>
 
       
-  <button class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+  <button v-if="isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
     My Account
     <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -310,14 +324,35 @@ watch(hideBanner, (val) => {
  
 
     <!-- My Account -->
-    <div class="relative hidden md:block">
-      <button class="flex items-center font-semibold hover:text-cyan-300">
+    <div class="relative hidden md:block" v-if="isAuthenticated">
+      <NuxtLink :to="'/account'" class="flex items-center font-semibold hover:text-cyan-300">
         My Account
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
-      </button>
+      </NuxtLink>
     </div>
+
+
+    <div class="relative hidden md:block" v-if="!isAuthenticated">
+      <NuxtLink :to="'/login'" class="text-white font-semibold hover:text-cyan-300">
+        Login
+      </NuxtLink>
+   </div>
+
+
+    <div class="relative hidden md:block" v-if="!isAuthenticated">
+      <NuxtLink :to="'/register'" class="text-white font-semibold hover:text-cyan-300">
+        Register
+      </NuxtLink>
+   </div>
+
+
+     <div class="relative hidden md:block" v-if="isAuthenticated">
+      <button @click="logout" class="text-white font-semibold hover:text-cyan-300">
+        Logout
+      </button>
+     </div>
 
     <!-- Cart Icon -->
     <button class="ml-2 hover:text-cyan-300">
@@ -357,6 +392,7 @@ watch(hideBanner, (val) => {
 
 
 
+   
  
 
     <!-- Banner -->
