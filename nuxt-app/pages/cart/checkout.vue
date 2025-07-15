@@ -10,7 +10,7 @@ import { computed } from 'vue'
 import { useToast } from 'vue-toastification'
 
 const { $axios, $r2Url } = useNuxtApp()
-
+const token = useCookie('token')
 interface OrderPayload {
   customer_id: number
   delivery_method: 'ship' | 'pickup'
@@ -53,7 +53,11 @@ const submitOrder = async () => {
       })),
     }
 
-    const response = await $axios.post('/api/orders/place', payload)
+    const response = await $axios.post('/api/orders/place', payload, {
+                                                  headers: {
+                                                    Authorization: `Bearer ${token.value}`,
+                                                  }
+                                                })
 
     if (response.status === 200) {
       // ✅ Clear cart and show success
