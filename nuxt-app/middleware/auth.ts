@@ -3,7 +3,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const token = useCookie<string | null>('token')
 
   if (!token.value) {
-    return navigateTo('/')
+    return navigateTo('/login')
   }
 
   try {
@@ -12,7 +12,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
 
     if (!userStore.isAuthenticated.valueOf) {
-      return navigateTo('/')
+      return navigateTo('/login')
     }
   } catch (err) {
     userStore.clearUser()

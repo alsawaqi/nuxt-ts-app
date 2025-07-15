@@ -4,18 +4,25 @@ definePageMeta({
   })
 import { ref, onMounted } from 'vue'
 import VueEasyLightbox from 'vue-easy-lightbox'
+import { useCartStore } from '~/stores/cart'
+import { useToast } from 'vue-toastification'
+
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
 
 
 const { $axios, $r2Url } = useNuxtApp()
 
-const slug = useParam('slug')
+const slug = useParam('slug');
 
-const quantity = ref(25)
+const cart = useCartStore()
+const toast = useToast()
+const quantity = ref<number>(1);
 
-const visible = ref(false)
-const index = ref(0)
+const visible = ref<boolean>(false);
+const index = ref<number>(0);
+
+
 
 function openLightbox(i: number) {
   index.value = i
@@ -31,7 +38,7 @@ interface Product {
   name: string;
   slug: string;
   price: number;
-  inhouse_barcode: string;
+  inhouse_barcode_source: string;
   description: string;
   images: ProductImage[]; // updated to support multiple images
 }
@@ -49,6 +56,22 @@ interface ProductDetailsResponse {
 
 const product = ref<Product | null>(null)
 const specifications = ref<SpecificationGroup[]>([])
+
+
+
+const addToCart = () => {
+  if (!product.value) return
+
+  cart.addToCart({
+    id: product.value.id,
+    name: product.value.name,
+    price: product.value.price,
+    quantity: quantity.value,
+    image: product.value.images?.[0]?.image_path || '',
+  })
+
+  toast.success(`${product.value.name} added to cart`)
+}
 
 
 const getProducts = async (): Promise<void> => {
@@ -116,7 +139,7 @@ onMounted(async(): Promise<void> => {
           <h1 class="text-xl font-bold text-gray-800 leading-tight">
             {{ product?.name }}
           </h1>
-          <p class="text-sm text-gray-600">Item Code {{ product?.inhouse_barcode }}</p>
+          <p class="text-sm text-gray-600">Item Code : {{ product?.inhouse_barcode_source }}</p>
 
           <div class="text-sm mt-4">
             
@@ -147,6 +170,7 @@ onMounted(async(): Promise<void> => {
 
   <!-- Add to Cart -->
   <button
+  @click="addToCart"
     class="w-full bg-gradient-to-r from-[#00bfa5] to-[#00e676] hover:from-[#00a388] hover:to-[#00c853] text-white text-sm font-semibold py-2.5 rounded-xl shadow-md transition"
   >
     Add to Cart
