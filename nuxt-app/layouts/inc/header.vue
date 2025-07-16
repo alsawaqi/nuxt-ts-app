@@ -65,6 +65,9 @@ const mobileMenuOpen = ref(false)
       
     </nav>
 
+
+    <h1 class="border-b-2 border-white" v-if="isAuthenticated">Welcome, {{ user?.User_Name ?? 'Guest' }}</h1>
+
     
   </div>
 
@@ -113,23 +116,31 @@ const mobileMenuOpen = ref(false)
       </a>
 
       
-  <NuxtLink v-if="isAuthenticated" :to="`/account`" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
-    My Accounts
-    
-  </NuxtLink>
-
-    <div class="relative hidden md:block" v-if="!isAuthenticated">
-      <NuxtLink :to="'/login'" class="text-white font-semibold hover:text-cyan-300">
+   <NuxtLink :to="'/login'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
         Login
       </NuxtLink>
-   </div>
+    
 
-
-    <div class="relative hidden md:block" v-if="!isAuthenticated">
-      <NuxtLink :to="'/register'" class="text-white font-semibold hover:text-cyan-300">
+ 
+      <NuxtLink :to="'/register'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
         Register
       </NuxtLink>
-   </div>
+       
+
+      
+  <NuxtLink v-if="isAuthenticated" :to="`/account`" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+    My Account
+    <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  </NuxtLink>
+
+   <button v-if="isAuthenticated"  @click="logout" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+        Logout
+        <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17l5-5m0 0l-5-5m5 5H3" />
+        </svg>
+  </button>
 
 
  
@@ -163,7 +174,7 @@ const mobileMenuOpen = ref(false)
 
         <!-- My Account -->
         <div class="relative hidden md:block" v-if="isAuthenticated">
-         <NuxtLink :to="'/register'" class="flex items-center font-semibold hover:text-cyan-300">
+         <NuxtLink :to="'/account'" class="flex items-center font-semibold hover:text-cyan-300">
         My Account
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -184,6 +195,13 @@ const mobileMenuOpen = ref(false)
         Register
       </NuxtLink>
    </div>
+
+
+   <div class="relative hidden md:block" v-if="isAuthenticated">
+      <button @click="logout" class="text-white font-semibold hover:text-cyan-300">
+        Logout
+      </button>
+     </div>
 
         <!-- Cart Icon -->
        <NuxtLink :to="'/cart'" class="ml-2 hover:text-cyan-300 flex items-center gap-x-1">

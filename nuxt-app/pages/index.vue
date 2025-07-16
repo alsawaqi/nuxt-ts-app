@@ -234,6 +234,9 @@ onMounted(async () => {
       </button>
       <a href="#contact" class="hover:text-gray-200 transition">Contact</a>
 
+
+      
+
       
     </nav>
   
@@ -288,12 +291,32 @@ onMounted(async () => {
         Contact
       </a>
 
+
+        
+      <NuxtLink :to="'/login'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+        Login
+      </NuxtLink>
+    
+
+ 
+      <NuxtLink :to="'/register'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+        Register
+      </NuxtLink>
+       
+
       
-  <button v-if="isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+  <NuxtLink v-if="isAuthenticated" :to="`/account`" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
     My Account
     <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
     </svg>
+  </NuxtLink>
+
+   <button v-if="isAuthenticated"  @click="logout" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+        Logout
+        <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17l5-5m0 0l-5-5m5 5H3" />
+        </svg>
   </button>
  
     </nav>
