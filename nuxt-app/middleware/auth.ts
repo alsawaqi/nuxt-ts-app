@@ -1,21 +1,11 @@
-export default defineNuxtRouteMiddleware(async (to) => {
+import { defineNuxtRouteMiddleware, navigateTo } from 'nuxt/app'
+import { useUserStore } from '~/stores/user'
+
+export default defineNuxtRouteMiddleware(() => {
   const userStore = useUserStore()
-  const token = useCookie<string | null>('token')
 
-  if (!token.value) {
+  // If not authenticated and user info has already been fetched
+  if (!userStore.isAuthenticated && userStore.fetched) {
     return navigateTo('/login')
-  }
-
-  try {
-    if (!userStore.fetched) {
-      await userStore.fetchUser()
-    }
-
-    if (!userStore.isAuthenticated.valueOf) {
-      return navigateTo('/login')
-    }
-  } catch (err) {
-    userStore.clearUser()
-    return navigateTo('/')
   }
 })

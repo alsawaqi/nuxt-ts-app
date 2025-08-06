@@ -7,7 +7,8 @@ definePageMeta({
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '~/stores/user'
-    const { $axios } = useNuxtApp()
+
+const { $axios } = useNuxtApp()
 
 const form = ref({
   email: '',
@@ -21,32 +22,24 @@ const userStore = useUserStore()
 const route = useRoute()
 const router = useRouter()
 
-const submitLogin = async () => {
+ const submitLogin = async () => {
   isSubmitting.value = true
   errorMsg.value = ''
 
   try {
     const response = await $axios.post('/api/login', form.value, {
-      validateStatus: (status) => status < 500, // ⚠️ Catch 401 manually
+      withCredentials: true, // ⬅️ This allows the browser to accept the cookie
+      validateStatus: (status) => status < 500,
     })
 
-    if (response.status === 401 || !response.data.token) {
+ 
+    if (response.status === 401 || !response.data.user) {
       errorMsg.value = response.data.message || 'Invalid email or password.'
       return
     }
 
-    const token = response.data.token
-    const user = response.data.user
+    userStore.setUser(response.data.user) // ✅ Set user manually
 
-    const tokenCookie = useCookie('token', {
-      maxAge: 60 * 60 * 24, // 1 day
-      sameSite: 'lax',
-    })
-    tokenCookie.value = token
-
-    userStore.setUser(user)
-
-    // Redirect to intended page or home
     const redirectTo = route.query.redirect || '/'
     await router.push(redirectTo as string)
 
@@ -56,6 +49,8 @@ const submitLogin = async () => {
     isSubmitting.value = false
   }
 }
+
+
 
 
 </script>

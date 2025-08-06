@@ -2,6 +2,10 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
   ssr: true ,  
+  plugins: [
+  '~/plugins/axios',
+  '~/plugins/init-auth.global.ts'
+],
   modules: ['@pinia/nuxt'],
   components: true,
   devtools: {

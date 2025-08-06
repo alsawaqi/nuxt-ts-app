@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted,onBeforeMount } from 'vue'
 import { useUserStore } from '~/stores/user'
 
 
@@ -17,16 +17,15 @@ useHead({
 
   onMounted(async () => {
 
-    const token = useCookie('token')
-  if (token.value && !userStore.fetched) {
-    await userStore.fetchUser()
-  }
+     
        try {
             await new Promise((resolve) => setTimeout(resolve, 1500)) // simulate delay
             } finally {
             showInitialLoader.value = false
          }
 })
+
+ 
 </script>
 <template>
   

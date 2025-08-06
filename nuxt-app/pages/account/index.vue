@@ -8,11 +8,15 @@ definePageMeta({
 const { user, isAuthenticated } = useAuth()
 const { $axios } = useNuxtApp()
 
+ 
+
+
+ 
 interface Order {
    id: number;
-  transaction_number: number;
-  total_price: string;
-  status: string;
+  Transaction_Number: number;
+  Total_Price: string;
+  Status: string;
   created_at: string;
  
 }
@@ -20,18 +24,39 @@ interface Order {
 const orders = ref<Order[]>([]);
 const loading = ref<boolean>(true);
 
+
+ 
+const selectedOrderDetails = ref<any[]>([])
+const showDetailsModal = ref(false)
+const loadingDetails = ref(false)
+
+const fetchOrderDetails = async (orderId: number) => {
+  loadingDetails.value = true
+  selectedOrderDetails.value = []
+
+  try {
+    const res = await $axios.get(`/api/orders/${orderId}/details`)
+    selectedOrderDetails.value = res.data
+    showDetailsModal.value = true
+  } catch (e) {
+    console.error('Failed to fetch order details', e)
+  } finally {
+    loadingDetails.value = false
+  }
+}
+
 const getorders = async (): Promise<void> => {
    loading.value = true;
   try {
-    const response = await $axios.get('/api/orders', {headers: {Authorization: `Bearer ${useCookie('token').value}`,},});
-    
+    const response = await $axios.get('/api/orders', {withCredentials: true});
+
       orders.value = response.data;
     }catch (error) {
       console.error('Error fetching orders:', error) 
     }finally{
       loading.value = false;
     }
-    }
+  }
  
 
  
@@ -39,6 +64,7 @@ const getorders = async (): Promise<void> => {
 
 onMounted(async (): Promise<void> => {
   await getorders();
+
 })
 
 </script>
@@ -105,25 +131,30 @@ onMounted(async (): Promise<void> => {
              
             <tbody>
               <tr v-for="order in orders" :key="order.id" class="border-t">
-                <td class="px-4 py-3 font-semibold">{{ order.transaction_number }}</td>
+                <td class="px-4 py-3 font-semibold">{{ order.Transaction_Number }}</td>
                 <td class="px-4 py-3">{{ order.created_at }}</td>
                 <td class="px-4 py-3">
                   <span
                     :class="[
                       'font-medium',
-                      order.status === 'Canceled' ? 'text-red-500' :
-                      order.status === 'In Progress' ? 'text-blue-500' :
-                      order.status === 'Delayed' ? 'text-orange-500' :
+                      order.Status === 'Canceled' ? 'text-red-500' :
+                      order.Status === 'In Progress' ? 'text-blue-500' :
+                      order.Status === 'Delayed' ? 'text-orange-500' :
                       'text-green-500'
                     ]"
                   >
-                    {{ order.status }}
+                    {{ order.Status }}
                   </span>
                 </td>
-                <td class="px-4 py-3 font-semibold">OMR {{ order.total_price }}</td>
-                <td class="px-4 py-3 text-right">
-                  <button class="text-blue-600 hover:underline text-sm">Order Details</button>
-                </td>
+                <td class="px-4 py-3 font-semibold">OMR {{ order.Total_Price }}</td>
+               <td class="px-4 py-3 text-right">
+                <button
+                  class="text-blue-600 hover:underline text-sm"
+                  @click="fetchOrderDetails(order.id)"
+                >
+                  Order Details
+                </button>
+              </td>
               </tr>
             </tbody>
           </table>
@@ -131,6 +162,54 @@ onMounted(async (): Promise<void> => {
       </main>
     </div>
   </div>
+
+  <transition name="fade">
+  <div v-if="showDetailsModal" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-full max-w-3xl shadow-lg">
+      <h2 class="text-lg font-semibold mb-4">Order Details</h2>
+
+      <div v-if="loadingDetails" class="text-center py-10">Loading...</div>
+
+      <div v-else-if="selectedOrderDetails.length > 0">
+        <table class="min-w-full text-sm text-left border">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="px-4 py-2">Product</th>
+              <th class="px-4 py-2">Quantity</th>
+              <th class="px-4 py-2">Price</th>
+              <th class="px-4 py-2">Subtotal</th>
+              <th class="px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="detail in selectedOrderDetails" :key="detail.id" class="border-t">
+              <td class="px-4 py-2">{{ detail.product?.Product_Name || 'N/A' }}</td>
+              <td class="px-4 py-2">{{ detail.Quantity }}</td>
+              <td class="px-4 py-2">OMR {{ detail.Price }}</td>
+              <td class="px-4 py-2">OMR {{ (detail.Price * detail.Quantity).toFixed(2) }}</td>
+              <td class="px-4 py-2">
+                <button
+                  class="text-red-600 hover:underline text-sm"
+                  
+                >
+                  Defective
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-else class="text-gray-500 text-sm">No details found for this order.</div>
+
+      <div class="text-right mt-4">
+        <button @click="showDetailsModal = false" class="px-4 py-2 border rounded hover:bg-gray-100">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</transition>
 
 
 </template>

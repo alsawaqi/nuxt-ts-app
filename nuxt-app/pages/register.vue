@@ -8,7 +8,7 @@ import { useUserStore } from '~/stores/user'
 
 const { $axios } = useNuxtApp()
  
-const userStore = useUserStore()
+ 
 interface RegisterForm {
   name: string;
   username: string;
@@ -102,11 +102,15 @@ const submitForm = async (): Promise<void> => {
     const user = response.data.user
 
     if (token) {
-      // SSR-safe token storage
-      const cookie = useCookie('token', { maxAge: 60 * 60 * 24 * 7 }) // 7 days
-      cookie.value = token
+      // ✅ Set token cookie with expiry
+      const tokenCookie = useCookie('token', {
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        sameSite: 'lax',
+        watch: true,
+      })
+      tokenCookie.value = token
 
-      // Set user in Pinia store
+      // ✅ Set user
       const userStore = useUserStore()
       userStore.setUser(user)
     }

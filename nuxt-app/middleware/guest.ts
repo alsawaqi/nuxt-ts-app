@@ -1,17 +1,11 @@
-export default defineNuxtRouteMiddleware(async () => {
-  // Ensure it's only running on client
-  if (import.meta.server) return
+import { defineNuxtRouteMiddleware, navigateTo } from 'nuxt/app'
+import { useUserStore } from '~/stores/user'
 
+export default defineNuxtRouteMiddleware(() => {
   const userStore = useUserStore()
-  const token = useCookie<string | null>('token')
 
-  if (!token.value) return
-
-  if (!userStore.fetched) {
-    await userStore.fetchUser()
-  }
-
-  if (userStore.isAuthenticated.valueOf()) {
+  // If already authenticated and user info has been fetched
+  if (userStore.isAuthenticated && userStore.fetched) {
     return navigateTo('/')
   }
 })

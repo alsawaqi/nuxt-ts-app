@@ -19,17 +19,17 @@ const { $axios ,$r2Url } = useNuxtApp();
 
 interface FilterCategory {
   id: number;
-  name: string;
+  Product_Specification_Description_Name: string;
   product_sub_sub_department_id: string;
   values: FilterValue[];
 }
 
 interface SubSubDepartment {
   id: string;
-  name: string;
-  slug: string;
-  description: string;
-  image_path: string;
+  Product_Sub_Sub_Department_Name: string;
+  Slug: string;
+  Product_Sub_Sub_Department_Description: string;
+  Image_Path: string;
 }
 
 interface SubSubDepartmentResponse {
@@ -38,15 +38,15 @@ interface SubSubDepartmentResponse {
 }
 
 interface ProductImage{
-    image_path: string;
+    Image_Path: string;
 }
 
 
 interface Products{
       id: string;
-      name: string;
-      price: number;
-      slug: string;
+      Product_Name: string;
+      Product_Price: number;
+      Slug: string;
       image: ProductImage | null;  
 }
 
@@ -175,7 +175,7 @@ watch(selectedFilters, async(): Promise<void> => {
         <div class="p-4 space-y-6 overflow-y-auto">
           <!-- Copy your filter groups here (Termination, Color, etc.) -->
             <div v-for="category in filters" :key="category.id">
-          <h3>{{ category.name }}</h3>
+          <h3>{{ category.Product_Specification_Description_Name }}</h3>
           <div class="space-y-1">
             <label
               v-for="option in category.values"
@@ -206,7 +206,7 @@ watch(selectedFilters, async(): Promise<void> => {
     </h2>
 
     <div v-for="category in filters" :key="category.id" class="bg-gray-50 rounded-md p-4 shadow-sm">
-      <h3 class="text-md font-semibold text-gray-700 mb-3">{{ category.name }}</h3>
+      <h3 class="text-md font-semibold text-gray-700 mb-3">{{ category.Product_Specification_Description_Name }}</h3>
 
       <div class="space-y-2">
         <label
@@ -235,17 +235,17 @@ watch(selectedFilters, async(): Promise<void> => {
       <!-- Title -->
       <div>
         <h1 class="text-2xl font-bold mb-2">
-          {{subsubdepartment?.name }}
+          {{subsubdepartment?.Product_Sub_Sub_Department_Name }}
         </h1>
         <p class="text-sm text-gray-700">
-          {{ subsubdepartment?.description }}
+          {{ subsubdepartment?.Product_Sub_Sub_Department_Description }}
          </p>
       </div>
 
       <!-- Product Types -->
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div class="border rounded p-4 flex flex-col items-center text-center">
-          <img :src="`${$r2Url}/` + subsubdepartment?.image_path" alt="Insulated" class="h-16 mb-2">
+          <img :src="`${$r2Url}/` + subsubdepartment?.Image_Path" alt="Insulated" class="h-16 mb-2">
          
         </div>
         
@@ -255,10 +255,10 @@ watch(selectedFilters, async(): Promise<void> => {
       <!-- Table -->
     <div class="overflow-x-auto border border-gray-300 rounded-lg shadow-xl">
   <table class="min-w-full text-sm text-left bg-white rounded-lg">
-    <thead class="bg-gradient-to-r from-cyan-400 via-lime-400 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
+    <thead class="bg-gradient-to-r from-cyan-400 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
       <tr>
         <th class="px-5 py-3 border-b">#</th>
-        <th class="px-5 py-3 border-b">Image</th>
+       
         <th class="px-5 py-3 border-b">Name</th>
         <th class="px-5 py-3 border-b">Price</th>
         <th class="px-5 py-3 border-b">Action</th>
@@ -272,23 +272,15 @@ watch(selectedFilters, async(): Promise<void> => {
       >
         <td class="px-5 py-4 font-medium text-gray-800">{{ index + 1 }}</td>
 
-        <td class="px-5 py-4">
-          <div class="w-20 h-20 overflow-hidden rounded border border-gray-200">
-            <img
-              :src="product.image?.image_path ? `${$r2Url}/${product.image.image_path}` : 'https://via.placeholder.com/64'"
-              alt="Product Image"
-              class="object-cover w-full h-full"
-            />
-          </div>
-        </td>
+    
 
-        <td class="px-5 py-4 text-gray-700">{{ product.name }}</td>
-        <td class="px-5 py-4 text-gray-700 font-semibold">{{ product.price }} OMR</td>
+        <td class="px-5 py-4 text-gray-700">{{ product.Product_Name }}</td>
+        <td class="px-5 py-4 text-gray-700 font-semibold">{{ product.Product_Price }} OMR</td>
 
        <td class="px-5 py-4">
   <NuxtLink
-    :to="`/product/${product.slug}`"
-    class="inline-block bg-gradient-to-r from-cyan-400   to-blue-600 text-white text-xs font-semibold px-5 py-2 rounded-md shadow-md hover:opacity-90 transition duration-200"
+    :to="`/product/${product.Slug}`"
+    class="inline-block bg-gradient-to-r from-cyan-400  via-black-400  to-blue-600 text-white text-xs font-semibold px-5 py-2 rounded-md shadow-md hover:opacity-90 transition duration-200"
   >
     View
   </NuxtLink>

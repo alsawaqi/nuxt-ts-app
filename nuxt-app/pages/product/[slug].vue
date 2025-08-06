@@ -9,6 +9,9 @@ import { useToast } from 'vue-toastification'
 
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 
 const { $axios, $r2Url } = useNuxtApp()
@@ -30,16 +33,16 @@ function openLightbox(i: number) {
 }
 
  interface ProductImage {
-  image_path: string;
+  Image_Path: string;
 }
 
 interface Product {
   id: number;
-  name: string;
-  slug: string;
-  price: number;
-  inhouse_barcode_source: string;
-  description: string;
+  Product_Name: string;
+  Slug: string;
+  Product_Price: number;
+  Inhouse_Barcode_Source: string;
+  Product_Description: string;
   images: ProductImage[]; // updated to support multiple images
 }
 
@@ -58,19 +61,29 @@ const product = ref<Product | null>(null)
 const specifications = ref<SpecificationGroup[]>([])
 
 
+const incrementQty = () => {
+  quantity.value++
+}
+
+const decrementQty = () => {
+  if (quantity.value > 1) quantity.value--
+}
+
 
 const addToCart = () => {
   if (!product.value) return
 
   cart.addToCart({
     id: product.value.id,
-    name: product.value.name,
-    price: product.value.price,
+    slug: product.value.Slug,
+    name: product.value.Product_Name,
+    price: product.value.Product_Price,
     quantity: quantity.value,
-    image: product.value.images?.[0]?.image_path || '',
+    image: product.value.images?.[0]?.Image_Path || '',
   })
 
-  toast.success(`${product.value.name} added to cart`)
+  toast.success(`${product.value.Product_Name} added to cart`)
+  router.push('/cart');
 }
 
 
@@ -117,7 +130,7 @@ onMounted(async(): Promise<void> => {
     @click="openLightbox(i)"
   >
     <img
-      :src="`${$r2Url}/${img.image_path}`"
+      :src="`${$r2Url}/${img.Image_Path}`"
       class="object-contain w-full h-[320px] cursor-zoom-in"
       alt="Product Image"
     />
@@ -126,7 +139,7 @@ onMounted(async(): Promise<void> => {
 
 <VueEasyLightbox
   :visible="visible"
-:imgs="product?.images ? product.images.map(img => `${$r2Url}/${img.image_path}`) : []"
+:imgs="product?.images ? product.images.map(img => `${$r2Url}/${img.Image_Path}`) : []"
   :index="index"
   @hide="visible = false"
 />
@@ -137,9 +150,9 @@ onMounted(async(): Promise<void> => {
       <div class="md:w-2/3 flex flex-col md:flex-row justify-between">
         <div class="md:w-3/4 space-y-3">
           <h1 class="text-xl font-bold text-gray-800 leading-tight">
-            {{ product?.name }}
+            {{ product?.Product_Name }}
           </h1>
-          <p class="text-sm text-gray-600">Item Code : {{ product?.inhouse_barcode_source }}</p>
+          <p class="text-sm text-gray-600">Item Code : {{ product?.Inhouse_Barcode_Source }}</p>
 
           <div class="text-sm mt-4">
             
@@ -150,44 +163,95 @@ onMounted(async(): Promise<void> => {
           </div>
         </div>
 
-        <!-- Purchase Box -->
-         <div class="md:w-[320px] w-full mt-6 md:mt-0 border rounded-2xl p-6 shadow-xl bg-white">
+    <!-- Purchase Box -->
+     <!-- Product Action Section -->
+<div class="md:w-[320px] w-full mt-6 md:mt-0 border rounded-2xl p-6 shadow-xl bg-white">
+
+  <!-- Mobile View: Stacked, Tight Layout -->
+  <div class="block md:hidden space-y-3">
+    <!-- Price, Qty, Subtotal in one row -->
+    <div class="flex items-center justify-between text-sm font-medium text-gray-700">
+      <div>
+        <div class="text-gray-500">Price</div>
+        <div class="text-green-600 font-bold">
+          OMR {{ product?.Product_Price ?? '0.00' }}
+          <span class="text-xs text-gray-500 font-normal">/ each</span>
+        </div>
+      </div>
+
+      <!-- Qty -->
+      <div class="flex items-center gap-1">
+        <button @click="quantity = Math.max(1, quantity - 1)" class="px-2 py-1 border rounded bg-gray-100">-</button>
+        <input type="number" v-model="quantity" min="1" class="w-12 text-center border rounded text-sm" />
+        <button @click="quantity++" class="px-2 py-1 border rounded bg-gray-100">+</button>
+      </div>
+
+      <!-- Subtotal -->
+      <div>
+        <div class="text-gray-500">Sub Total</div>
+        <div class="font-semibold">
+          {{ ((product?.Product_Price ?? 0) * quantity).toFixed(2) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Add to Cart Button -->
+    <button
+      @click="addToCart"
+      class="w-full bg-gradient-to-r from-[#00bfa5] to-[#00e676] hover:from-[#00a388] hover:to-[#00c853] text-white text-sm font-semibold py-2.5 rounded-xl shadow-md transition"
+    >
+      Add to Cart
+    </button>
+  </div>
+
+  <!-- Desktop View: Original Layout -->
+  <div class="hidden md:block">
   <!-- Price -->
   <div class="text-sm text-gray-500 font-medium mb-1">Web Price</div>
-          <div class="text-3xl font-bold text-green-600 mb-3">
-           OMR {{ product?.price ? product.price.toFixed(2) : '0.00' }}
-            <span class="text-sm font-normal text-gray-600">/ each</span>
-          </div>
+  <div class="text-3xl font-bold text-green-600 mb-3">
+    OMR {{ product?.Product_Price ?? '0.00' }}
+    <span class="text-sm font-normal text-gray-600">/ each</span>
+  </div>
 
   <!-- Quantity -->
   <label class="text-sm font-semibold block mb-1 text-gray-700">Qty</label>
-  <input
-    type="number"
-    v-model="quantity"
-    min="1"
-    class="w-full border border-gray-300 px-3 py-2 rounded-lg mb-5 text-sm focus:ring-2 focus:ring-[#00bfa5] focus:outline-none"
-  />
+  <div class="flex items-center space-x-2 mb-5">
+    <!-- Decrement Button -->
+    <button
+      @click="decrementQty()"
+      class="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition"
+    >−</button>
+
+    <!-- Quantity Input -->
+    <input
+      type="number"
+      v-model.number="quantity"
+      min="1"
+      class="w-16 border border-gray-300 text-center px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-[#00bfa5] focus:outline-none"
+    />
+
+    <!-- Increment Button -->
+    <button
+      @click="incrementQty()"
+      class="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition"
+    >+</button>
+  </div>
 
   <!-- Add to Cart -->
   <button
-  @click="addToCart"
+    @click="addToCart"
     class="w-full bg-gradient-to-r from-[#00bfa5] to-[#00e676] hover:from-[#00a388] hover:to-[#00c853] text-white text-sm font-semibold py-2.5 rounded-xl shadow-md transition"
   >
     Add to Cart
   </button>
-
-  <!-- Shipping & Pickup -->
-  <div class="mt-5 space-y-3 text-sm text-gray-700">
+</div>
 
 
-     
+
+
+</div>
 
     
-
-
-
-  </div>
-         </div>
 
 
 
@@ -219,7 +283,7 @@ onMounted(async(): Promise<void> => {
 
       <h2 class="text-xl font-semibold mb-4">Product Description</h2>
       <p class="text-sm text-gray-700">
-        {{ product?.description || 'No description available.' }}
+        {{ product?.Product_Description || 'No description available.' }}
       </p>
     </div>
 

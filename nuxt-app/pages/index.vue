@@ -17,14 +17,14 @@ const { $axios ,$r2Url } = useNuxtApp();
 interface ProductDepartment {
   id: number;
   Product_Department_Name: string;
-  image_path: string;
+  Image_path: string;
   
 }
 
 interface ProductBrand {
   id: number;
   name: string;
-  image_path: string;
+  Brands_Image_Path: string;
 }
 
 
@@ -170,15 +170,11 @@ const logout = async () => {
 }
 
 
-
-
- 
-
-
 onMounted(async () => {
   await fetchData();
   await getBrands();
-
+ 
+  
   if (typeof window !== 'undefined') {
     const storedTopbar = localStorage.getItem('hideTopbar')
     const storedBanner = localStorage.getItem('hideBanner')
@@ -193,6 +189,7 @@ onMounted(async () => {
 
 </script>
 <template>
+  
   
 <header class="bg-gradient-to-r from-teal-500 to-cyan-500 shadow-md relative z-50">
   <div class="w-full max-w-screen-xl mx-auto flex justify-between items-center p-4" style="height: 80px;">
@@ -509,7 +506,7 @@ onMounted(async () => {
               :key="department.id"
               @click="fetchSubCategories(department.id)"
             >
-              <img :src="`${$r2Url}/`+ department.image_path" alt="Power Tools" class="w-24 h-24 object-cover rounded-full mb-3">
+              <img :src="`${$r2Url}/`+ department.Image_path" alt="Power Tools" class="w-24 h-24 object-cover rounded-full mb-3">
               <h3 class="text-center font-medium text-sm">{{ department.Product_Department_Name }}</h3>
             </div>
           </div>
@@ -529,8 +526,8 @@ onMounted(async () => {
                 :key="sub.id"
                 @click="fetchSubSubCategories(sub.id)"
               >
-                <img :src="`${$r2Url}/`+ sub.image_path" alt="SubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
-                <h3 class="text-center font-medium text-sm">{{ sub.name }}</h3>
+                <img :src="`${$r2Url}/`+ sub.Image_path" alt="SubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
+                <h3 class="text-center font-medium text-sm">{{ sub.Sub_Department_Name }}</h3>
               </div>
             </div>
 
@@ -551,13 +548,13 @@ onMounted(async () => {
                 :key="subSub.id"
               >
 
-              <NuxtLink :to="`/departments/${subSub.slug}`">
+              <NuxtLink :to="`/departments/${subSub.Slug}`">
 
 
 
             
-                <img :src="`${$r2Url}/`+ subSub.image_path"alt="SubSubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
-                <h3 class="text-center font-medium text-sm">{{ subSub.name }}</h3>
+                <img :src="`${$r2Url}/`+ subSub.Image_Path"alt="SubSubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
+                <h3 class="text-center font-medium text-sm">{{ subSub.Product_Sub_Sub_Department_Name }}</h3>
 
                 </NuxtLink>
               </div>
@@ -577,7 +574,7 @@ onMounted(async () => {
         <div class="flex space-x-6 overflow-x-auto">
 
           <div v-for="brand in productBrands" class="flex-shrink-0 w-32 h-20 bg-white rounded shadow flex items-center justify-center p-2" >
-            <img :src="`${$r2Url}/`+ brand.image_path" alt="DeWalt" class="h-full object-contain">
+            <img :src="`${$r2Url}/`+ brand.Brands_Image_Path" alt="DeWalt" class="h-full object-contain">
           </div>
 
          

@@ -1,12 +1,12 @@
-import { storeToRefs } from 'pinia'
+// composables/useAuth.ts
 import { useUserStore } from '~/stores/user'
 
 export const useAuth = () => {
   const userStore = useUserStore()
-  const { user, isAuthenticated } = storeToRefs(userStore)
 
   return {
-    user,
-    isAuthenticated,
+    user: computed(() => userStore.user),
+    isAuthenticated: computed(() => !!userStore.user),
+    loading: computed(() => !userStore.fetched),
   }
 }
