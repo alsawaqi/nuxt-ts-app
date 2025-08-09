@@ -2,69 +2,63 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export const useUserStore = defineStore('user', () => {
- 
-   
-
   const user = ref<Record<string, any> | null>(null)
   const fetched = ref(false)
-  const authloading = ref(true)
+  const authloading = ref(false)
   const isAuthenticated = computed(() => !!user.value)
 
-const setUser = (val: any) => {
-  user.value = val
-  fetched.value = true // ✅ Mark as fetched after setting user manually
-}
+  const setUser = (val: any) => {
+    user.value = val
+    fetched.value = true
+  }
 
   const clearUser = () => {
     user.value = null
-   
     fetched.value = false
   }
 
-const fetchUser = async () => {
-  if (fetched.value) return
+  const fetchUser = async (force = false) => {
+    if (fetched.value && !force) return
 
-  try {
-    const { $axios } = useNuxtApp()
-    const response = await $axios.get('/api/user', { withCredentials: true })
+    authloading.value = true
+    try {
+      const { $axios } = useNuxtApp()
 
-    console.log('User information :', response.data);
+      // Forward cookie on SSR; no-op on client
+      const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
 
-    user.value = response.data.user
-    fetched.value = true
-  } catch (error: any) {
-    console.error('[fetchUser] error:', error)
-    if (error?.response?.status === 401) {
-      clearUser()
+      const res = await $axios.get('/api/user', {
+        withCredentials: true,
+        headers, // <-- critical for SSR refresh
+      })
+
+      user.value = res.data.user
+      fetched.value = true
+    } catch (error: any) {
+      if (error?.response?.status === 401) clearUser()
+      else console.error('[fetchUser] error:', error)
+    } finally {
+      authloading.value = false
     }
   }
-}
 
-
-
-
- const logout = async () => {
-  try {
-    const { $axios } = useNuxtApp()
-    await $axios.post('/api/logout', {}, { withCredentials: true })
-  } catch (error) {
-    // Silent fail
+  const logout = async () => {
+    try {
+      const { $axios } = useNuxtApp()
+      await $axios.post('/api/logout', {}, { withCredentials: true })
+    } catch (_) {}
+    clearUser()
+    await navigateTo('/login')
   }
-
-  clearUser()
-  await navigateTo('/login')
-}
- 
 
   return {
     user,
-  
     fetched,
     isAuthenticated,
     authloading,
     setUser,
     clearUser,
     fetchUser,
-    logout, // ✅ exposed
+    logout,
   }
 })

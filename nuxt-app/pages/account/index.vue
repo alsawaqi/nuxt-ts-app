@@ -64,7 +64,6 @@ const getorders = async (): Promise<void> => {
 
 onMounted(async (): Promise<void> => {
   await getorders();
-
 })
 
 </script>

@@ -1,72 +1,69 @@
 import axios from 'axios'
 
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin(() => {
   const config = useRuntimeConfig()
   const userStore = useUserStore()
   const router = useRouter()
 
   const instance = axios.create({
-    baseURL: config.public.apiBase,
-    withCredentials: true, // ✅ required to send/receive cookies
+    baseURL: config.public.apiBase,   // Prefer SAME-ORIGIN proxy like https://app.example.com/api
+    withCredentials: true,
   })
 
+  // ✅ Forward browser cookies on SSR so /api/user works during server-render
+  if (process.server) {
+    const headers = useRequestHeaders(['cookie'])
+    if (headers.cookie) {
+      instance.defaults.headers.common['cookie'] = headers.cookie
+    }
+  }
 
-  // Optional: Add XSRF support (for Laravel CSRF protection)
-  instance.interceptors.request.use((config) => {
+  // Optional: XSRF for Sanctum-style CSRF (OK to keep; harmless with JWT)
+  instance.interceptors.request.use((cfg) => {
     if (import.meta.client) {
       const csrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
-      if (csrf) {
-        config.headers['X-XSRF-TOKEN'] = decodeURIComponent(csrf[1])
-      }
+      if (csrf) cfg.headers['X-XSRF-TOKEN'] = decodeURIComponent(csrf[1])
     }
-    return config
+    return cfg
   })
 
-
+  // ✅ 401/419 handler with refresh, no loops, and single source (Axios)
   instance.interceptors.response.use(
-  res => res,
-  async error => {
-    const originalRequest = error.config
-    const status = error.response?.status
+    (res) => res,
+    async (error) => {
+      const status = error.response?.status
+      const originalRequest = error.config
 
-    // Prevent infinite loop
-    if ((status === 401 || status === 419) && !originalRequest._retry) {
-      originalRequest._retry = true
-
-      try {
-        await $fetch('/api/refresh', {
-          method: 'POST',
-          credentials: 'include'
-        })
-
-        // ✅ Retry the original request
-        return instance(originalRequest)
-      } catch (refreshError) {
-        // ❌ Refresh failed — force logout
-        userStore.clearUser()
-
-        const guestRoutes = ['/login', '/register', '/forgot-password']
-        const currentPath = router.currentRoute.value.path
-
-        if (!guestRoutes.includes(currentPath)) {
-          return await navigateTo('/login')
+      // Do not try to refresh if:
+      // - already retried
+      // - request WAS the refresh call
+      const isRefreshCall = originalRequest?.url?.includes('/refresh')
+      if ((status === 401 || status === 419) && !originalRequest?._retry && !isRefreshCall) {
+        originalRequest._retry = true
+        try {
+          // Use the SAME axios instance so SSR cookie forwarding applies
+          await instance.post('/refresh')
+          // Retry original request
+          return instance(originalRequest)
+        } catch (e) {
+          // Refresh failed -> clear and redirect if needed
+          userStore.clearUser()
+          const guestRoutes = ['/login', '/register', '/forgot-password']
+          const path = router.currentRoute.value.path
+          if (!guestRoutes.includes(path)) {
+            // Don’t return navigateTo() into Axios flow; just redirect
+            // and reject to unblock the awaiting call stack.
+            navigateTo('/login')
+          }
+          return Promise.reject(e)
         }
-        return Promise.reject(refreshError)
       }
+
+      return Promise.reject(error)
     }
-
-    return Promise.reject(error)
-  }
-)
-
-
-
-
-
+  )
 
   return {
-    provide: {
-      axios: instance,
-    },
+    provide: { axios: instance },
   }
 })
