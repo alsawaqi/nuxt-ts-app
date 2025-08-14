@@ -1,134 +1,136 @@
-<script setup lang="ts">
-  definePageMeta({
-    layout: 'layouts',
-  })
-import { ref, watch, onMounted } from 'vue'
-const { $axios ,$r2Url } = useNuxtApp();
+ <script setup lang="ts">
+definePageMeta({ layout: 'layouts' })
 
-  const showFilters = ref<boolean>(false);
-  const slug = useParam('slug')
-  const isloadingsubsubdepartments = ref<boolean>(true);
-  const isloadingproducts = ref<boolean>(true);
+import { ref, watch, onMounted, computed } from 'vue'
+const { $axios, $r2Url } = useNuxtApp()
 
- interface FilterValue {
-  id: number;
-  product_id: string;
-  product_specification_description_id: string;
-  value: string;
+const showFilters = ref(false)
+const route = useRoute()
+const slug = computed(() => route.params.slug as string)
+
+const isloadingsubsubdepartments = ref(true)
+const isloadingproducts = ref(true)
+
+interface FilterValue {
+  id: number
+  value: string
 }
 
+type InputType = 'text' | 'number' | 'select' | 'multiselect' | 'boolean'
+
 interface FilterCategory {
-  id: number;
-  Product_Specification_Description_Name: string;
-  product_sub_sub_department_id: string;
-  values: FilterValue[];
+  id: number
+  name: string
+  type: InputType
+  values: FilterValue[]
 }
 
 interface SubSubDepartment {
-  id: string;
-  Product_Sub_Sub_Department_Name: string;
-  Slug: string;
-  Product_Sub_Sub_Department_Description: string;
-  Image_Path: string;
+  id: string
+  Product_Sub_Sub_Department_Name: string
+  Slug: string
+  Product_Sub_Sub_Department_Description: string
+  Image_Path: string
 }
 
 interface SubSubDepartmentResponse {
-  data: SubSubDepartment;
-  filters: FilterCategory[];
+  data: SubSubDepartment
+  filters: any[] // we'll map to FilterCategory[]
 }
 
-interface ProductImage{
-    Image_Path: string;
+interface ProductImage {
+  Image_Path: string
 }
 
-
-interface Products{
-      id: string;
-      Product_Name: string;
-      Product_Price: number;
-      Slug: string;
-      image: ProductImage | null;  
+interface Products {
+  id: string
+  Product_Name: string
+  Product_Price: number
+  Slug: string
+  image: ProductImage | null
 }
 
 const subsubdepartment = ref<SubSubDepartment | null>(null)
 const filters = ref<FilterCategory[]>([])
-const products = ref<Products[]>([]);
+const products = ref<Products[]>([])
 
-// Holds the selected filter values for each filter category
-const selectedFilters = ref<Record<number, string[]>>({});
+// selected filters by description id -> array of value ids
+const selectedFilters = ref<Record<number, number[]>>({})
 
-const getDepartment = async (): Promise<void> => {
-  isloadingsubsubdepartments.value = true;
-
+const getDepartment = async () => {
+  isloadingsubsubdepartments.value = true
   try {
-    const response = await $axios.get<SubSubDepartmentResponse>(`/api/subsubdepartments/${slug}`);
-    
-    subsubdepartment.value = response.data.data;
-    filters.value = response.data.filters;
-   
-    for (const filter of filters.value) {
-      selectedFilters.value[filter.id] = []
-    }
 
- 
+    const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
+
+const apiFilters = res.data.filters as any[]
+
+// Normalize to a clean shape with number IDs
+filters.value = apiFilters.map((f) => ({
+  id: Number(f.id),
+  name: String(f.Product_Specification_Description_Name ?? ''),
+  type: (f.input_type ?? 'select') as 'text'|'number'|'select'|'multiselect'|'boolean',
+  values: (f.values ?? []).map((v: any) => ({
+    id: Number(v.id),
+    value: String(v.value),
+  })),
+}))
+
+// init selected filters AFTER filters are set
+selectedFilters.value = filters.value.reduce((acc, f) => {
+  acc[f.id] = [] as number[]
+  return acc
+}, {} as Record<number, number[]>)
+
+// optional: debug to ensure numbers
+console.table(filters.value.map(f => ({
+  id: f.id,
+  name: f.name,
+  valueIds: f.values.map(v => v.id).join(',')
+})))
+   
   } catch (error) {
     console.error('Error fetching department:', error)
   } finally {
-    isloadingsubsubdepartments.value = false;
-  }
-};
-
-
-
-
-
-const getProducts = async (): Promise<void> => {
-  isloadingproducts.value = true;
-
-  try {
-
-    const spec_ids = Object.values(selectedFilters.value)
-                            .flat()
-                            .map(id => Number(id)); // Ensure they are numbers
-
-
-    const response = await $axios.get<Products[]>(`/api/products/${slug}`, {
-      params: {
-        filters: selectedFilters.value,
-         spec_ids: spec_ids,
-      }
-    });
-    products.value = response.data;
-  } catch (error) {
-    console.error('Error fetching products:', error);
-  } finally {
-    isloadingproducts.value = false;
+    isloadingsubsubdepartments.value = false
   }
 }
 
+const getProducts = async () => {
+  isloadingproducts.value = true
+  try {
+    const spec_ids = Object.values(selectedFilters.value).flat() // already numbers
 
+    const { data } = await $axios.get<Products[]>(`/api/products/${slug.value}`, {
+      params: {
+        filters: selectedFilters.value, // { [descId:number]: number[] }
+        spec_ids,                       // optional convenience param
+      },
+    })
+    products.value = data
+  } catch (error) {
+    console.error('Error fetching products:', error)
+  } finally {
+    isloadingproducts.value = false
+  }
+}
 
+// Refetch products whenever filters change
+watch(selectedFilters, async () => {
+  await getProducts()
+}, { deep: true })
 
-watch(selectedFilters, async(): Promise<void> => {
- await getProducts();
-}, { deep: true });
+// Lock scroll when mobile drawer open
+watch(showFilters, (val) => {
+  if (import.meta.client) document.body.style.overflow = val ? 'hidden' : ''
+})
 
- watch(showFilters, async(val): Promise<void> => {
-    if (typeof window !== 'undefined') {
-      document.body.style.overflow = val ? 'hidden' : ''
-    }
-  });
-
-
-
- onMounted(async () => {
-    await getDepartment();
-    await getProducts();
-  }); 
-
-
-
+onMounted(async () => {
+  await getDepartment()
+  await getProducts()
+})
 </script>
+
 <template>
   
 
@@ -173,29 +175,24 @@ watch(selectedFilters, async(): Promise<void> => {
         </div>
 
         <div class="p-4 space-y-6 overflow-y-auto">
-          <!-- Copy your filter groups here (Termination, Color, etc.) -->
-            <div v-for="category in filters" :key="category.id">
-          <h3>{{ category.Product_Specification_Description_Name }}</h3>
-          <div class="space-y-1">
-            <label
-              v-for="option in category.values"
-              :key="option.id"
-              class="block"
-            >
-                <input
-            type="checkbox"
-            class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            :value="option.id"
-            v-model="selectedFilters[category.id]"
-          />
-              {{ option.value }}
-            </label>
-          </div>
-       </div>
-
-          <!-- Add more filter groups here -->
-        </div>
+         <div v-for="category in filters" :key="category.id" class="space-y-2">
+  <h3 class="font-semibold">{{ category.name }}</h3>
+  <label
+    v-for="opt in category.values"
+    :key="opt.id"
+    class="flex items-center gap-2"
+  >
+    <input
+      type="checkbox"
+      class="mr-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
+      :value="opt.id"                          
+      v-model="selectedFilters[category.id]"   
+    />
+    <span>{{ opt.value }}</span>
+  </label>
+</div>
       </div>
+      </div>  
 
      <!-- Sidebar Filters -->
     <aside class="hidden md:block w-full md:w-1/4">
@@ -205,25 +202,28 @@ watch(selectedFilters, async(): Promise<void> => {
       <i class="fas fa-filter mr-2"></i> Filters
     </h2>
 
-    <div v-for="category in filters" :key="category.id" class="bg-gray-50 rounded-md p-4 shadow-sm">
-      <h3 class="text-md font-semibold text-gray-700 mb-3">{{ category.Product_Specification_Description_Name }}</h3>
 
-      <div class="space-y-2">
-        <label
-          v-for="option in category.values"
-          :key="option.id"
-          class="flex items-center text-gray-700 hover:text-blue-600 transition"
-        >
-          <input
-            type="checkbox"
-            class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            :value="option.id"
-            v-model="selectedFilters[category.id]"
-          />
-          <span class="text-sm">{{ option.value }}</span>
-        </label>
-      </div>
-    </div>
+
+    <div v-for="category in filters" :key="category.id" class="bg-gray-50 rounded-md p-4 shadow-sm">
+  <h3 class="text-md font-semibold text-gray-700 mb-3">{{ category.name }}</h3>
+  <div class="space-y-2">
+    <label
+   v-for="opt in category.values"
+    :key="opt.id"
+      class="flex items-center text-gray-700 hover:text-blue-600 transition"
+    >
+     <input
+      type="checkbox"
+      class="mr-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
+      :value="opt.id"                          
+      v-model="selectedFilters[category.id]"   
+    />
+    <span>{{ opt.value }}</span>
+    </label>
+  </div>
+</div>
+
+   
 
   </div>
     </aside>
