@@ -103,7 +103,7 @@ const getProducts = async () => {
 
     const { data } = await $axios.get<Products[]>(`/api/products/${slug.value}`, {
       params: {
-        filters: selectedFilters.value, // { [descId:number]: number[] }
+        filters: JSON.stringify(selectedFilters.value), // safe for GET
         spec_ids,                       // optional convenience param
       },
     })
