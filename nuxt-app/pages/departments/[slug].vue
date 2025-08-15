@@ -18,6 +18,21 @@ interface FilterValue {
 
 type InputType = 'text' | 'number' | 'select' | 'multiselect' | 'boolean'
 
+type GridHeader = { id: number; name: string }
+type GridRow = {
+  id: number
+  name: string
+  price: number
+  slug: string
+  specs: Record<number, { value_id: number | null; label: string | null } | null>
+}
+
+
+const headers = ref<GridHeader[]>([])
+const rows    = ref<GridRow[]>([])
+
+
+
 interface FilterCategory {
   id: number
   name: string
@@ -61,33 +76,33 @@ const getDepartment = async () => {
   isloadingsubsubdepartments.value = true
   try {
 
-    const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
+      const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
 
-const apiFilters = res.data.filters as any[]
+      const apiFilters = res.data.filters as any[]
 
-// Normalize to a clean shape with number IDs
-filters.value = apiFilters.map((f) => ({
-  id: Number(f.id),
-  name: String(f.Product_Specification_Description_Name ?? ''),
-  type: (f.input_type ?? 'select') as 'text'|'number'|'select'|'multiselect'|'boolean',
-  values: (f.values ?? []).map((v: any) => ({
-    id: Number(v.id),
-    value: String(v.value),
-  })),
-}))
+      // Normalize to a clean shape with number IDs
+      filters.value = apiFilters.map((f) => ({
+        id: Number(f.id),
+        name: String(f.Product_Specification_Description_Name ?? ''),
+        type: (f.input_type ?? 'select') as 'text'|'number'|'select'|'multiselect'|'boolean',
+        values: (f.values ?? []).map((v: any) => ({
+          id: Number(v.id),
+          value: String(v.value),
+        })),
+      }))
 
-// init selected filters AFTER filters are set
-selectedFilters.value = filters.value.reduce((acc, f) => {
-  acc[f.id] = [] as number[]
-  return acc
-}, {} as Record<number, number[]>)
+      // init selected filters AFTER filters are set
+      selectedFilters.value = filters.value.reduce((acc, f) => {
+        acc[f.id] = [] as number[]
+        return acc
+      }, {} as Record<number, number[]>)
 
-// optional: debug to ensure numbers
-console.table(filters.value.map(f => ({
-  id: f.id,
-  name: f.name,
-  valueIds: f.values.map(v => v.id).join(',')
-})))
+      // optional: debug to ensure numbers
+      console.table(filters.value.map(f => ({
+        id: f.id,
+        name: f.name,
+        valueIds: f.values.map(v => v.id).join(',')
+      })))
    
   } catch (error) {
     console.error('Error fetching department:', error)
@@ -97,19 +112,21 @@ console.table(filters.value.map(f => ({
 }
 
 const getProducts = async () => {
-  isloadingproducts.value = true
+   isloadingproducts.value = true
   try {
-    const spec_ids = Object.values(selectedFilters.value).flat() // already numbers
+    const spec_ids = Object.values(selectedFilters.value).flat()
 
-    const { data } = await $axios.get<Products[]>(`/api/products/${slug.value}`, {
+    const { data } = await $axios.get(`/api/products/${slug.value}`, {
       params: {
         filters: JSON.stringify(selectedFilters.value), // safe for GET
-        spec_ids,                       // optional convenience param
+        spec_ids,
       },
     })
-    products.value = data
-  } catch (error) {
-    console.error('Error fetching products:', error)
+
+    headers.value = data.headers ?? []
+    rows.value    = data.products ?? []
+  } catch (e) {
+    console.error('Error fetching products grid:', e)
   } finally {
     isloadingproducts.value = false
   }
@@ -176,20 +193,20 @@ onMounted(async () => {
 
         <div class="p-4 space-y-6 overflow-y-auto">
          <div v-for="category in filters" :key="category.id" class="space-y-2">
-  <h3 class="font-semibold">{{ category.name }}</h3>
-  <label
-    v-for="opt in category.values"
-    :key="opt.id"
-    class="flex items-center gap-2"
-  >
-    <input
-      type="checkbox"
-      class="mr-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
-      :value="opt.id"                          
-      v-model="selectedFilters[category.id]"   
-    />
-    <span>{{ opt.value }}</span>
-  </label>
+          <h3 class="font-semibold">{{ category.name }}</h3>
+          <label
+            v-for="opt in category.values"
+            :key="opt.id"
+            class="flex items-center gap-2"
+          >
+            <input
+              type="checkbox"
+              class="mr-1 h-4 w-4 text-blue-600 border-gray-300 rounded"
+              :value="opt.id"                          
+              v-model="selectedFilters[category.id]"   
+            />
+            <span>{{ opt.value }}</span>
+          </label>
 </div>
       </div>
       </div>  
@@ -254,41 +271,52 @@ onMounted(async () => {
      
       <!-- Table -->
     <div class="overflow-x-auto border border-gray-300 rounded-lg shadow-xl">
-  <table class="min-w-full text-sm text-left bg-white rounded-lg">
-    <thead class="bg-gradient-to-r from-cyan-400 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
-      <tr>
-        <th class="px-5 py-3 border-b">#</th>
-       
-        <th class="px-5 py-3 border-b">Name</th>
-        <th class="px-5 py-3 border-b">Price</th>
-        <th class="px-5 py-3 border-b">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr
-        v-for="(product, index) in products"
-        :key="product.id"
-        class="border-b hover:bg-blue-50 transition duration-150"
-      >
-        <td class="px-5 py-4 font-medium text-gray-800">{{ index + 1 }}</td>
+         <table class="min-w-full text-sm text-left bg-white rounded-lg">
+  <thead class="bg-gradient-to-r from-cyan-400 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
+    <tr>
+      <th class="px-5 py-3 border-b">#</th>
+      <th class="px-5 py-3 border-b">Name</th>
+     
 
-    
+      <!-- dynamic spec headers -->
+      <th v-for="h in headers" :key="h.id" class="px-5 py-3 border-b">
+        {{ h.name }}
+      </th>
+      <th class="px-5 py-3 border-b">Price</th>
+      <th class="px-5 py-3 border-b">Action</th>
+    </tr>
+  </thead>
 
-        <td class="px-5 py-4 text-gray-700">{{ product.Product_Name }}</td>
-        <td class="px-5 py-4 text-gray-700 font-semibold">{{ product.Product_Price }} OMR</td>
+  <tbody>
+    <tr
+      v-for="(row, idx) in rows"
+      :key="row.id"
+      class="border-b hover:bg-blue-50 transition duration-150"
+    >
+      <td class="px-5 py-4 font-medium text-gray-800">{{ idx + 1 }}</td>
+      <td class="px-5 py-4 text-gray-700">{{ row.name }}</td>
 
-       <td class="px-5 py-4">
-  <NuxtLink
-    :to="`/product/${product.Slug}`"
-    class="inline-block bg-gradient-to-r from-cyan-400  via-black-400  to-blue-600 text-white text-xs font-semibold px-5 py-2 rounded-md shadow-md hover:opacity-90 transition duration-200"
-  >
-    View
-  </NuxtLink>
-</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+      <!-- dynamic spec cells -->
+      <td v-for="h in headers" :key="`${row.id}:${h.id}`" class="px-5 py-4 text-gray-700">
+        {{ row.specs[h.id]?.label ?? '—' }}
+      </td>
+
+      <td class="px-5 py-4 text-gray-700 font-semibold">{{ row.price }} OMR</td>
+
+
+      <td class="px-5 py-4">
+        <NuxtLink
+          :to="`/product/${row.slug}`"
+          class="inline-block bg-gradient-to-r from-cyan-400 via-black-400 to-blue-600 text-white text-xs font-semibold px-5 py-2 rounded-md shadow-md hover:opacity-90 transition duration-200"
+        >
+          View
+        </NuxtLink>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+    </div>
 
     </main>
   </div>
