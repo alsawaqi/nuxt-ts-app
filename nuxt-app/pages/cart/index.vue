@@ -5,10 +5,13 @@ definePageMeta({
   layout: 'layouts',
 })
 import { useCartStore } from '~/stores/cart'
+import { useUserStore } from '~/stores/user'
+
+
+
 const { $r2Url ,$axios } = useNuxtApp();
 
 const cart = useCartStore();
-import { useUserStore } from '~/stores/user'
 const { user, isAuthenticated } = useAuth()
 
 
@@ -32,6 +35,8 @@ const fetchAddresses = async () => {
 
 const showAddressModal = ref(false)
 const countries = ref<any[]>([])
+const regions = ref<any[]>([])
+const districts = ref<any[]>([])
 const states = ref<any[]>([])
 const cities = ref<any[]>([])
 
@@ -39,6 +44,8 @@ const newAddress = reactive({
   Country_Id: '',
   State_Id: '',
   City_Id: '',
+  Region_Id: '',
+  District_Id: '',
   Contact_Person_Name: '',
   Telephone: '',
   Designation: '',
@@ -54,6 +61,21 @@ const loadCountries = async () => {
   countries.value = res.data
 }
 
+
+
+const loadRegions = async () => {
+ 
+  const res = await $axios.get('/api/region')
+  regions.value = res.data.data
+}
+
+
+const loadDistricts = async () => {
+ 
+  const res = await $axios.get('/api/district')
+  districts.value = res.data.data
+}
+
 const loadStates = async () => {
   states.value = []
   cities.value = []
@@ -63,10 +85,12 @@ const loadStates = async () => {
 }
 
 const loadCities = async () => {
-  cities.value = []
-  if (!newAddress.State_Id) return
-  const { $axios } = useNuxtApp()
-  const res = await $axios.get(`/api/contacts/by-state/${newAddress.State_Id}`)
+ 
+    
+ 
+    
+
+  const res = await $axios.get(`/api/contacts/by-state/${newAddress.District_Id}`)
   cities.value = res.data
 }
 
@@ -117,8 +141,10 @@ const decrementQty = (id: number) => {
 
 onMounted(() => {
   if (isAuthenticated.value === true) {
-    fetchAddresses()
-    loadCountries()
+    fetchAddresses();
+    loadCountries();
+    loadRegions();
+    loadDistricts();
   }
  
    
@@ -311,13 +337,25 @@ onMounted(() => {
           </select>
         </div>
 
-        <!-- State -->
+        <!-- Region -->
         <div>
-          <label class="block text-sm font-medium mb-1">State</label>
-          <select v-model="newAddress.State_Id" @change="loadCities" class="w-full border rounded p-2">
-            <option value="">-- Select State --</option>
-            <option v-for="s in states" :key="s.id" :value="s.id">
-              {{ s.State_Name }}
+          <label class="block text-sm font-medium mb-1">Regions</label>
+          <select v-model="newAddress.Region_Id"  class="w-full border rounded p-2">
+            <option value="">-- Select Regions --</option>
+            <option v-for="r in  regions" :key="r.id" :value="r.id">
+              {{ r.Region_Name }}
+            </option>
+          </select>
+        </div>
+
+
+        <!-- District  -->
+        <div>
+          <label class="block text-sm font-medium mb-1">District</label>
+          <select v-model="newAddress.District_Id" @change="loadCities" class="w-full border rounded p-2">
+            <option value="">-- Select District --</option>
+            <option v-for="d in districts" :key="d.id" :value="d.id">
+              {{ d.District_Name }}
             </option>
           </select>
         </div>

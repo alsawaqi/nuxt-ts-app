@@ -44,6 +44,11 @@ interface Product {
   Inhouse_Barcode_Source: string;
   Product_Description: string;
   images: ProductImage[]; // updated to support multiple images
+  Weight_Kg: number;
+  Length_Cm: number;
+  Width_Cm: number;
+  Height_Cm: number;
+
 }
 
 interface SpecificationGroup {
@@ -80,6 +85,12 @@ const addToCart = () => {
     price: product.value.Product_Price,
     quantity: quantity.value,
     image: product.value.images?.[0]?.Image_Path || '',
+    weight: product.value.Weight_Kg,
+  
+      length: product.value.Length_Cm,
+      width: product.value.Width_Cm,
+      height: product.value.Height_Cm
+ 
   })
 
   toast.success(`${product.value.Product_Name} added to cart`)
@@ -150,7 +161,7 @@ onMounted(async(): Promise<void> => {
       <div class="md:w-2/3 flex flex-col md:flex-row justify-between">
         <div class="md:w-3/4 space-y-3">
           <h1 class="text-xl font-bold text-gray-800 leading-tight">
-            {{ product?.Product_Name }}
+            {{ product?.Product_Name }}  
           </h1>
           <p class="text-sm text-gray-600">Item Code : {{ product?.Inhouse_Barcode_Source }}</p>
 

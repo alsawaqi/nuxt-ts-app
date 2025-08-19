@@ -7,19 +7,37 @@ definePageMeta({
 
 import { useCartStore } from '~/stores/cart'
 import { useUserStore } from '~/stores/user'
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed,watch } from 'vue'
 import { useToast } from 'vue-toastification'
+import { useShippingQuotes } from '@/composables/useShippingQuotes'
+
 
 
 const { user, isAuthenticated } = useAuth()
 
 const { $axios, $r2Url } = useNuxtApp()
 
+const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShippingQuotes()
+const selectedOption = ref<any|null>(null)
+
+interface ShippingOption {
+  shipper_id: number
+  destination_id: number
+  basis: 'weight' | 'volume' | 'heavy'
+  price: number
+  currency: string
+  weight_kg?: number | null
+  volume_cbm?: number | null
+}
+
+
+
 interface OrderPayload {
   customer_id: number
   delivery_method: 'ship' | 'pickup'
   Customers_Contacts_Id: number | null // ✅ Nullable for pickup
   shipping_cost: number
+  shipping_option: ShippingOption | null
   cart_items: {
     product_id: number
     quantity: number
@@ -33,14 +51,50 @@ interface OrderPayload {
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
 const cart = useCartStore()
-const shippingCost = computed(() => {
-  return cart.deliveryMethod === 'ship' ? 2: 0
-})// could be dynamic later
-
+ 
 const toast = useToast()
+ 
 
 
 const selectedAddress = ref<any>(null)
+
+
+const totals = computed(() => {
+  const weight = cart.cartItems.reduce((s,i)=> s + (i.weight * i.quantity), 0)
+  const volume = cart.cartItems.reduce((s,i)=> {
+    const cbm = (i.length * i.width * i.height) / 1_000_000
+    return s + (cbm * i.quantity)
+  }, 0)
+  return { weight_kg: +weight.toFixed(3), volume_cbm: +volume.toFixed(4) }
+})
+
+
+const requestQuotes = async () => {
+  if (cart.deliveryMethod !== 'ship') return
+  const storedId = localStorage.getItem('selected_address_id')
+  if (!storedId) return
+
+  await fetchQuotes({
+    // prefer address_id to avoid passing names around
+    destination: {},           // keep empty; backend will ignore it when address_id is present
+    totals: totals.value,
+    include_heavy: false
+  } as any /* to satisfy TS temporarily */)
+
+  // Actually pass address_id via query body:
+  const { data } = await $axios.post('/api/v1/shipping/quotes', {
+    address_id: parseInt(storedId, 10),
+    totals: totals.value,
+    include_heavy: false
+  })
+  shippingOptions.value = data?.options ?? []
+  selectedOption.value = shippingOptions.value[0] || null
+}
+ 
+
+watch([() => cart.cartItems, () => cart.deliveryMethod, selectedAddress, totals], requestQuotes, { deep: true })
+
+
 
 const fetchSelectedAddress = async () => {
   if (cart.deliveryMethod !== 'ship') return
@@ -72,19 +126,30 @@ const submitOrder = async () => {
       return
     }
 
-    const payload: OrderPayload = {
-      customer_id: 1,  // Replace with actual customer logic
-      delivery_method: cart.deliveryMethod,
-      shipping_cost: shippingCost.value,
-      Customers_Contacts_Id: cart.deliveryMethod === 'ship' ? addressId : null, // ✅ attach it conditionally
-      cart_items: cart.cartItems.map(item => ({
-        product_id: item.id,
-        quantity: item.quantity,
-        price: item.price,
-        subtotal: item.price * item.quantity,
-        vat: 0,
-      })),
-    }
+   const payload: OrderPayload = {
+  customer_id: 1,  // TODO: real customer id
+  delivery_method: cart.deliveryMethod,
+  shipping_cost: shippingCost.value,
+  Customers_Contacts_Id: cart.deliveryMethod === 'ship' ? addressId : null,
+  // ✅ include the chosen quote (or null if pickup / none selected)
+  shipping_option: cart.deliveryMethod === 'ship' && selectedOption.value ? {
+    shipper_id: selectedOption.value.shipper_id,
+    destination_id: selectedOption.value.destination_id,
+    basis: selectedOption.value.basis,         // 'weight' | 'volume' | 'heavy'
+    price: Number(selectedOption.value.total_price),
+    currency: selectedOption.value.currency ?? 'OMR',
+    // helpful for auditing/calculation reproducibility:
+    weight_kg: totals.value.weight_kg,
+    volume_cbm: totals.value.volume_cbm
+  } : null,
+  cart_items: cart.cartItems.map(item => ({
+    product_id: item.id,
+    quantity: item.quantity,
+    price: item.price,
+    subtotal: item.price * item.quantity,
+    vat: 0,
+  })),
+}
 
     const response = await $axios.post('/api/orders/place', payload, { withCredentials: true })
 
@@ -138,7 +203,16 @@ watch(() => cart.deliveryMethod, (val) => {
   }
 })
 
-onMounted(fetchSelectedAddress)
+const shippingCost = computed(() => {
+  return cart.deliveryMethod === 'ship' && selectedOption.value
+    ? Number(selectedOption.value.total_price)
+    : 0
+})
+
+onMounted(()=>{
+          fetchSelectedAddress()
+          requestQuotes()
+          })
 </script>
 <template>
 
@@ -176,6 +250,48 @@ onMounted(fetchSelectedAddress)
 
     </div>
   </div>
+
+   <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
+
+
+  
+  <div class="mt-4">
+  <div class="flex items-center justify-between">
+    <h4 class="font-semibold">Shipping Options</h4>
+    <span v-if="quotesLoading" class="text-xs text-gray-500">Calculating…</span>
+  </div>
+
+  <div v-if="shippingOptions.length === 0 && !quotesLoading" class="text-sm text-gray-500 mt-2">
+    No shipping options available for this address and cart totals.
+  </div>
+
+  <div v-for="opt in shippingOptions" :key="`${opt.shipper_id}-${opt.basis}-${opt.destination_id}`"
+       class="mt-2 p-3 border rounded flex items-center justify-between">
+    <label class="flex items-center gap-3">
+      <input type="radio" name="shippingOption"
+             :value="opt"
+             v-model="selectedOption">
+      <div>
+        <div class="font-semibold">
+          {{ opt.shipper_name }} — <span class="capitalize">{{ opt.basis }}</span>
+        </div>
+        <div class="text-xs text-gray-500">
+          {{ opt.breakdown.band_label || 'Band' }} |
+          Std: {{ opt.breakdown.standard_rate }} |
+          Base: {{ opt.breakdown.base_fee }} |
+          Per-unit: {{ opt.breakdown.per_unit_fee }} × {{ opt.breakdown.units_used }} |
+          Flat: {{ opt.breakdown.flat_fee }}
+        </div>
+      </div>
+    </label>
+    <div class="font-semibold text-[#00bfa5]">
+      {{ opt.currency }} {{ opt.total_price }}
+    </div>
+  </div>
+</div>
+ </div>
+
+
 
   <!-- ✅ Shipping Info -->
  <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">

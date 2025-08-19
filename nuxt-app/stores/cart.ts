@@ -9,6 +9,10 @@ export interface CartItem {
   price: number
   quantity: number
   image?: string
+  weight: number
+  length: number
+  width: number
+  height: number
 }
 
 export const useCartStore = defineStore('cart', () => {
