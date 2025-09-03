@@ -2,8 +2,8 @@
 definePageMeta({
   layout: 'layout',
 })
-import { ref, watch,onMounted } from 'vue'
-import { Squares2X2Icon, ListBulletIcon } from '@heroicons/vue/24/solid'
+import { ref, watch, onMounted, computed  } from 'vue'
+import { Squares2X2Icon, ListBulletIcon, ChartPieIcon } from '@heroicons/vue/24/solid'
 import { useUserStore } from '~/stores/user'
 import { useCartStore } from '~/stores/cart'
 const cart = useCartStore()
@@ -36,7 +36,7 @@ const prodcutsDepartments = ref<ProductDepartment[]>([])
 const productBrands = ref<ProductBrand[]>([])
 const bannerStyle = 'background-image: url(\'https://www.aabtools.com/banner/HomePageBanner/Desktop/Megger_Desktop.webp\')'
 
-const viewMode = ref<'grid' | 'list'>('grid')
+const viewMode = ref<'grid' | 'list' |'pie'>('grid')
 
 
 const subCategories = ref<any[]>([])
@@ -63,6 +63,86 @@ watch(hideBanner, (val) => {
 })
 
 
+const router = useRouter()
+
+/** Pick the items to render based on where you are in the tree */
+ 
+const pieItems = computed(() => {
+  if (!selectedDepartment.value) return prodcutsDepartments.value ?? []
+  if (selectedDepartment.value && !selectedSubCategory.value) return subCategories.value ?? []
+  return subSubCategories.value ?? []
+})
+
+const getItemName = (it: any) => {
+  if (!selectedDepartment.value) return it.Product_Department_Name
+  if (selectedDepartment.value && !selectedSubCategory.value) return it.Sub_Department_Name
+  return it.Product_Sub_Sub_Department_Name
+}
+const getItemImage = (it: any) => {
+  if (!selectedDepartment) return it.Image_path
+  if (selectedDepartment && !selectedSubCategory) return it.Image_path
+  return it.Image_Path
+}
+
+/** Click behavior by level */
+ 
+
+
+const centerLabel = computed(() => {
+  const i = hovered.value
+  if (i != null) return getItemName(pieItems.value[i])
+  if (!selectedDepartment.value) return 'Departments'
+  if (selectedDepartment.value && !selectedSubCategory.value) return 'Subcategories'
+  return 'Browse'
+})
+
+const onSliceClick = (it: any) => {
+  if (!selectedDepartment.value) return fetchSubCategories(it.id)
+  if (selectedDepartment.value && !selectedSubCategory.value) return fetchSubSubCategories(it.id)
+  if (it.Slug) router.push(`/departments/${it.Slug}`)
+}
+
+/** Donut math */
+const hovered = ref<number|null>(null)
+const palette = ['#10b981','#3b82f6','#a855f7','#06b6d4','#f59e0b','#ef4444','#14b8a6','#8b5cf6','#22c55e','#f97316']
+
+const polarToCartesian = (cx:number, cy:number, r:number, angle:number) => {
+  const rad = (angle - 90) * Math.PI / 180
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+}
+const arcPath = (cx:number, cy:number, rOuter:number, rInner:number, start:number, end:number) => {
+  const largeArc = end - start <= 180 ? 0 : 1
+  const sO = polarToCartesian(cx, cy, rOuter, start)
+  const eO = polarToCartesian(cx, cy, rOuter, end)
+  const sI = polarToCartesian(cx, cy, rInner, end)
+  const eI = polarToCartesian(cx, cy, rInner, start)
+  return [
+    `M ${sO.x} ${sO.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${eO.x} ${eO.y}`,
+    `L ${sI.x} ${sI.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${eI.x} ${eI.y}`,
+    'Z'
+  ].join(' ')
+}
+
+const slices = computed(() => {
+  const items = pieItems.value
+  const n = Math.max(items.length, 1)
+  const step = 360 / n
+  const cx = 100, cy = 100, rOuter = 92, rInner = 36
+  return items.map((it: any, i: number) => {
+    const start = i * step
+    const end = start + step
+    return {
+      item: it,
+      d: arcPath(cx, cy, rOuter, rInner, start, end),
+      color: palette[i % palette.length],
+    }
+  })
+})
+
+/** Center label text */
+ 
 function resetToMainCategory() {
   selectedDepartment.value = null
   selectedSubCategory.value = null
@@ -128,7 +208,7 @@ const selectedDepartmentName = computed(() => {
 })
 
 const selectedSubCategoryName = computed(() => {
-  return subCategories.value.find(s => s.id === selectedSubCategory.value)?.name || ''
+  return subCategories.value.find(s => s.id === selectedSubCategory.value)?.Sub_Department_Name || ''
 })
 
 const categoryPath = computed(() => {
@@ -191,137 +271,149 @@ onMounted(async () => {
 <template>
   
   
-<header class="bg-gradient-to-r from-teal-500 to-cyan-500 shadow-md relative z-50">
-  <div class="w-full max-w-screen-xl mx-auto flex justify-between items-center p-4" style="height: 80px;">
+ <header class="sticky top-0 z-50 bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-500 shadow-md">
+  <div class="max-w-screen-xl mx-auto h-20 grid grid-cols-3 items-center px-4">
 
-    
-    <!-- Hamburger button (mobile only) -->
+    <!-- Hamburger (mobile only) -->
     <button
-      class="text-teal-600 md:hidden absolute left-4 text-white"
+      class="md:hidden justify-self-start text-white"
       @click="mobileMenuOpen = true"
+      aria-label="Open menu"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
-        viewBox="0 0 24 24" stroke="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M4 6h16M4 12h16M4 18h16" />
+              d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
 
-    <!-- Logo -->
-     <NuxtLink to="/" class="flex items-center">
-    <img src="/logonew3.png" alt="ISC Logo" class="h-12 md:h-14 mx-auto md:mx-0 absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none"/>
+    <!-- Logo (centered on all sizes) -->
+    <NuxtLink to="/" class="justify-self-center inline-flex items-center">
+      <img src="/logonew3.png" alt="ISC" class="h-12 md:h-14" />
     </NuxtLink>
- 
-    <nav class="hidden md:flex space-x-6 text-base font-semibold text-teal-700 ml-auto pr-4 text-white">
-      <button
-        @click="currentSection = 'categories'"
-        :class="{ 'border-b-2 border-white': currentSection === 'categories' }"
-        class="hover:text-gray-200 transition"
-      >
-        Categories
-      </button>
 
+    <!-- Desktop nav + welcome (right side) -->
+    <div class="hidden md:flex justify-self-end items-center gap-6 text-white">
+      <nav class="flex items-center gap-6 text-base font-semibold">
+        <button
+          @click="currentSection = 'categories'"
+          :class="currentSection === 'categories' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
+          class="pb-1 hover:opacity-90 transition"
+        >
+          Categories
+        </button>
 
-      <button
-        @click="currentSection = 'brand'"
-      :class="{ 'border-b-2 border-white': currentSection === 'brand' }"
-        class="hover:text-gray-200 transition"
-      >
-        Brands
-      </button>
-      <a href="#contact" class="hover:text-gray-200 transition">Contact</a>
+        <button
+          @click="currentSection = 'brand'"
+          :class="currentSection === 'brand' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
+          class="pb-1 hover:opacity-90 transition"
+        >
+          Brands
+        </button>
 
+        <a href="#contact" class="pb-1 border-b-2 border-transparent hover:opacity-90 transition">
+          Contact
+        </a>
+      </nav>
 
-      
-
-      
-    </nav>
-  
-
-      <h1 class="border-b-2 border-white" v-if="isAuthenticated">Welcome, {{ user?.User_Name ?? 'Guest' }}</h1>
-
-      
-    
+      <span v-if="isAuthenticated" class="hidden lg:inline-block text-sm font-medium px-3 py-1 rounded-full bg-white/10 ring-1 ring-white/20">
+        Welcome, {{ user?.User_Name ?? 'Guest' }}
+      </span>
+    </div>
   </div>
 
   <!-- Overlay -->
   <div
     v-if="mobileMenuOpen"
     @click="mobileMenuOpen = false"
-    class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+    class="fixed inset-0 bg-black/50 z-40 md:hidden"
   ></div>
 
   <!-- Mobile Drawer -->
   <div
-    class="fixed top-0 left-0 w-64 h-full bg-white shadow-xl z-50 transform transition-transform duration-300 md:hidden"
-    :class="{ '-translate-x-0': mobileMenuOpen, '-translate-x-full': !mobileMenuOpen }"
+    class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform transition-transform duration-300 md:hidden"
+    :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
   >
-    <!-- Menu header with gradient -->
-    <div class="p-4 flex justify-between items-center border-b bg-gradient-to-r from-teal-500 to-cyan-500 text-white">
+    <!-- Drawer header -->
+    <div class="p-4 flex justify-between items-center bg-gradient-to-r from-teal-600 to-cyan-500 text-white">
       <h3 class="text-lg font-bold">Menu</h3>
-      <button @click="mobileMenuOpen = false" class="border border-white px-2 py-1 rounded hover:bg-white hover:text-teal-600">
+      <button
+        @click="mobileMenuOpen = false"
+        class="border border-white/70 px-2 py-1 rounded hover:bg-white hover:text-teal-700 transition"
+        aria-label="Close menu"
+      >
         Close
       </button>
     </div>
 
-    <!-- Shared nav (mobile view) -->
+    <!-- Drawer nav -->
     <nav class="flex flex-col p-4 space-y-2 text-base font-semibold text-teal-800">
       <button
         @click="currentSection = 'categories'; mobileMenuOpen = false"
-        :class="{ 'bg-cyan-100 text-teal-700': currentSection === 'categories' }"
-        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50"
+        :class="currentSection === 'categories' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
+        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
       >
         Categories
       </button>
+
       <button
         @click="currentSection = 'brand'; mobileMenuOpen = false"
-        :class="{ 'bg-cyan-100 text-teal-700': currentSection === 'brand' }"
-        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50"
+        :class="currentSection === 'brand' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
+        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
       >
         Brands
       </button>
+
       <a
         href="#contact"
         @click="mobileMenuOpen = false"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 text-left"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
       >
         Contact
       </a>
 
-
-        
-      <NuxtLink :to="'/login'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <NuxtLink
+        v-if="!isAuthenticated"
+        to="/login"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+      >
         Login
       </NuxtLink>
-    
 
- 
-      <NuxtLink :to="'/register'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <NuxtLink
+        v-if="!isAuthenticated"
+        to="/register"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+      >
         Register
       </NuxtLink>
-       
 
-      
-  <NuxtLink v-if="isAuthenticated" :to="`/account`" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
-    My Account
-    <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-    </svg>
-  </NuxtLink>
+      <NuxtLink
+        v-if="isAuthenticated"
+        :to="`/account`"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+      >
+        My Account
+        <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </NuxtLink>
 
-   <button v-if="isAuthenticated"  @click="logout" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <button
+        v-if="isAuthenticated"
+        @click="logout"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+      >
         Logout
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17l5-5m0 0l-5-5m5 5H3" />
         </svg>
-  </button>
- 
+      </button>
     </nav>
   </div>
 </header>
+
      
-
-
+ 
 <!-- Secondary Nav Bar -->
 <section class="text-white" style="background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));">
 
@@ -387,48 +479,113 @@ onMounted(async () => {
 </section>
 
  
-     <hr class="border-t border-gray-200">
-
-
-
-
-
+ 
     <!-- Topbar -->
     <div
-  v-if="!hideBanner"
-  id="topbar"
-  class="bg-gradient-to-r from-lime-400 to-yellow-300 py-4 px-4 text-sm text-gray-800 border-b border-lime-300"
->
-  <div class="flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
-    <div class="flex flex-wrap items-center space-x-4">
-      <span class="font-semibold text-base">Accepted Payments:</span>
-      <img src="/images/visa.png" class="h-8 md:h-10 p-1 bg-white rounded shadow-sm" alt="Visa" />
-      <img src="/images/mastercard.png" class="h-8 md:h-10 p-1 bg-white rounded shadow-sm" alt="Mastercard" />
-      <img src="/images/cash.png" class="h-8 md:h-10 p-1 bg-white rounded shadow-sm" alt="Cash" />
+        v-if="!hideBanner"
+        id="topbar"
+        class="relative isolate  bg-gradient-to-r from-[#c2ff4a] via-[#6fd114] to-[#0a0a0a] text-slate-800"
+      >
+        <!-- subtle top hairline -->
+        <div class="absolute inset-x-0 -top-px h-px bg-white/40"></div>
+
+          <div class="max-w-screen-xl mx-auto px-4">
+            <div class="flex items-center gap-4 py-3 overflow-x-auto whitespace-nowrap">
+  <!-- Payments -->
+  <div class="flex items-center gap-3 shrink-0">
+    <span class="text-sm font-semibold uppercase tracking-wide text-slate-700/80">Payments</span>
+    <ul class="flex items-center gap-2">
+      <li class="shrink-0">
+        <img src="/images/visa.png" alt="Visa"
+             class="h-7 w-auto rounded-md bg-white/90 p-1.5 ring-1 ring-black/5 shadow-sm"
+             loading="lazy" decoding="async" />
+      </li>
+      <li class="shrink-0">
+        <img src="/images/mastercard.png" alt="Mastercard"
+             class="h-7 w-auto rounded-md bg-white/90 p-1.5 ring-1 ring-black/5 shadow-sm"
+             loading="lazy" decoding="async" />
+      </li>
+      <li class="shrink-0">
+        <img src="/images/cash.png" alt="Cash"
+             class="h-7 w-auto rounded-md bg-white/90 p-1.5 ring-1 ring-black/5 shadow-sm"
+             loading="lazy" decoding="async" />
+      </li>
+    </ul>
+  </div>
+
+  <!-- Shipping -->
+  <div class="flex items-center gap-3 shrink-0 pl-4 border-l border-white/30">
+    <span class="text-sm font-semibold uppercase tracking-wide text-slate-700/80">Shipping</span>
+    <ul class="flex items-center gap-2">
+      <li class="shrink-0">
+        <img src="/images/dhl.png" alt="DHL"
+             class="h-7 w-auto rounded-md bg-white/90 p-1.5 ring-1 ring-black/5 shadow-sm"
+             loading="lazy" decoding="async" />
+      </li>
+      <li class="shrink-0">
+        <img src="/images/fedex.png" alt="FedEx"
+             class="h-7 w-auto rounded-md bg-white/90 p-1.5 ring-1 ring-black/5 shadow-sm"
+             loading="lazy" decoding="async" />
+      </li>
+    </ul>
+  </div>
+
+  
+</div>
+
+            
+          </div>
     </div>
-    <div class="flex flex-wrap items-center space-x-4">
-      <span class="font-semibold text-base">Shipping Methods:</span>
-      <img src="/images/dhl.png" class="h-8 md:h-10 p-1 bg-white rounded shadow-sm" alt="DHL" />
-      <img src="/images/fedex.png" class="h-8 md:h-10 p-1 bg-white rounded shadow-sm" alt="FedEx" />
+
+
+
+
+<!-- Industrial Hero Banner -->
+<section  v-if="!hideBanner" class="relative isolate overflow-hidden bg-slate-900">
+  <!-- Responsive image (put files in /public/images/hero/) -->
+  <picture>
+    <!-- WebP sources -->
+    <source
+ 
+      type="image/webp"
+      sizes="(min-width: 1024px) 1200px, 100vw"
+    />
+    <!-- JPEG fallback -->
+    <source
+     
+      type="image/jpeg"
+      sizes="(min-width: 1024px) 1200px, 100vw"
+    />
+    <img
+      src="https://www.aabtools.com/banner/HomePageBanner/Desktop/Megger_Desktop.webp"
+      alt="Industrial supply aisle with power tools, fasteners, and safety gear"
+      class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover"
+      loading="eager"
+      decoding="async"
+    />
+  </picture>
+
+  <!-- Readability overlay (dark to transparent) -->
+  <div class="absolute inset-0 bg-gradient-to-r from-slate-900/85 via-slate-900/45 to-transparent"></div>
+
+  <!-- Brand accent wash (lime/teal hint, very subtle) -->
+  <div class="absolute inset-0 [mask-image:radial-gradient(80%_60% at 20%_40%,black,transparent)] 
+              bg-[linear-gradient(to_right,#c2ff4a33,#22d3ee33_35%,transparent_70%)]"></div>
+
+  <!-- Content -->
+  <div class="absolute inset-0 flex items-center">
+    <div class="max-w-screen-xl mx-auto px-4">
+      <h1 class="text-white text-2xl md:text-3xl font-bold">
+        Industrial Supplies &amp; MRO
+      </h1>
+      <p class="text-white/85 mt-1 text-sm md:text-base">
+        Power tools, fasteners, abrasives, safety—trusted brands, fast shipping.
+      </p>
+       
     </div>
   </div>
-    </div>
+</section>
 
-
-
-
-   
- 
-
-    <!-- Banner -->
-    <section v-if="!hideBanner" id="banner" class="bg-cover bg-center h-40 md:h-64" :style="bannerStyle">
-      <div class="container mx-auto h-full flex items-center justify-center">
-        <h2 class="text-white text-2xl md:text-4xl font-bold bg-black bg-opacity-50 p-2 md:p-4 rounded">
-          Your One-Stop Shop for Building Materials
-        </h2>
-      </div>
-     
-    </section>
 
       <div class="flex items-center space-x-2 justify-start md:justify-end px-4 py-2">
         <input type="checkbox" id="hideBannerCheckbox" v-model="hideBanner" class="accent-blue-600">
@@ -475,6 +632,16 @@ onMounted(async () => {
                 >
                   <ListBulletIcon class="w-5 h-5" />
                 </button>
+
+                  <button
+                    @click="viewMode = 'pie'"
+                    :class="[
+                      'px-3 py-2 rounded border', 
+                      viewMode === 'pie' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
+                      ]"
+                      >
+                     <ChartPieIcon class="w-5 h-5" />
+                </button>
               </div>
          </div>
 
@@ -490,77 +657,128 @@ onMounted(async () => {
           </div>
 
 
-          <!-- Category View -->
-          <div
-            v-if="!selectedDepartment"
-            :class="[
-              viewMode === 'grid'
-                ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
-                : 'flex flex-col gap-4'
-            ]"
-            >
-            <div
-              class="bg-white border border-gray-200 rounded-xl p-4 flex flex-col items-center shadow-sm hover:shadow-lg hover:border-blue-400 transition duration-300 ease-in-out cursor-pointer"
 
-              v-for="department in prodcutsDepartments"
-              :key="department.id"
-              @click="fetchSubCategories(department.id)"
-            >
-              <img :src="`${$r2Url}/`+ department.Image_path" alt="Power Tools" class="w-24 h-24 object-cover rounded-full mb-3">
-              <h3 class="text-center font-medium text-sm">{{ department.Product_Department_Name }}</h3>
+
+
+      
+
+
+
+                  <div v-if="viewMode === 'pie'" class="w-full">
+                      <div class="flex flex-col md:flex-row items-center gap-6">
+                        <div class="w-full md:w-auto">
+                          <svg viewBox="0 0 200 200" class="w-full max-w-[420px] mx-auto">
+                            <g v-for="(s, i) in slices" :key="i">
+                              <path
+                                :d="s.d"
+                                :fill="s.color"
+                                class="transition duration-200"
+                                :opacity="hovered === null || hovered === i ? 1 : 0.6"
+                                @mouseenter="hovered = i"
+                                @mouseleave="hovered = null"
+                                @click="onSliceClick(s.item)"
+                                style="cursor:pointer"
+                              />
+                              <path :d="s.d" fill="none" stroke="white" stroke-width="0.8" />
+                            </g>
+                            <circle cx="100" cy="100" r="34" fill="white" stroke="#e5e7eb" stroke-width="1" />
+                            <text x="100" y="100" text-anchor="middle" dominant-baseline="middle"
+                                  class="fill-slate-700" style="font-size:12px;font-weight:600;">
+                              {{ centerLabel }}
+                            </text>
+                          </svg>
+                        </div>
+                        </div>
+                 </div>
+
+
+          <!-- Category View -->
+            <div
+   v-else-if="!selectedDepartment"
+  :class="[
+    viewMode === 'grid'
+      ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-px p-px bg-gray-300 overflow-hidden rounded-md'
+      : 'flex flex-col divide-y divide-gray-200'
+  ]"
+>
+  <div
+    v-for="department in prodcutsDepartments"
+    :key="department.id"
+    @click="fetchSubCategories(department.id)"
+    class="bg-white p-6 text-center cursor-pointer hover:bg-gray-50"
+  >
+    <div class="h-24 flex items-center justify-center">
+      <img :src="`${$r2Url}/` + department.Image_path" alt="" class="max-h-24 w-auto object-contain" />
+    </div>
+    <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
+      {{ department.Product_Department_Name }}
+    </h3>
+  </div>
             </div>
-          </div>
+
 
             <!-- Subcategory View -->
             <div
-              v-else-if="selectedDepartment && !selectedSubCategory"
-               :class="[
-              viewMode === 'grid'
-                ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
-                : 'flex flex-col gap-4'
-            ]"
-            >
-              <div
-                class="bg-blue-50 border rounded-lg p-4 flex flex-col items-center hover:shadow cursor-pointer"
-                v-for="sub in subCategories"
-                :key="sub.id"
-                @click="fetchSubSubCategories(sub.id)"
-              >
-                <img :src="`${$r2Url}/`+ sub.Image_path" alt="SubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
-                <h3 class="text-center font-medium text-sm">{{ sub.Sub_Department_Name }}</h3>
-              </div>
+  v-else-if="selectedDepartment && !selectedSubCategory"
+  :class="[
+    viewMode === 'grid'
+        ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-px p-px bg-gray-300 overflow-hidden rounded-md'
+      : 'flex flex-col divide-y divide-gray-200'
+  ]"
+>
+  <div
+    v-for="sub in subCategories"
+    :key="sub.id"
+    @click="fetchSubSubCategories(sub.id)"
+    class="bg-white p-6 text-center cursor-pointer hover:bg-gray-50"
+  >
+    <div class="h-24 flex items-center justify-center">
+      <img
+        :src="`${$r2Url}/` + sub.Image_path"
+        alt=""
+        class="max-h-24 w-auto object-contain"
+      />
+    </div>
+    <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
+      {{ sub.Sub_Department_Name }}
+    </h3>
+  </div>
             </div>
 
-            <!-- Sub-subcategory View -->
-            <div
-              v-else
-               :class="[
-                viewMode === 'grid'
-                  ? 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'
-                  : 'flex flex-col gap-4'
-              ]"
-            >
 
-            
+                 <!-- Sub-subcategory View -->
+                  <div
+                    v-else
+                    :class="[
+                      viewMode === 'grid'
+                        ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-px p-px bg-gray-300 overflow-hidden rounded-md'
+                        : 'flex flex-col divide-y divide-gray-200'
+                    ]"
+                  >
               <div
-                class="bg-green-50 border rounded-lg p-4 flex flex-col items-center hover:shadow cursor-pointer"
                 v-for="subSub in subSubCategories"
                 :key="subSub.id"
+                class="bg-white p-6 text-center hover:bg-gray-50"
               >
-
-              <NuxtLink :to="`/departments/${subSub.Slug}`">
-
-
-
-            
-                <img :src="`${$r2Url}/`+ subSub.Image_Path"alt="SubSubCategory" class="w-24 h-24 object-cover rounded-full mb-3">
-                <h3 class="text-center font-medium text-sm">{{ subSub.Product_Sub_Sub_Department_Name }}</h3>
-
+                <NuxtLink :to="`/departments/${subSub.Slug}`" class="block">
+                  <div class="h-24 flex items-center justify-center">
+                    <img
+                      :src="`${$r2Url}/` + subSub.Image_Path"
+                      alt=""
+                      class="max-h-24 w-auto object-contain"
+                    />
+                  </div>
+                  <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
+                    {{ subSub.Product_Sub_Sub_Department_Name }}
+                  </h3>
                 </NuxtLink>
               </div>
+                 </div>
 
 
-            </div>
+
+                 
+
 
       </section>
 

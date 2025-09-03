@@ -6,6 +6,7 @@ export default defineNuxtConfig({
   '~/plugins/axios',
   '~/plugins/init-auth.global.ts'
 ],
+  css: ['assets/css/card.min.css'],
   modules: ['@pinia/nuxt'],
   components: true,
   devtools: {

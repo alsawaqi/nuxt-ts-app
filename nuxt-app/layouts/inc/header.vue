@@ -19,135 +19,146 @@ const mobileMenuOpen = ref(false)
 </script>
 <template>
 
-     <header class="bg-gradient-to-r from-teal-500 to-cyan-500 shadow-md relative z-50">
-  <div class="w-full max-w-screen-xl mx-auto flex justify-between items-center p-4" style="height: 80px;">
+    <header class="sticky top-0 z-50 bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-500 shadow-md">
+  <div class="max-w-screen-xl mx-auto h-20 grid grid-cols-3 items-center px-4">
 
-    
-    <!-- Hamburger button (mobile only) -->
+    <!-- Hamburger (mobile only) -->
     <button
-      class="text-teal-600 md:hidden absolute left-4 text-white"
+      class="md:hidden justify-self-start text-white"
       @click="mobileMenuOpen = true"
+      aria-label="Open menu"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
-        viewBox="0 0 24 24" stroke="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M4 6h16M4 12h16M4 18h16" />
+              d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
 
-    <!-- Logo -->
-     <NuxtLink to="/" class="flex items-center">
-    <img
-      src="/logonew3.png"
-      alt="ISC Logo"
-      class="h-12 md:h-14 mx-auto md:mx-0 absolute left-1/2 transform -translate-x-1/2 md:static md:transform-none"
-    />
+    <!-- Logo (centered on all sizes) -->
+    <NuxtLink to="/" class="justify-self-center inline-flex items-center">
+      <img src="/logonew3.png" alt="ISC" class="h-12 md:h-14" />
     </NuxtLink>
 
-    <!-- Shared Nav: hidden in mobile menu, visible in desktop -->
-    <nav class="hidden md:flex space-x-6 text-base font-semibold text-teal-700 ml-auto pr-4 text-white">
-      <button
-        @click="currentSection = 'categories'"
-        :class="{ 'border-b-2 border-white': currentSection === 'categories' }"
-        class="hover:text-gray-200 transition"
-      >
-        Categories
-      </button>
-      <button
-        @click="currentSection = 'brand'"
-      :class="{ 'border-b-2 border-white': currentSection === 'brand' }"
-        class="hover:text-gray-200 transition"
-      >
-        Brands
-      </button>
-      <a href="#contact" class="hover:text-gray-200 transition">Contact</a>
+    <!-- Desktop nav + welcome (right side) -->
+    <div class="hidden md:flex justify-self-end items-center gap-6 text-white">
+      <nav class="flex items-center gap-6 text-base font-semibold">
+        <button
+          @click="currentSection = 'categories'"
+          :class="currentSection === 'categories' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
+          class="pb-1 hover:opacity-90 transition"
+        >
+          Categories
+        </button>
 
-      
-    </nav>
+        <button
+          @click="currentSection = 'brand'"
+          :class="currentSection === 'brand' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
+          class="pb-1 hover:opacity-90 transition"
+        >
+          Brands
+        </button>
 
+        <a href="#contact" class="pb-1 border-b-2 border-transparent hover:opacity-90 transition">
+          Contact
+        </a>
+      </nav>
 
-    <h1 class="border-b-2 border-white" v-if="isAuthenticated">Welcome, {{ user?.User_Name ?? 'Guest' }}</h1>
-
-    
+      <span v-if="isAuthenticated" class="hidden lg:inline-block text-sm font-medium px-3 py-1 rounded-full bg-white/10 ring-1 ring-white/20">
+        Welcome, {{ user?.User_Name ?? 'Guest' }}
+      </span>
+    </div>
   </div>
 
   <!-- Overlay -->
   <div
     v-if="mobileMenuOpen"
     @click="mobileMenuOpen = false"
-    class="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+    class="fixed inset-0 bg-black/50 z-40 md:hidden"
   ></div>
 
   <!-- Mobile Drawer -->
   <div
-    class="fixed top-0 left-0 w-64 h-full bg-white shadow-xl z-50 transform transition-transform duration-300 md:hidden"
-    :class="{ '-translate-x-0': mobileMenuOpen, '-translate-x-full': !mobileMenuOpen }"
+    class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform transition-transform duration-300 md:hidden"
+    :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
   >
-    <!-- Menu header with gradient -->
-    <div class="p-4 flex justify-between items-center border-b bg-gradient-to-r from-teal-500 to-cyan-500 text-white">
+    <!-- Drawer header -->
+    <div class="p-4 flex justify-between items-center bg-gradient-to-r from-teal-600 to-cyan-500 text-white">
       <h3 class="text-lg font-bold">Menu</h3>
-      <button @click="mobileMenuOpen = false" class="border border-white px-2 py-1 rounded hover:bg-white hover:text-teal-600">
+      <button
+        @click="mobileMenuOpen = false"
+        class="border border-white/70 px-2 py-1 rounded hover:bg-white hover:text-teal-700 transition"
+        aria-label="Close menu"
+      >
         Close
       </button>
     </div>
 
-    <!-- Shared nav (mobile view) -->
+    <!-- Drawer nav -->
     <nav class="flex flex-col p-4 space-y-2 text-base font-semibold text-teal-800">
       <button
         @click="currentSection = 'categories'; mobileMenuOpen = false"
-        :class="{ 'bg-cyan-100 text-teal-700': currentSection === 'categories' }"
-        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50"
+        :class="currentSection === 'categories' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
+        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
       >
         Categories
       </button>
+
       <button
         @click="currentSection = 'brand'; mobileMenuOpen = false"
-        :class="{ 'bg-cyan-100 text-teal-700': currentSection === 'brand' }"
-        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50"
+        :class="currentSection === 'brand' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
+        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
       >
         Brands
       </button>
+
       <a
         href="#contact"
         @click="mobileMenuOpen = false"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 text-left"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
       >
         Contact
       </a>
 
-      
-   <NuxtLink :to="'/login'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <NuxtLink
+        v-if="!isAuthenticated"
+        to="/login"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+      >
         Login
       </NuxtLink>
-    
 
- 
-      <NuxtLink :to="'/register'" v-if="!isAuthenticated" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <NuxtLink
+        v-if="!isAuthenticated"
+        to="/register"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+      >
         Register
       </NuxtLink>
-       
 
-      
-  <NuxtLink v-if="isAuthenticated" :to="`/account`" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
-    My Account
-    <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-    </svg>
-  </NuxtLink>
+      <NuxtLink
+        v-if="isAuthenticated"
+        :to="`/account`"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+      >
+        My Account
+        <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </NuxtLink>
 
-   <button v-if="isAuthenticated"  @click="logout" class="w-full flex items-center justify-between font-semibold py-2 px-3 rounded border border-gray-200 hover:bg-cyan-50">
+      <button
+        v-if="isAuthenticated"
+        @click="logout"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+      >
         Logout
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17l5-5m0 0l-5-5m5 5H3" />
         </svg>
-  </button>
-
-
- 
- 
+      </button>
     </nav>
   </div>
-     </header>
+</header>
 
      <!-- Secondary Nav Bar -->
     <section class="text-white" style="background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));">
