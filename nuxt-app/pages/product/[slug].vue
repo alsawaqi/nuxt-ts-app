@@ -302,10 +302,10 @@ onMounted(async(): Promise<void> => {
                 <svg class="h-4 w-4 text-cyan-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z"/></svg>
                 Fast dispatch from ISC warehouse
               </div>
-              <div class="flex items-center gap-2">
+              <!-- <div class="flex items-center gap-2">
                 <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a5 5 0 015 5v4h3v2H4v-2h3v-4a5 5 0 015-5z"/></svg>
                 7-day returns on unused items
-              </div>
+              </div> -->
             </div>
           </div>
         </div>

@@ -271,102 +271,146 @@ onMounted(async () => {
 <template>
   
   
- <header class="sticky top-0 z-50 bg-gradient-to-r from-teal-600 via-teal-500 to-cyan-500 shadow-md">
-  <div class="max-w-screen-xl mx-auto h-20 grid grid-cols-3 items-center px-4">
+ <header class="sticky top-0 z-50 bg-[#0f766e] shadow-lg">
+  <div class="max-w-[1400px] mx-auto h-24 grid grid-cols-[auto,1fr,auto] items-center px-6 md:px-8">
 
-    <!-- Hamburger (mobile only) -->
+    <!-- Mobile hamburger -->
     <button
-      class="md:hidden justify-self-start text-white"
+      class="md:hidden mr-3 text-white"
       @click="mobileMenuOpen = true"
       aria-label="Open menu"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 6h16M4 12h16M4 18h16" />
       </svg>
     </button>
 
-    <!-- Logo (centered on all sizes) -->
-    <NuxtLink to="/" class="justify-self-center inline-flex items-center">
-      <img src="/logonew3.png" alt="ISC" class="h-12 md:h-14" />
+    <!-- Logo -->
+    <NuxtLink to="/" class="inline-flex items-center gap-4">
+      <span class="inline-flex items-center justify-center bg-white rounded-full px-3.5 py-1.5 shadow ring-1 ring-black/10">
+        <img
+          src="/logonew1.jpg"
+          alt="ISC"
+          class="h-12 md:h-14 object-contain"
+          loading="eager"
+          decoding="async"
+        />
+      </span>
+      <!-- Tagline (hide on small if you want) -->
+      <span class="hidden xl:inline-block text-white/95 font-semibold tracking-wide text-lg">
+        Industrial Supplies Center LLC
+      </span>
     </NuxtLink>
 
-    <!-- Desktop nav + welcome (right side) -->
-    <div class="hidden md:flex justify-self-end items-center gap-6 text-white">
-      <nav class="flex items-center gap-6 text-base font-semibold">
-        <button
-          @click="currentSection = 'categories'"
-          :class="currentSection === 'categories' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
-          class="pb-1 hover:opacity-90 transition"
-        >
-          Categories
-        </button>
+    <!-- Desktop nav -->
+    <nav class="hidden md:flex items-center justify-center text-white font-semibold gap-8 lg:gap-12">
+      <NuxtLink
+        to="/"
+        class="pb-1 transition hover:opacity-90 border-b-2"
+        :class="$route.path==='/' ? 'border-white/90' : 'border-transparent'"
+      >
+        Home
+      </NuxtLink>
 
-        <button
-          @click="currentSection = 'brand'"
-          :class="currentSection === 'brand' ? 'border-b-2 border-white/90' : 'border-b-2 border-transparent'"
-          class="pb-1 hover:opacity-90 transition"
-        >
-          Brands
-        </button>
+      <button
+        @click="currentSection = 'categories'"
+        class="pb-1 border-b-2 transition hover:opacity-90"
+        :class="currentSection==='categories' ? 'border-white/90' : 'border-transparent'"
+      >
+        Categories
+      </button>
 
-        <a href="#contact" class="pb-1 border-b-2 border-transparent hover:opacity-90 transition">
-          Contact
-        </a>
-      </nav>
+      <button
+        @click="currentSection = 'brand'"
+        class="pb-1 border-b-2 transition hover:opacity-90"
+        :class="currentSection==='brand' ? 'border-white/90' : 'border-transparent'"
+      >
+        Brands
+      </button>
 
-      <span v-if="isAuthenticated" class="hidden lg:inline-block text-sm font-medium px-3 py-1 rounded-full bg-white/10 ring-1 ring-white/20">
+      <NuxtLink
+        to="/dealerships"
+        class="pb-1 border-b-2 transition hover:opacity-90"
+        :class="$route.path.startsWith('/dealerships') ? 'border-white/90' : 'border-transparent'"
+      >
+        Dealerships
+      </NuxtLink>
+
+      <a href="#contact" class="pb-1 border-b-2 border-transparent transition hover:opacity-90">
+        Contact
+      </a>
+    </nav>
+
+    <!-- Welcome pill -->
+    <div class="hidden md:flex justify-end">
+      <span
+        v-if="isAuthenticated"
+        class="text-sm font-medium px-4 py-2 rounded-full bg-white/10 ring-1 ring-white/25 text-white"
+      >
         Welcome, {{ user?.User_Name ?? 'Guest' }}
       </span>
     </div>
   </div>
 
-  <!-- Overlay -->
+  <!-- Mobile overlay -->
   <div
     v-if="mobileMenuOpen"
     @click="mobileMenuOpen = false"
     class="fixed inset-0 bg-black/50 z-40 md:hidden"
   ></div>
 
-  <!-- Mobile Drawer -->
+  <!-- Mobile drawer -->
   <div
-    class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform transition-transform duration-300 md:hidden"
+    class="fixed top-0 left-0 w-72 h-full bg-white z-50 shadow-2xl transform transition-transform duration-300 md:hidden"
     :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
   >
-    <!-- Drawer header -->
-    <div class="p-4 flex justify-between items-center bg-gradient-to-r from-teal-600 to-cyan-500 text-white">
+    <div class="p-4 flex justify-between items-center bg-[#0f766e] text-white">
       <h3 class="text-lg font-bold">Menu</h3>
       <button
         @click="mobileMenuOpen = false"
-        class="border border-white/70 px-2 py-1 rounded hover:bg-white hover:text-teal-700 transition"
+        class="border border-white/70 px-2 py-1 rounded hover:bg-white hover:text-[#0f766e] transition"
         aria-label="Close menu"
       >
         Close
       </button>
     </div>
 
-    <!-- Drawer nav -->
-    <nav class="flex flex-col p-4 space-y-2 text-base font-semibold text-teal-800">
+    <nav class="flex flex-col p-4 space-y-2 text-base font-semibold text-teal-900">
+      <NuxtLink
+        to="/"
+        @click="mobileMenuOpen = false"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
+      >
+        Home
+      </NuxtLink>
+
       <button
         @click="currentSection = 'categories'; mobileMenuOpen = false"
-        :class="currentSection === 'categories' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
-        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
+        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Categories
       </button>
 
       <button
         @click="currentSection = 'brand'; mobileMenuOpen = false"
-        :class="currentSection === 'brand' ? 'bg-cyan-50 text-teal-700 ring-1 ring-cyan-200' : 'border border-gray-200'"
-        class="w-full text-left px-4 py-2 rounded hover:bg-cyan-50 transition"
+        class="w-full text-left px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Brands
       </button>
 
+      <NuxtLink
+        to="/dealerships"
+        @click="mobileMenuOpen = false"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
+      >
+        Dealerships
+      </NuxtLink>
+
       <a
         href="#contact"
         @click="mobileMenuOpen = false"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Contact
       </a>
@@ -374,7 +418,7 @@ onMounted(async () => {
       <NuxtLink
         v-if="!isAuthenticated"
         to="/login"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Login
       </NuxtLink>
@@ -382,7 +426,7 @@ onMounted(async () => {
       <NuxtLink
         v-if="!isAuthenticated"
         to="/register"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Register
       </NuxtLink>
@@ -390,7 +434,7 @@ onMounted(async () => {
       <NuxtLink
         v-if="isAuthenticated"
         :to="`/account`"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition flex items-center justify-between"
       >
         My Account
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -401,7 +445,7 @@ onMounted(async () => {
       <button
         v-if="isAuthenticated"
         @click="logout"
-        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-cyan-50 transition flex items-center justify-between"
+        class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition flex items-center justify-between"
       >
         Logout
         <svg xmlns="http://www.w3.org/2000/svg" class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -411,6 +455,7 @@ onMounted(async () => {
     </nav>
   </div>
 </header>
+
 
      
  

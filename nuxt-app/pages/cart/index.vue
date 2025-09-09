@@ -281,96 +281,89 @@ onMounted(async () => {
     </div>
 
     <!-- Products -->
-    <div class="border rounded-xl shadow-sm mb-10">
-      <div class="flex justify-between items-center px-6 py-4 border-b bg-[#f9f9f9]">
-        <h2 class="font-semibold text-gray-800 text-lg">Items in Cart</h2>
-        <button
-          @click="onClearCart"
-          class="flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-md text-sm transition"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          Clear Cart
-        </button>
+    <!-- ============ PRODUCTS + SUMMARY IN ONE GRID ============ -->
+<div class="grid md:grid-cols-3 gap-6 items-start">
+
+  <!-- Products (left, span 2) -->
+  <div class="md:col-span-2 border rounded-xl shadow-sm">
+    <div class="flex justify-between items-center px-4 md:px-5 py-3 border-b bg-[#f9f9f9]">
+      <h2 class="font-semibold text-gray-800 text-base md:text-lg">Items in Cart</h2>
+      <button
+        @click="onClearCart"
+        class="flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-sm transition"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        Clear Cart
+      </button>
+    </div>
+
+    <div
+      v-for="item in cart.cartItems"
+      :key="item.id"
+      class="flex justify-between items-center px-4 md:px-5 py-3 md:py-4 border-b last:border-b-0 hover:bg-gray-50 transition"
+    >
+      <div class="flex items-start gap-3 md:gap-4 min-w-0">
+        <NuxtLink :to="`/product/${item.slug}`" class="shrink-0">
+          <img :src="`${$r2Url}/${item.image}`"
+               alt="Product"
+               class="w-16 h-16 md:w-20 md:h-20 object-cover border rounded-lg shadow-sm" />
+        </NuxtLink>
+        <div class="min-w-0">
+          <h3 class="font-medium text-gray-800 truncate">{{ item.name }}</h3>
+          <p class="text-[11px] text-gray-500">Item #{{ item.id }}</p>
+          <button @click="cart.removeFromCart(item.id)"
+                  class="text-xs text-[#00bfa5] hover:underline mt-1.5">Remove</button>
+        </div>
       </div>
 
-      <div
-        v-for="item in cart.cartItems"
-        :key="item.id"
-        class="flex justify-between items-center px-6 py-6 border-b hover:bg-gray-50 transition group"
-      >
-        <div class="flex items-start gap-x-5">
-          <NuxtLink :to="`/product/${item.slug}`">
-            <img :src="`${$r2Url}/${item.image}`" alt="Product" class="w-20 h-20 object-cover border rounded-lg shadow-sm group-hover:scale-105 transition" />
-          </NuxtLink>
-          <div>
-            <h3 class="font-medium text-gray-800">{{ item.name }}</h3>
-            <p class="text-xs text-gray-500">Item #{{ item.id }}</p>
-            <p class="text-xs text-gray-500 mt-1">Expected by <span class="font-semibold">Wed. Jul 16</span></p>
-            <button @click="cart.removeFromCart(item.id)" class="text-sm text-[#00bfa5] hover:underline mt-2">Remove</button>
-          </div>
+      <div class="text-right">
+        <label class="text-[12px] font-semibold text-gray-600 block mb-1">Qty</label>
+        <div class="flex items-center justify-end gap-1">
+          <button @click="decrementQty(item.id)"
+                  class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">−</button>
+          <input type="number" min="1" v-model.number="item.quantity"
+                 @change="onQtyInputChange($event, item.id)"
+                 class="w-14 border rounded-md text-center text-sm py-1" />
+          <button @click="incrementQty(item.id)"
+                  class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">+</button>
         </div>
-       <div class="text-right">
-  <label class="text-sm font-semibold text-gray-600 block mb-1">Quantity</label>
-
-  <div class="flex items-center justify-end space-x-1">
-    <!-- Decrement Button -->
-    <button
-      @click="decrementQty(item.id)"
-      class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
-    >
-      −
-    </button>
-
-    <!-- Quantity Input -->
-    <input
-      type="number"
-      min="1"
-      v-model.number="item.quantity"
-      @change="onQtyInputChange($event, item.id)"
-      class="w-16 border rounded-md text-center text-sm py-1.5 px-2"
-    />
-
-    <!-- Increment Button -->
-    <button
-      @click="incrementQty(item.id)"
-      class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
-    >
-      +
-    </button>
+        <p class="text-sm text-green-700 font-semibold mt-1.5">
+          OMR {{ item.price }} <span class="text-xs text-gray-500 font-normal">/ each</span>
+        </p>
+      </div>
+    </div>
   </div>
 
-  <p class="text-sm text-green-700 font-semibold mt-2">
-    OMR {{ item.price }} <span class="text-xs text-gray-500 font-normal">/ each</span>
-  </p>
+  <!-- Summary (right, sticky) -->
+  <div class="md:col-span-1">
+    <div class="w-full border rounded-xl shadow-lg bg-[#fafafa] p-5 md:sticky md:top-24">
+      <h2 class="text-base md:text-lg font-bold text-gray-800 mb-3">Order Summary</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span>Subtotal</span>
+          <span>OMR {{ cart.totalPrice().toFixed(2) }}</span>
+        </div>
+      </div>
+      <hr class="my-3" />
+      <div class="flex justify-between font-semibold text-lg text-[#00bfa5]">
+        <span>Total</span>
+        <span>OMR {{ (cart.totalPrice()).toFixed(2) }}</span>
+      </div>
+      <NuxtLink
+        :to="'/cart/checkout'"
+        class="block mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
+        :disabled="cart.cartItems.length === 0"
+      >
+        Proceed to Checkout
+      </NuxtLink>
+    </div>
+  </div>
 </div>
 
-      </div>
-    </div>
 
-    <!-- Summary -->
-    <div class="flex justify-end">
-      <div class="w-full max-w-sm border rounded-xl shadow-lg bg-[#fafafa] p-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-4">Order Summary</h2>
-        <div class="space-y-2 text-sm">
-          <div class="flex justify-between"><span>Subtotal</span><span>OMR {{ cart.totalPrice().toFixed(2) }}</span></div>
-        
-        </div>
-        <hr class="my-3" />
-        <div class="flex justify-between font-semibold text-lg text-[#00bfa5]">
-          <span>Total</span>
-          <span>OMR {{ (cart.totalPrice()).toFixed(2) }}</span>
-        </div>
-        <NuxtLink
-          :to="'/cart/checkout'"
-          class="block mt-6 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition"
-          :disabled="cart.cartItems.length === 0"
-        >
-          Proceed to Checkout
-        </NuxtLink>
-      </div>
-    </div>
+   
   </section>
 
   <!-- Address Modal -->
