@@ -50,13 +50,31 @@ interface OrderPayload {
 
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
+const itemsOpen = ref(false) 
 const cart = useCartStore()
  
 const toast = useToast()
  
 
 
-const selectedAddress = ref<any>(null)
+const selectedAddress = ref<any>(null);
+
+
+const shippingOk = computed(() =>
+  cart.deliveryMethod === 'pickup' ||
+  (Boolean(selectedAddress.value) && Boolean(selectedOption.value))
+)
+
+// Payment requirements OK per method
+const paymentOk = computed(() => {
+  if (paymentMethod.value === 'card') return cardValid.value
+  if (paymentMethod.value === 'transfer') return transferValid.value
+  if (paymentMethod.value === 'cod') return true
+  return false
+})
+
+// Final gate for enabling the button
+const canSubmit = computed(() => shippingOk.value && paymentOk.value)
 
 
 const totals = computed(() => {
@@ -433,6 +451,88 @@ onMounted(()=>{
     </div>
   </div>
 
+
+  <!-- Products Review (Accordion) -->
+<div class="bg-[#f9f9f9] border border-gray-200 rounded-lg shadow-sm">
+  <!-- Header / Toggle -->
+  <button
+    type="button"
+    class="w-full flex items-center justify-between px-5 py-4"
+    @click="itemsOpen = !itemsOpen"
+    :aria-expanded="itemsOpen"
+    aria-controls="order-items"
+  >
+    <div class="flex items-center gap-2">
+      <span class="text-lg font-semibold text-gray-800">🛒 Items in Your Order</span>
+      <span class="text-xs text-gray-500">({{ cart.cartItems.length }})</span>
+    </div>
+
+    <!-- Chevron -->
+    <svg
+      class="h-5 w-5 text-gray-600 transition-transform duration-200"
+      :class="itemsOpen ? 'rotate-180' : ''"
+      viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+    >
+      <path fill-rule="evenodd"
+        d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.23 8.27a.75.75 0 01.02-1.06z"
+        clip-rule="evenodd" />
+    </svg>
+  </button>
+
+  <!-- Body -->
+  <transition name="accordion">
+    <div
+      v-show="itemsOpen"
+      id="order-items"
+      class="px-5 pb-5 overflow-hidden"
+      role="region"
+      aria-label="Order items"
+    >
+      <div
+        v-for="item in cart.cartItems"
+        :key="item.id"
+        class="flex justify-between items-center border-t pt-4 pb-5 first:border-t-0"
+      >
+        <div class="flex gap-4">
+          <img :src="`${$r2Url}/${item.image}`" alt="product"
+               class="w-16 h-16 object-cover rounded border" />
+          <div class="text-sm">
+            <p class="font-semibold text-gray-800">{{ item.name }}</p>
+
+            <!-- Quantity + Buttons -->
+            <div class="flex items-center space-x-2 mt-1">
+              <button
+                @click="decrementQty(item.id)"
+                class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
+              >−</button>
+
+              <input
+                type="number"
+                min="1"
+                v-model.number="item.quantity"
+                class="w-12 border rounded text-center text-xs py-1"
+                @change="onQtyInputChange($event, item.id)"
+              />
+
+              <button
+                @click="incrementQty(item.id)"
+                class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
+              >+</button>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-1">OMR {{ item.price }} / each</p>
+          </div>
+        </div>
+
+        <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">
+          OMR {{ (item.price * item.quantity).toFixed(2) }}
+        </p>
+      </div>
+    </div>
+  </transition>
+</div>
+
+
    <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
 
 
@@ -472,35 +572,7 @@ onMounted(()=>{
   </div>
 </div>
  </div>
-
-
-
-  <!-- ✅ Shipping Info -->
- <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
-  <div class="flex justify-between items-start mb-2">
-    <div>
-      <h3 class="font-semibold text-gray-800 text-lg mb-1">📦 Shipping To</h3>
-      <p class="text-sm text-gray-600" v-if="selectedAddress">
-        {{ selectedAddress.Contact_Person_Name }}<br>
-        {{ selectedAddress.Telephone }}<br>
-       {{ selectedAddress.country?.Country_Name }}, {{ selectedAddress.region?.Region_Name }}, {{ selectedAddress.district?.District_Name }} , {{ selectedAddress.city?.City_Name }}, 
-      </p>
-      <p class="text-sm text-gray-400" v-else>
-        No address selected
-      </p>
-    </div>
-    <button class="text-sm text-[#00bfa5] hover:underline">Change</button>
-  </div>
-  <!-- <div class="mt-3 text-sm text-gray-700">
-    <p class="mb-1 font-medium">Ground Shipping - Standard</p>
-    <p>Estimated Delivery: <strong>Wed. Jul 16</strong> - <strong>Thu. Jul 17</strong></p>
-    <p class="text-[#00bfa5] font-semibold mt-1">Shipping Cost: OMR {{ shippingCost }}</p>
-  </div> -->
-</div>
-
-
-  <!-- ✅ Payment Method -->
-  <!-- ✅ Payment Method -->
+ 
 <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
   <h3 class="font-semibold text-gray-800 text-lg mb-4">Choose Payment Method</h3>
 
@@ -701,54 +773,24 @@ onMounted(()=>{
 </div>
 
 
-  <!-- ✅ Products Review -->
-  <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
-    <h3 class="font-semibold text-gray-800 text-lg mb-4">🛒 Items in Your Order</h3>
-    <div
-      v-for="item in cart.cartItems"
-      :key="item.id"
-      class="flex justify-between items-center border-t pt-4 pb-5 first:border-t-0"
-    >
-      <div class="flex gap-4">
-        <img :src="`${$r2Url}/${item.image}`" alt="product" class="w-16 h-16 object-cover rounded border" />
-        <div class="text-sm">
-          <p class="font-semibold text-gray-800">{{ item.name }}</p>
-
-          <!-- Quantity + Buttons -->
-          <div class="flex items-center space-x-2 mt-1">
-            <button
-              @click="decrementQty(item.id)"
-              class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
-            >−</button>
-
-            <input
-              type="number"
-              min="1"
-              v-model.number="item.quantity"
-              class="w-12 border rounded text-center text-xs py-1"
-              @change="onQtyInputChange($event, item.id)"
-            />
-
-            <button
-              @click="incrementQty(item.id)"
-              class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
-            >+</button>
-          </div>
-
-          <p class="text-xs text-gray-500 mt-1">OMR {{ item.price }} / each</p>
-        </div>
-      </div>
-
-      <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">
-        OMR {{ (item.price * item.quantity).toFixed(2) }}
-      </p>
-    </div>
-  </div>
+ 
 </div>
 
 
       <!-- Right Column: Order Summary -->
       <div class="bg-gray-50 border rounded-lg p-5 shadow-sm">
+
+         <h3 class="font-semibold text-gray-800 text-lg mb-1">📦 Shipping To</h3>
+      <p class="text-sm text-gray-600" v-if="selectedAddress">
+        {{ selectedAddress.Contact_Person_Name }}<br>
+        {{ selectedAddress.Telephone }}<br>
+       {{ selectedAddress.country?.Country_Name }}, {{ selectedAddress.region?.Region_Name }}, {{ selectedAddress.district?.District_Name }} , {{ selectedAddress.city?.City_Name }}, 
+      </p>
+      <p class="text-sm text-gray-400" v-else>
+        No address selected
+      </p>
+      <br>
+        <!-- Order Summary -->
         <h3 class="text-lg font-semibold mb-4">Order Summary</h3>
         <div class="space-y-2 text-sm text-gray-700">
           <div class="flex justify-between">

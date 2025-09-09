@@ -507,9 +507,24 @@ onMounted(async () => {
           <!-- Designation -->
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Designation</label>
-            <input v-model="newAddress.Designation" type="text"
-                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm
-                          focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400" />
+         
+              
+              <select v-model="newAddress.Designation"
+                      class="w-full mt-2 appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm shadow-sm
+                             focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400">
+                <option value="">-- Select Designation --</option>
+                <option value="Mr">Mr</option>
+                <option value="Ms">Ms</option>
+                <option value="Mrs">Mrs</option>
+                <option value="Dr">Dr</option>
+                <option value="Prof">Prof</option>
+                
+                <option value="Sir">Sir</option>
+                <option value="Eng">Eng</option>
+
+              </select>            
+
+
           </div>
 
           <!-- Remarks -->

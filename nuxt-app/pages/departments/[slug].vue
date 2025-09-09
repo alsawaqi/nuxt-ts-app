@@ -361,114 +361,131 @@ onMounted(async () => {
      <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
 
        <div v-if="view_option" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-    <article
-      v-for="row in rows"
-      :key="row.id"
-      @click="goProduct(row.slug)"
-      @keydown.enter="goProduct(row.slug)"
-      role="button"
-      tabindex="0"
-      class="group relative rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 hover:shadow-lg hover:-translate-y-[2px] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50"
-    >
-      <!-- top image -->
-      <div class="aspect-[4/3] overflow-hidden bg-slate-50">
-        <img
-          :src="row.image?.Image_Path"
-          :alt="row.name"
-          class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          loading="lazy"
-        />
+        <article
+          v-for="row in rows"
+          :key="row.id"
+          @click="goProduct(row.slug)"
+          @keydown.enter="goProduct(row.slug)"
+          role="button"
+          tabindex="0"
+          class="group relative rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 hover:shadow-lg hover:-translate-y-[2px] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50"
+        >
+          <!-- top image -->
+          <div class="aspect-[4/3] overflow-hidden bg-slate-50">
+            <img
+              :src="row.image?.Image_Path"
+              :alt="row.name"
+              class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              loading="lazy"
+            />
 
-       
-      </div>
+          
+          </div>
 
-      <!-- content -->
-      <div class="p-4">
-        <div class="flex items-start justify-between gap-3">
-          <h3 class="text-[15px] font-semibold text-slate-900 line-clamp-2">
-            {{ row.name }}
+          <!-- content -->
+          <div class="p-4">
+            <div class="flex items-start justify-between gap-3">
+              <h3 class="text-[15px] font-semibold text-slate-900 line-clamp-2">
+                {{ row.name }}
 
-             {{ row.image?.Image_Path }}
-          </h3>
-          <div class="text-right shrink-0">
-            <div class="text-[13px] font-semibold px-2 py-1 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm">
-             
+                {{ row.image?.Image_Path }}
+              </h3>
+              <div class="text-right shrink-0">
+                <div class="text-[13px] font-semibold px-2 py-1 rounded-md bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-sm">
+                
+                </div>
+              </div>
+            </div>
+
+            <!-- spec chips -->
+            <div class="mt-3 flex flex-wrap gap-2">
+              
             </div>
           </div>
-        </div>
 
-        <!-- spec chips -->
-        <div class="mt-3 flex flex-wrap gap-2">
-           
-        </div>
+          <!-- bottom bar -->
+          <div class="px-4 pb-4">
+            <div class="flex items-center justify-between text-[12px] text-slate-500">
+              <span class="inline-flex items-center gap-1">
+                <span class="i-heroicons-arrow-top-right-on-square-20-solid"></span>
+                View details
+              </span>
+              <svg class="h-4 w-4 text-slate-400 group-hover:text-cyan-500 transition-colors" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd"
+                  d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1
+                  1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- subtle gradient border on top -->
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-cyan-500/80 via-sky-500/80 to-blue-600/80"></div>
+        </article>
       </div>
 
-      <!-- bottom bar -->
-      <div class="px-4 pb-4">
-        <div class="flex items-center justify-between text-[12px] text-slate-500">
-          <span class="inline-flex items-center gap-1">
-            <span class="i-heroicons-arrow-top-right-on-square-20-solid"></span>
-            View details
-          </span>
-          <svg class="h-4 w-4 text-slate-400 group-hover:text-cyan-500 transition-colors" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd"
-              d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1
-              1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-          </svg>
-        </div>
-      </div>
+      <div class="overflow-auto rounded-xl border border-slate-200 shadow-sm" v-else>
+  <table class="min-w-full table-fixed text-sm bg-white" aria-label="Products">
+    <!-- Control widths: Name grows; specs get a min width; Price fixed -->
+    <colgroup>
+      <col class="w-[32%]" />
+      <!-- one col per dynamic header -->
+      <col v-for="h in headers" :key="`col-${h.id}`" class="min-w-[140px]" />
+      <col class="w-[120px]" />
+    </colgroup>
 
-      <!-- subtle gradient border on top -->
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-cyan-500/80 via-sky-500/80 to-blue-600/80"></div>
-    </article>
-  </div>
+    <thead class="sticky top-0 z-10">
+      <tr class="bg-gradient-to-r from-cyan-600 to-blue-700 text-white text-xs uppercase tracking-wide shadow-sm">
+        <th class="px-5 py-3 text-left font-semibold">Name</th>
+        <th v-for="h in headers" :key="h.id" class="px-5 py-3 text-left font-semibold">
+          {{ h.name }}
+        </th>
+        <th class="px-5 py-3 text-right font-semibold">Price</th>
+      </tr>
+    </thead>
 
-        <table v-else class="min-w-full table-fixed text-sm bg-white">
-          <thead class="sticky top-0 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-semibold uppercase tracking-wider">
-            <tr>
-              <th class="px-5 py-3 text-left">Name</th>
-              <!-- dynamic spec headers -->
-              <th v-for="h in headers" :key="h.id" class="px-5 py-3 text-left">
-                {{ h.name }}
-              </th>
-              <th class="px-5 py-3 text-right">Price</th>
-              
-            </tr>
-          </thead>
+    <tbody class="divide-y divide-slate-100 text-[13px]">
+      <tr
+        v-for="row in rows"
+        :key="row.id"
+        @click="goProduct(row.slug)"
+        @keydown.enter="goProduct(row.slug)"
+        role="button"
+        tabindex="0"
+        class="group cursor-pointer odd:bg-white even:bg-slate-50 hover:bg-cyan-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40"
+      >
+        <!-- Name -->
+        <td class="px-5 py-3 font-medium text-slate-900 whitespace-nowrap truncate" :title="row.name">
+          {{ row.name }}
+        </td>
 
-          <tbody class="divide-y divide-gray-100 text-[12px]">
-            <tr
-              v-for="row in rows"
-              :key="row.id"
-              @click="goProduct(row.slug)"
-              @keydown.enter="goProduct(row.slug)"
-              role="button"
-              tabindex="0"
-              class="group cursor-pointer odd:bg-white even:bg-slate-50 hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40"
-            >
-              <!-- Name -->
-              <td class="px-5 py-2.5 leading-5 whitespace-nowrap truncate max-w-[260px] font-medium text-gray-900">
-                {{ row.name }}
-              </td>
+        <!-- Dynamic specs -->
+        <td
+          v-for="h in headers"
+          :key="`${row.id}:${h.id}`"
+          class="px-5 py-3 text-slate-700 whitespace-nowrap truncate"
+          :title="row.specs[h.id]?.label ?? '—'"
+        >
+          {{ row.specs[h.id]?.label ?? '—' }}
+        </td>
 
-              <!-- dynamic spec cells -->
-              <td
-                v-for="h in headers"
-                :key="`${row.id}:${h.id}`"
-                class="px-5 py-2.5 leading-5 whitespace-nowrap truncate text-gray-700"
-              >
-                {{ row.specs[h.id]?.label ?? '—' }}
-              </td>
+        <!-- Price -->
+        <td class="px-5 py-3 text-right font-semibold text-slate-900 whitespace-nowrap">
+          {{ row.price }} <span class="text-slate-500 font-normal">OMR</span>
+        </td>
+      </tr>
 
-              <!-- Price (right aligned) -->
-              <td class="px-5 py-2.5 leading-5 whitespace-nowrap text-right font-semibold text-gray-900">
-                {{ row.price }} OMR
-              </td>
+      <!-- Optional: empty state row -->
+      <tr v-if="rows.length === 0">
+        <td :colspan="headers.length + 2" class="px-5 py-6 text-center text-slate-500">
+          No products found.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
-              
-            </tr>
-          </tbody>
-        </table>
+
+        
     </div>
 
 

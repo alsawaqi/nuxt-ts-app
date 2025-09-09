@@ -248,7 +248,7 @@ const onShowOrderDetails = async (orderId: number) => {
     ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
     : 'text-slate-700 hover:bg-slate-50'">
   <span class="mr-2">🎫</span>
-  Tickets
+  Requests
 </button>
 
   </nav>

@@ -95,7 +95,7 @@ const addToCart = () => {
   })
 
   toast.success(`${product.value.Product_Name} added to cart`)
-  router.push('/cart');
+ 
 }
 
 

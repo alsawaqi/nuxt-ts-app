@@ -63,8 +63,8 @@ const mobileMenuOpen = ref(false)
 
       <NuxtLink
         to="/"
-        class="pb-1 border-b-2 transition hover:opacity-90"
-        :class="currentSection==='categories' ? 'border-white/90' : 'border-transparent'"
+        class="pb-1 border-b-2 transition hover:opacity-90 border-transparent"
+        
       >
         Categories
       </NuxtLink>
@@ -85,9 +85,9 @@ const mobileMenuOpen = ref(false)
         Dealerships
       </NuxtLink>
 
-      <a href="#contact" class="pb-1 border-b-2 border-transparent transition hover:opacity-90">
+      <NuxtLink to="/contact" class="pb-1 border-b-2 border-transparent transition hover:opacity-90">
         Contact
-      </a>
+      </NuxtLink>
     </nav>
 
     <!-- Welcome pill -->
@@ -156,13 +156,12 @@ const mobileMenuOpen = ref(false)
         Dealerships
       </NuxtLink>
 
-      <a
-        href="#contact"
+      <NuxtLink to="/contact"
         @click="mobileMenuOpen = false"
         class="w-full px-4 py-2 rounded border border-gray-200 hover:bg-teal-50 transition"
       >
         Contact
-      </a>
+      </NuxtLink>
 
       <NuxtLink
         v-if="!isAuthenticated"
@@ -269,6 +268,29 @@ const mobileMenuOpen = ref(false)
                {{ cart.totalItems() }}
             </span>
         </NuxtLink>
+
+
+         <NuxtLink
+  to="/cart/checkout"
+  class="ml-2 flex items-center gap-x-1 text-white hover:text-cyan-300 transition"
+   v-if="isAuthenticated"
+>
+ 
+  <svg
+    width="32px"
+    height="32px"
+    version="1.1"
+    viewBox="0 0 1200 1200"
+    xmlns="http://www.w3.org/2000/svg"
+    class="fill-current"
+  >
+    <path d="m1e3 1e3c0 55.227-44.773 100-100 100s-100-44.773-100-100 44.773-100 100-100 100 44.773 100 100z"/>
+    <path d="m450 1e3c0 55.227-44.773 100-100 100s-100-44.773-100-100 44.773-100 100-100 100 44.773 100 100z"/>
+    <path transform="scale(50)" d="m20 16h-13c-0.8 0-1.3-0.9-0.8-1.6l1.8-2.4-3-9h-3" fill="none" stroke="currentColor" stroke-miterlimit="10" stroke-width="2"/>
+    <path d="m1050 200h-780l130 450h495c20 0 40-10 45-30l155-350c15-35-10-70-45-70zm-350 350v-100h-200v-50h200v-100l150 125z" />
+  </svg>
+  Checkout
+</NuxtLink>
       </div>
     </section>
 <hr class="border-t border-gray-200">
