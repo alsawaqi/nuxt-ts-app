@@ -73,7 +73,7 @@ const remember = ref(false)
                 class="w-full h-full object-cover"
               />
         </div>
-          <div class="min-h-[70vh] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center px-4 py-12">
+          <div class="min-h-[60vh] bg-gradient-to-b from-slate-50 to-slate-100 flex items-center justify-center px-4 py-12">
             
             <div class="w-full max-w-md">
 

@@ -1,97 +1,153 @@
-
-
 <script setup lang="ts">
-definePageMeta({
-  layout: 'layouts',
-})
+definePageMeta({ layout: 'layouts' })
+
+// Imports
 import { useCartStore } from '~/stores/cart'
-import { useUserStore } from '~/stores/user'
+import { useShippingQuotes } from '@/composables/useShippingQuotes'
 
-
-
-const { $r2Url ,$axios } = useNuxtApp();
-
-const cart = useCartStore();
+// Init first (so everything below can safely use them)
+const { $r2Url, $axios } = useNuxtApp()
+const cart = useCartStore()
 const { user, isAuthenticated } = useAuth()
 
+// Shipping quotes composable
+const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShippingQuotes()
+const selectedOption = ref<any | null>(null)
 
-const addresses = ref<any[]>([])
-const selectedAddressId = ref<number | null>(null)
 
-const fetchAddresses = async () => {
-  if (!isAuthenticated) return  
+const totalsForQuotes = computed(() => {
+  const weight = cart.cartItems.reduce((s, i) => s + ((i.weight || 0) * i.quantity), 0)
+  const volume = cart.cartItems.reduce((s, i) => {
+    const cbm = ((i.length || 0) * (i.width || 0) * (i.height || 0)) / 1_000_000
+    return s + (cbm * i.quantity)
+  }, 0)
+  return { weight_kg: +weight.toFixed(3), volume_cbm: +volume.toFixed(4) }
+})
 
-  try {
-    const res = await $axios.get('/api/contacts')
-    addresses.value = res.data
-    if (addresses.value.length > 0) {
-      selectedAddressId.value = addresses.value[0].id
-    }
-  } catch (e) {
-    console.error('Failed to fetch addresses', e)
+
+// Persist selected address
+watch(() => cart.selectedAddressId, (id) => {
+  if (id) localStorage.setItem('selected_address_id', String(id))
+}, { immediate: true })
+
+// Quote inputs from cart items
+const itemsForQuote = computed(() =>
+  cart.cartItems.map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
+)
+
+// Request quotes when cart/delivery/address changes
+ 
+const readCartItemsForQuote = (): { product_id: number; qty: number }[] => {
+  // Adjust the key if your app uses a different one
+  const raw = localStorage.getItem('cart_items') || localStorage.getItem('cart')
+  if (!raw) {
+    // fallback to Pinia store if LS empty
+    return cart.cartItems.map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
   }
+  try {
+    const parsed = JSON.parse(raw)
+
+    // shape A: [{ id, quantity }]
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter(i => i?.id && i?.quantity)
+        .map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
+    }
+
+    // shape B: { items: [{ product_id, qty }] }
+    if (Array.isArray((parsed as any).items)) {
+      return (parsed as any).items
+        .filter((i: any) => i?.product_id && i?.qty)
+        .map((i: any) => ({ product_id: Number(i.product_id), qty: Number(i.qty) }))
+    }
+  } catch {
+    // fallback to Pinia store on parse error
+    return cart.cartItems.map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
+  }
+  return []
 }
 
 
+const requestQuotes = async () => {
+  if (cart.deliveryMethod !== 'ship') return
+  const storedId = localStorage.getItem('selected_address_id')
+  if (!storedId) return
+
+  const items = readCartItemsForQuote()
+  if (!items.length) return
+
+  try {
+    const { data } = await $axios.post('/api/v1/shipping/quotes', {
+      address_id: parseInt(storedId, 10),
+      items,              // ✅ send items instead of totals
+      include_heavy: false
+    })
+
+    // server returns options sorted by price; keep your existing handling
+    shippingOptions.value = data?.options ?? []
+    selectedOption.value = shippingOptions.value[0] || null
+
+    // (optional) you can store server totals if you want:
+    // totalsFromServer.value = data?.totals
+  } catch (e:any) {
+    console.error('Failed to fetch shipping quotes', e)
+  }
+}
+
+watch([() => cart.cartItems, () => cart.deliveryMethod, totalsForQuotes], requestQuotes, { deep: true })
+
+// Addresses
+const addresses = ref<any[]>([])
 const showAddressModal = ref(false)
 const countries = ref<any[]>([])
 const regions = ref<any[]>([])
 const districts = ref<any[]>([])
 const states = ref<any[]>([])
 const cities = ref<any[]>([])
-
 const newAddress = reactive({
-  Country_Id: '',
-  State_Id: '',
-  City_Id: '',
-  Region_Id: '',
-  District_Id: '',
-  Contact_Person_Name: '',
-  Telephone: '',
-  Designation: '',
-  Remarks: '',
+  Country_Id: '', State_Id: '', City_Id: '',
+  Region_Id: '', District_Id: '', Contact_Person_Name: '',
+  Telephone: '', Designation: '', Remarks: '',
 })
 
-const loadCountries = async () => {
- if (!isAuthenticated) return 
-
-
-  const res = await $axios.get('/api/countries')
-  countries.value = res.data
+const fetchAddresses = async () => {
+  if (!isAuthenticated) return
+  try {
+    const res = await $axios.get('/api/contacts')
+    addresses.value = res.data
+    const stored = localStorage.getItem('selected_address_id')
+    const candidate = stored ? Number(stored) : addresses.value[0]?.id
+    if (candidate) cart.selectedAddressId = candidate
+  } catch (e) {
+    console.error('Failed to fetch addresses', e)
+  }
 }
 
+// Totals (+5% VAT)
+const subtotal = computed(() => +cart.totalPrice().toFixed(3))
+const shippingCost = computed(() =>
+  cart.deliveryMethod === 'ship' && selectedOption.value
+    ? Number(selectedOption.value.total_price)
+    : 0
+)
+const vat = computed(() => +(((subtotal.value + shippingCost.value) * 0.05)).toFixed(3))
+const grandTotal = computed(() =>
+  +(subtotal.value + shippingCost.value + vat.value).toFixed(3)
+)
 
-
-const loadRegions = async () => {
- 
-  const res = await $axios.get('/api/region')
-  regions.value = res.data.data
+// Qty handlers, address helpers (unchanged)
+const onQtyInputChange = (e: Event, id: number) => {
+  const v = (e.target as HTMLInputElement).valueAsNumber
+  if (v > 0) cart.updateQuantity(id, v)
 }
+const incrementQty = (id: number) => { const it = cart.cartItems.find(i => i.id === id); if (it) it.quantity++ }
+const decrementQty = (id: number) => { const it = cart.cartItems.find(i => i.id === id); if (it && it.quantity > 1) it.quantity-- }
 
-
-const loadDistricts = async () => {
- 
-  const res = await $axios.get('/api/district')
-  districts.value = res.data.data
-}
-
-const loadStates = async () => {
-  states.value = []
-  cities.value = []
-  if (!newAddress.Country_Id) return
-  const res = await $axios.get(`/api/contacts/by-country/${newAddress.Country_Id}`)
-  states.value = res.data
-}
-
-const loadCities = async () => {
- 
-    
- 
-    
-
-  const res = await $axios.get(`/api/contacts/by-state/${newAddress.District_Id}`)
-  cities.value = res.data
-}
+const loadCountries = async () => { if (!isAuthenticated) return; const r = await $axios.get('/api/countries'); countries.value = r.data }
+const loadRegions = async () => { const r = await $axios.get('/api/region'); regions.value = r.data.data }
+const loadDistricts = async () => { const r = await $axios.get('/api/district'); districts.value = r.data.data }
+const loadStates = async () => { states.value = []; cities.value = []; if (!newAddress.Country_Id) return; const r = await $axios.get(`/api/contacts/by-country/${newAddress.Country_Id}`); states.value = r.data }
+const loadCities = async () => { const r = await $axios.get(`/api/contacts/by-state/${newAddress.District_Id}`); cities.value = r.data }
 
 const submitAddress = async () => {
   try {
@@ -103,47 +159,22 @@ const submitAddress = async () => {
   }
 }
 
- 
-
-
- 
-const onQtyInputChange = (event: Event, id: number) => {
-  const input = event.target as HTMLInputElement
-  const value = input.valueAsNumber
-  if (value > 0) cart.updateQuantity(id, value)
-}
-
-const onRemove = (id: number) => {
-  cart.removeFromCart(id)
-}
-
 const onClearCart = () => {
   cart.clearCart()
 }
 
 
-const incrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item) item.quantity++
-}
-
-const decrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item && item.quantity > 1) item.quantity--
-}
-
-
-
 onMounted(async () => {
   if (isAuthenticated.value === true) {
-        await fetchAddresses();
-        await loadCountries();
-        await loadRegions();
-        await loadDistricts();
+    await fetchAddresses()
+    await loadCountries()
+    await loadRegions()
+    await loadDistricts()
+      requestQuotes()
   }
 })
-
 </script>
+
 
 <template>
   <section class="bg-white py-10 px-4 max-w-screen-xl mx-auto font-sans">
@@ -151,135 +182,8 @@ onMounted(async () => {
       <span class="text-gradient">Your Cart</span>
     </h1>
 
-    <!-- Delivery Method -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border border-[#00bfa5]/20 rounded-xl p-6 shadow-sm mb-10 bg-white animate-fade-in">
-      <div>
-        <h2 class="font-semibold text-gray-700 mb-3">Delivery Method {{ cart.deliveryMethod }}</h2>
-        <div class="space-y-3">
-          <label class="flex items-center border border-[#00bfa5]/40 hover:border-[#00bfa5] rounded-lg px-4 py-2 cursor-pointer transition">
-            <input type="radio" name="delivery" value="ship" v-model="cart.deliveryMethod" class="accent-[#00bfa5] mr-3" />
-            Ship to Address
-          </label>
-          <label class="flex items-center border border-[#00bfa5]/40 hover:border-[#00bfa5] rounded-lg px-4 py-2 cursor-pointer transition">
-            <input type="radio" name="delivery" value="pickup" v-model="cart.deliveryMethod" class="accent-[#00bfa5] mr-3" />
-            Local Pickup
-          </label>
-        </div>
-      </div>
-
-      <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-5">
-  <div class="flex items-center justify-between mb-4">
-    <h2 v-if="cart.deliveryMethod === 'ship'" class="text-lg font-semibold text-gray-900">
-      Shipping Address
-    </h2>
-    <span
-      v-if="isAuthenticated && cart.deliveryMethod === 'ship' && addresses.length"
-      class="text-xs text-gray-500"
-    >
-      {{ addresses.length }} saved
-    </span>
-  </div>
-
-  <!-- Ask to login -->
-  <div v-if="!isAuthenticated">
-    <p class="text-sm text-gray-600">
-      Please log in to select a shipping address.
-    </p>
-    <NuxtLink to="/login" class="inline-flex items-center gap-1 text-teal-600 hover:text-teal-700 hover:underline">
-      Login
-      <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707A1 1 0 018.707 5.293l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
-    </NuxtLink>
-  </div>
-
-  <!-- Address selector -->
-  <template v-else-if="cart.deliveryMethod === 'ship'">
-    <!-- With addresses -->
-    <div v-if="addresses.length > 0" role="radiogroup" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <label
-        v-for="addr in addresses"
-        :key="addr.id"
-        class="cursor-pointer rounded-lg border bg-white p-4 transition
-               hover:border-teal-400 focus-within:ring-2 focus-within:ring-teal-400
-               flex items-start gap-3"
-        :class="cart.selectedAddressId === addr.id
-                ? 'border-teal-500 ring-2 ring-teal-300 bg-teal-50/40'
-                : 'border-gray-200'"
-      >
-        <!-- Visually-hidden radio -->
-        <input
-          type="radio"
-          class="sr-only"
-          name="selectedAddress"
-          :value="addr.id"
-          v-model="cart.selectedAddressId"
-        />
-
-        <!-- Custom radio dot -->
-        <span
-          class="mt-1 h-4 w-4 rounded-full border transition"
-          :class="cart.selectedAddressId === addr.id
-                  ? 'border-teal-600 ring-4 ring-teal-200 bg-teal-600'
-                  : 'border-gray-300 bg-white'"
-          aria-hidden="true"
-        ></span>
-
-        <div class="min-w-0">
-          <p class="font-medium text-gray-900 truncate">
-            {{ addr.Contact_Person_Name || 'Unnamed Address' }}
-          </p>
-          <p class="text-sm text-gray-600 truncate">
-            {{ addr.country?.Country_Name }},
-            {{ addr.state?.State_Name || addr.region?.Region_Name }},
-            {{ addr.city?.City_Name }}
-          </p>
-          <p class="text-xs text-gray-500">Tel: {{ addr.Telephone || addr.Gsm }}</p>
-        </div>
-
-        <span
-          v-if="cart.selectedAddressId === addr.id"
-          class="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-teal-100 text-teal-700"
-        >
-          Selected
-        </span>
-      </label>
-
-      <!-- Add new address tile -->
-      <button
-        type="button"
-        @click="showAddressModal = true"
-        class="min-h-[104px] flex items-center justify-center rounded-lg border-2 border-dashed
-               border-gray-300 text-teal-700 hover:border-teal-500 hover:bg-teal-50/40 transition"
-      >
-        <span class="inline-flex items-center gap-2 font-semibold">
-          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 4a1 1 0 011 1v4h4a1 1 0 110 2h-4v4a1 1 0 11-2 0v-4H5a1 1 0 110-2h4V5a1 1 0 011-1z"/>
-          </svg>
-          Add New Address
-        </span>
-      </button>
-    </div>
-
-    <!-- Empty state -->
-    <div v-else class="text-center py-8">
-      <div class="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full bg-teal-50 text-teal-600">
-        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v1.586l-.707.707A1 1 0 004 12h12a1 1 0 00.707-1.707L16 9.586V8a6 6 0 00-6-6z"/><path d="M4 13a3 3 0 003 3h6a3 3 0 003-3H4z"/></svg>
-      </div>
-      <p class="text-sm text-gray-600 mb-4">No saved addresses yet.</p>
-      <button
-        @click="showAddressModal = true"
-        class="inline-flex items-center gap-2 rounded-md bg-gradient-to-r from-cyan-500 to-teal-600
-               text-white px-4 py-2 font-medium shadow-sm hover:opacity-90 transition"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4a1 1 0 011 1v4h4a1 1 0 110 2h-4v4a1 1 0 11-2 0v-4H5a1 1 0 110-2h4V5a1 1 0 011-1z"/></svg>
-        Add New Address
-      </button>
-    </div>
-  </template>
-</div>
-
-
-    </div>
-
+  
+    
     <!-- Products -->
     <!-- ============ PRODUCTS + SUMMARY IN ONE GRID ============ -->
 <div class="grid md:grid-cols-3 gap-6 items-start">
@@ -337,29 +241,124 @@ onMounted(async () => {
   </div>
 
   <!-- Summary (right, sticky) -->
-  <div class="md:col-span-1">
-    <div class="w-full border rounded-xl shadow-lg bg-[#fafafa] p-5 md:sticky md:top-24">
-      <h2 class="text-base md:text-lg font-bold text-gray-800 mb-3">Order Summary</h2>
-      <div class="space-y-2 text-sm">
+<div class="md:col-span-1">
+  <div class="w-full border rounded-xl shadow-lg bg-[#fafafa] p-5 md:sticky md:top-24 space-y-4">
+
+    <!-- STEP 1: Delivery method -->
+    <div>
+      <h2 class="text-base md:text-lg font-bold text-gray-800 mb-2">Delivery</h2>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer"
+               :class="cart.deliveryMethod==='ship' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
+          <input type="radio" value="ship" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
+          Ship to Address
+        </label>
+        <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer"
+               :class="cart.deliveryMethod==='pickup' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
+          <input type="radio" value="pickup" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
+          Local Pickup
+        </label>
+      </div>
+    </div>
+
+    <!-- STEP 2: Address (if ship) -->
+    <div v-if="cart.deliveryMethod==='ship'">
+      <h3 class="font-semibold text-gray-800 text-sm mb-2">Shipping Address</h3>
+
+      <div v-if="!isAuthenticated" class="text-sm text-gray-600">
+        Please <NuxtLink to="/login" class="text-teal-600 hover:underline">log in</NuxtLink> to select an address.
+      </div>
+
+      <template v-else>
+        <div v-if="addresses.length" class="space-y-2">
+          <select
+            v-model="cart.selectedAddressId"
+            class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm"
+          >
+            <option v-for="a in addresses" :key="a.id" :value="a.id">
+              {{ a.Contact_Person_Name }} — {{ a.country?.Country_Name }}, {{ a.city?.City_Name }}
+            </option>
+          </select>
+          <button type="button" @click="showAddressModal = true"
+                  class="text-xs text-teal-700 hover:underline">Add new address</button>
+        </div>
+
+        <div v-else class="text-sm text-gray-600">
+          No addresses yet.
+          <button @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
+            Add one
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <!-- STEP 3: Shipping options (after address) -->
+    <div v-if="cart.deliveryMethod==='ship' && cart.selectedAddressId">
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-gray-800 text-sm">Delivery Options</h3>
+        <span v-if="quotesLoading" class="text-[11px] text-gray-500">Calculating…</span>
+      </div>
+
+      <div v-if="!quotesLoading && shippingOptions.length===0" class="text-xs text-gray-500 mt-1">
+        No options for this address/cart.
+      </div>
+
+      <div v-for="opt in shippingOptions"
+           :key="`${opt.shipper_id}-${opt.basis}-${opt.destination_id}`"
+           class="mt-2 p-3 rounded-md border bg-white flex items-center justify-between"
+           :class="selectedOption && selectedOption===opt ? 'border-teal-500' : 'border-slate-200'">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="radio" name="shipOpt" :value="opt" v-model="selectedOption" class="accent-[#00bfa5]">
+          <div>
+            <div class="font-medium">
+              {{ opt.shipper_name }} — <span class="capitalize">{{ opt.basis }}</span>
+            </div>
+            <div class="text-[11px] text-gray-500" v-if="opt.breakdown">
+              {{ opt.breakdown.band_label || 'Band' }} |
+              Std: {{ opt.breakdown.standard_rate }} |
+              Base: {{ opt.breakdown.base_fee }} |
+              Per-unit: {{ opt.breakdown.per_unit_fee }} × {{ opt.breakdown.units_used }} |
+              Flat: {{ opt.breakdown.flat_fee }}
+            </div>
+          </div>
+        </label>
+        <div class="font-semibold text-[#00bfa5]">
+          {{ opt.currency }} {{ opt.total_price }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Totals -->
+    <div class="pt-2 border-t">
+      <h3 class="text-base md:text-lg font-bold text-gray-800 mb-2">Order Summary</h3>
+      <div class="space-y-1.5 text-sm">
+        <div class="flex justify-between"><span>Subtotal</span><span>OMR {{ subtotal.toFixed(3) }}</span></div>
         <div class="flex justify-between">
-          <span>Subtotal</span>
-          <span>OMR {{ cart.totalPrice().toFixed(2) }}</span>
+          <span>Shipping</span>
+          <span>OMR {{ shippingCost.toFixed(3) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>VAT (5%)</span>
+          <span>OMR {{ vat.toFixed(3) }}</span>
         </div>
       </div>
       <hr class="my-3" />
       <div class="flex justify-between font-semibold text-lg text-[#00bfa5]">
         <span>Total</span>
-        <span>OMR {{ (cart.totalPrice()).toFixed(2) }}</span>
+        <span>OMR {{ grandTotal.toFixed(3) }}</span>
       </div>
+
       <NuxtLink
         :to="'/cart/checkout'"
         class="block mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
-        :disabled="cart.cartItems.length === 0"
+        :disabled="cart.cartItems.length===0 || (cart.deliveryMethod==='ship' && !selectedOption)"
       >
         Proceed to Checkout
       </NuxtLink>
     </div>
   </div>
+</div>
+
 </div>
 
 

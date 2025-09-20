@@ -2,7 +2,7 @@
 definePageMeta({
     layout: 'layouts',
   })
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import VueEasyLightbox from 'vue-easy-lightbox'
 import { useCartStore } from '~/stores/cart'
 import { useToast } from 'vue-toastification'
@@ -24,7 +24,19 @@ const quantity = ref<number>(1);
 
 const visible = ref<boolean>(false);
 const index = ref<number>(0);
+const is_active = ref<any>([]);
+const features = ref<any>([]);
 
+
+const swiperRef = ref<any>(null)
+const activeIndex = ref(0)
+
+const onSwiper = (sw: any) => (swiperRef.value = sw)
+const onSlideChange = (sw: any) => (activeIndex.value = sw.activeIndex)
+
+const goToSlide = (i: number) => swiperRef.value?.slideTo(i)
+const prevSlide  = () => swiperRef.value?.slidePrev()
+const nextSlide  = () => swiperRef.value?.slideNext()
 
 
 function openLightbox(i: number) {
@@ -34,6 +46,20 @@ function openLightbox(i: number) {
 
  interface ProductImage {
   Image_Path: string;
+}
+
+interface RelDepartment {
+  id: number
+  Product_Department_Name: string
+}
+interface RelSubDepartment {
+  id: number
+  Sub_Department_Name: string
+}
+interface RelSubSubDepartment {
+  id: number
+  Product_Sub_Sub_Department_Name: string
+  Slug: string
 }
 
 interface Product {
@@ -50,6 +76,11 @@ interface Product {
   Width_Cm: number;
   Height_Cm: number;
 
+   // ✅ relations loaded by: product->load(['images','department','subdepartment','subSubDepartment'])
+  department?: RelDepartment | null
+  subdepartment?: RelSubDepartment | null
+  sub_sub_department?: RelSubSubDepartment | null
+
 }
 
 interface SpecificationGroup {
@@ -63,8 +94,79 @@ interface ProductDetailsResponse {
 }
 
 
+// --- Safe accessors for names/ids/slugs ---
+const dept    = computed(() => product.value?.department ?? null)
+const sub     = computed(() => product.value?.subdepartment ?? null)
+const subSub  = computed(() => product.value?.sub_sub_department ?? null)
+
+const deptName   = computed(() => dept.value?.Product_Department_Name ?? '')
+const subName    = computed(() => sub.value?.Sub_Department_Name ?? '')
+const subSubName = computed(() => subSub.value?.Product_Sub_Sub_Department_Name ?? '')
+
+// --- Breadcrumb navigation helpers ---
+const goDept = () => {
+  if (!dept.value?.id) return
+  router.push({
+    path: '/',
+    query: { deptId: dept.value.id }
+  })
+}
+
+const goSub = () => {
+  if (!dept.value?.id || !sub.value?.id) return
+  router.push({
+    path: '/',
+    query: { deptId: dept.value.id, subId: sub.value.id }
+  })
+}
+
+const goSubSub = () => {
+  if (!subSub.value?.Slug) return
+  // Goes to /departments/<slug> as requested. We also pass ids to keep context.
+  router.push({
+    path: `/departments/${subSub.value.Slug}`,
+    query: {
+      deptId: dept.value?.id ?? undefined,
+      subId:  sub.value?.id ?? undefined,
+      subSubId: subSub.value?.id ?? undefined
+    }
+  })
+}
+
+
 const product = ref<Product | null>(null)
 const specifications = ref<SpecificationGroup[]>([])
+
+
+const getProductFeatures = async (): Promise<void> => {
+    
+    try{
+        const response = await $axios.get(`/api/products/value/${slug}`);
+         console.log('Product features response:', response.data.is_ative);
+      
+        is_active.value = response.data.is_ative;
+        features.value = response.data.features;
+        
+
+    }catch(error){
+        console.error('Error fetching product features:', error);
+    }finally{
+
+    }
+  
+
+
+}
+
+
+const normalizedIsActive = computed(() =>
+  (is_active.value ?? [])
+    .filter(Boolean)
+    .map((x: any) => ({
+      label: x?.description?.Product_Specification_Description_Name ?? '',
+      value: x?.spec_value?.value ?? '',
+    }))
+)
 
 
 const incrementQty = () => {
@@ -108,6 +210,8 @@ const getProducts = async (): Promise<void> => {
                         price: parseFloat(response.data.product.price)
                        };
       specifications.value = response.data.specifications;
+
+      console.log('Fetched product:', product.value);
  
   } catch (error) {
     console.error('Error fetching product:', error)
@@ -117,6 +221,7 @@ const getProducts = async (): Promise<void> => {
 
 onMounted(async(): Promise<void> => {
      await getProducts();
+      await getProductFeatures();
 })
 
 
@@ -131,60 +236,151 @@ onMounted(async(): Promise<void> => {
   <div class="max-w-7xl mx-auto px-4 md:px-6 py-8 md:py-12">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8">
 
+
+      
+
       <!-- LEFT: Images -->
-      <div class="md:col-span-5">
-        <!-- Main gallery -->
-        <Swiper
-          :slides-per-view="1"
-          class="overflow-hidden rounded-2xl ring-1 ring-slate-200/70 shadow-sm bg-white"
-        >
-          <SwiperSlide
-            v-for="(img, i) in (product?.images || [])"
-            :key="i"
-            @click="openLightbox(i)"
-            class="bg-white cursor-zoom-in"
-          >
-            <img
-              :src="`${$r2Url}/${img.Image_Path}`"
-              :alt="product?.Product_Name || 'Product image'"
-              class="block w-full h-[360px] md:h-[420px] object-contain"
-              loading="lazy"
-              decoding="async"
-            />
-          </SwiperSlide>
-        </Swiper>
+      <!-- LEFT: Images -->
+<div class="md:col-span-5">
+  <!-- Main gallery -->
 
-        <!-- Thumbnails -->
-        <div
-          v-if="product?.images?.length"
-          class="mt-3 flex gap-2 overflow-x-auto pb-1"
+  <!-- Breadcrumbs -->
+<nav aria-label="Breadcrumb" class="mb-3">
+  <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+    <li>
+      <NuxtLink to="/" class="hover:text-[#07B6C6]">Home</NuxtLink>
+    </li>
+
+    <li class="opacity-60">/</li>
+
+    <li>
+      <button
+        v-if="deptName"
+        type="button"
+        @click="goDept"
+        class="hover:text-[#07B6C6] font-medium"
+      >
+        {{ deptName }}
+      </button>
+      <span v-else class="text-slate-400">Department</span>
+    </li>
+
+    <template v-if="subName">
+      <li class="opacity-60">/</li>
+      <li>
+        <button
+          type="button"
+          @click="goSub"
+          class="hover:text-[#07B6C6] font-medium"
         >
-          <button
-            v-for="(img, i) in product.images"
-            :key="`thumb-${i}`"
-            type="button"
-            @click="openLightbox(i)"
-            class="shrink-0 w-16 h-16 md:w-18 md:h-18 rounded-lg ring-1 ring-slate-200 hover:ring-cyan-300 bg-white overflow-hidden"
-            :title="`Preview ${i+1}`"
-          >
-            <img
-              :src="`${$r2Url}/${img.Image_Path}`"
-              :alt="`Thumbnail ${i+1}`"
-              class="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
-            />
-          </button>
+          {{ subName }}
+        </button>
+      </li>
+    </template>
+
+    <template v-if="subSubName">
+      <li class="opacity-60">/</li>
+      <li>
+        <button
+          type="button"
+          @click="goSubSub"
+          class="text-slate-900 font-semibold hover:text-[#07B6C6]"
+        >
+          {{ subSubName }}s
+        </button>
+      </li>
+    </template>
+  </ol>
+</nav>
+
+  <div class="relative group">
+    <Swiper
+      :slides-per-view="1"
+      :space-between="16"
+      :onSwiper="onSwiper"
+      :onSlideChange="onSlideChange"
+      class="overflow-hidden rounded-2xl ring-1 ring-slate-200/70 shadow-sm bg-white"
+    >
+      <SwiperSlide
+        v-for="(img, i) in (product?.images || [])"
+        :key="i"
+        @click="openLightbox(i)"
+        class="bg-white cursor-zoom-in"
+      >
+        <div class="aspect-[4/3] md:aspect-[5/4] flex items-center justify-center bg-slate-50">
+          <img
+            :src="`${$r2Url}/${img.Image_Path}`"
+            :alt="product?.Product_Name || 'Product image'"
+            class="block max-h-[420px] w-auto object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"
+            loading="lazy"
+             
+          />
         </div>
+      </SwiperSlide>
+    </Swiper>
 
-        <!-- Lightbox -->
-        <VueEasyLightbox
-          :visible="visible"
-          :imgs="product?.images ? product.images.map(img => `${$r2Url}/${img.Image_Path}`) : []"
-          :index="index"
-          @hide="visible = false"
-        />
-      </div>
+    <!-- Custom nav -->
+    <button
+      type="button"
+      @click="prevSlide"
+      class="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 shadow ring-1 ring-slate-200
+             opacity-0 group-hover:opacity-100 transition focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]"
+      aria-label="Previous image"
+    >
+      ‹
+    </button>
+    <button
+      type="button"
+      @click="nextSlide"
+      class="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 shadow ring-1 ring-slate-200
+             opacity-0 group-hover:opacity-100 transition focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]"
+      aria-label="Next image"
+    >
+      ›
+    </button>
+
+    <!-- Counter badge -->
+    <div
+      v-if="product?.images?.length"
+      class="absolute bottom-2 right-2 rounded-full bg-slate-900/70 text-white text-xs px-2 py-0.5"
+    >
+      {{ (activeIndex + 1) }} / {{ product.images.length }}
+    </div>
+  </div>
+
+  <!-- Thumbnails -->
+  <div v-if="product?.images?.length" class="mt-3 flex gap-2 overflow-x-auto pb-1">
+    <button
+      v-for="(img, i) in product.images"
+      :key="`thumb-${i}`"
+      type="button"
+      @click="goToSlide(i)"
+      class="shrink-0 w-16 h-16 md:w-18 md:h-18 rounded-lg overflow-hidden ring-2 transition
+             focus:outline-none"
+      :class="i === activeIndex
+        ? 'ring-[#2f5fb6] shadow-sm'
+        : 'ring-slate-200 hover:ring-[#07B6C6]'"
+      :title="`Preview ${i+1}`"
+    >
+      <img
+        :src="`${$r2Url}/${img.Image_Path}`"
+        :alt="`Thumbnail ${i+1}`"
+        class="w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    </button>
+  </div>
+
+  <!-- Lightbox -->
+  <VueEasyLightbox
+    :visible="visible"
+    :imgs="product?.images ? product.images.map(img => `${$r2Url}/${img.Image_Path}`) : []"
+    :index="index"
+    @hide="visible = false"
+  />
+</div>
+
 
       <!-- RIGHT: Content -->
       <div class="md:col-span-7 grid grid-cols-1 md:grid-cols-7 gap-6">
@@ -213,20 +409,40 @@ onMounted(async(): Promise<void> => {
           </div>
 
           <!-- Small feature bullets (optional) -->
-          <ul class="mt-2 space-y-1.5 text-sm text-slate-700">
-            <li class="flex items-start gap-2">
-              <svg class="mt-0.5 h-4 w-4 text-cyan-600" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293l-8.5 8.5-4-4L5.707 8.293l2.5 2.5 7.5-7.5z"/></svg>
-              Durable, industry-grade build for heavy use
-            </li>
-            <li class="flex items-start gap-2">
-              <svg class="mt-0.5 h-4 w-4 text-cyan-600" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293l-8.5 8.5-4-4L5.707 8.293l2.5 2.5 7.5-7.5z"/></svg>
-              Backed by ISC quality assurance
-            </li>
-            <li class="flex items-start gap-2">
-              <svg class="mt-0.5 h-4 w-4 text-cyan-600" viewBox="0 0 20 20" fill="currentColor"><path d="M16.707 5.293l-8.5 8.5-4-4L5.707 8.293l2.5 2.5 7.5-7.5z"/></svg>
-              Fast dispatch with trusted couriers
-            </li>
-          </ul>
+           <!-- Quick spec chips (aligned) -->
+            <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              <div
+                v-for="(item, idx) in normalizedIsActive"
+                :key="idx"
+                class="rounded-lg bg-white ring-1 ring-slate-200 px-3 py-2 min-h-[56px]
+                      flex flex-col justify-center"
+                :class="!item.value ? 'opacity-70' : ''"
+              >
+                <div
+                  class="text-[11px] uppercase tracking-wide text-slate-500 truncate"
+                  :title="item.label"
+                >
+                  {{ item.label }}
+                </div>
+                <div
+                  class="text-[13px] font-semibold text-slate-900 truncate"
+                  :title="item.value || '—'"
+                >
+                  {{ item.value || '—' }}
+                </div>
+              </div>
+
+              <!-- Optional empty state -->
+              <div
+                v-if="(!normalizedIsActive || !normalizedIsActive.length)"
+                class="col-span-full text-sm text-slate-500"
+              >
+                No feature information available.
+              </div>
+            </div>
+
+       
+          
         </div>
 
         <!-- Purchase card -->
@@ -314,40 +530,30 @@ onMounted(async(): Promise<void> => {
       <!-- Features -->
       <div class="md:col-span-12 mt-8">
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="text-lg md:text-xl font-semibold text-slate-900">Product Features</h2>
+          <h2 class="text-lg md:text-xl font-semibold text-slate-900">Product Specifications</h2>
           <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
             <div
-              v-for="(group, i) in (specifications || [])"
+              v-for="(feature, i) in (features || [])"
               :key="i"
               class="rounded-lg bg-slate-50/60 ring-1 ring-slate-200 px-3 py-2"
             >
-              <div class="text-slate-600 text-xs uppercase tracking-wide mb-1">{{ group.category }}</div>
+              <div class="text-slate-600 text-xs uppercase tracking-wide mb-1">{{ feature.description?.Product_Specification_Description_Name }}</div>
               <div class="font-medium">
-                <template v-for="(val, j) in group.values" :key="j">
-                  <span>{{ val }}</span><span v-if="j < group.values.length - 1"> · </span>
-                </template>
+                {{ feature.spec_value?.value }} 
               </div>
             </div>
-            <div v-if="!specifications || specifications.length === 0" class="text-slate-500">
+            <div v-if="!features || features.length === 0" class="text-slate-500">
               No feature information available.
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Description -->
-      <div class="md:col-span-12">
-        <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="text-lg md:text-xl font-semibold text-slate-900">Product Description</h2>
-          <p class="mt-3 text-sm leading-6 text-slate-700">
-            {{ product?.Product_Description || 'No description available.' }}
-          </p>
-        </div>
-      </div>
+    
 
     </div>
   </div>
-</section>
+  </section>
 
  
 </template>

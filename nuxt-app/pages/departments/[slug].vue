@@ -4,12 +4,96 @@ definePageMeta({ layout: 'layouts' })
 import { ref, watch, onMounted, computed } from 'vue'
 const { $axios, $r2Url } = useNuxtApp()
 
-const showFilters = ref(false)
-const route = useRoute()
+const showFilters = ref(false);
+const route = useRoute();
 const slug = computed(() => route.params.slug as string)
 
 const isloadingsubsubdepartments = ref(true)
 const isloadingproducts = ref(true)
+
+
+ // read parent context from query (sent by index.vue link)
+const parentDeptId = computed<number | null>(() =>
+  route.query.deptId ? Number(route.query.deptId) : null
+)
+const parentSubId = computed<number | null>(() =>
+  route.query.subId ? Number(route.query.subId) : null
+)
+
+const parentDeptName = ref<string>('')
+const parentSubName  = ref<string>('')
+
+
+const router = useRouter()
+const subsubdepartment = ref<SubSubDepartment | null>(null)
+
+
+ 
+
+
+// fetch names for the breadcrumb, using your existing endpoints
+async function resolveBreadcrumbNames() {
+  try {
+    if (parentDeptId.value) {
+      // you already use this endpoint on index.vue
+      const { data: depts } = await $axios.get('/api/productdepartment')
+      const dept = (depts || []).find((d: any) => Number(d.id) === parentDeptId.value)
+      if (dept) parentDeptName.value = dept.Product_Department_Name
+    }
+
+    if (parentDeptId.value && parentSubId.value) {
+      // gets subs for a department; then pick the one by id
+      const { data: subs } = await $axios.get(`/api/categories/${parentDeptId.value}/subcategories`)
+      const sub = (subs || []).find((s: any) => Number(s.id) === parentSubId.value)
+      if (sub) parentSubName.value = sub.Sub_Department_Name
+    }
+
+    // Fallback: if your /api/subsubdepartments/{slug} already includes parent names,
+    // use them when query is missing (optional).
+    const d: any = subsubdepartment.value
+    if (d) {
+      if (!parentDeptName.value && d.Product_Department_Name) parentDeptName.value = d.Product_Department_Name
+      if (!parentSubName.value && d.Sub_Department_Name) parentSubName.value = d.Sub_Department_Name
+    }
+  } catch { /* ignore */ }
+}
+
+ 
+
+// run when we have either query ids or the subsubdepartment loaded
+watch(
+  [parentDeptId, parentSubId, () => subsubdepartment.value],
+  resolveBreadcrumbNames,
+  { immediate: true }
+)
+
+// breadcrumb navigation helpers (send query so index.vue restores state)
+const goDept = () => router.push({
+  path: '/',
+  query: { deptId: parentDeptId.value ?? undefined }
+})
+
+const goSub = () => router.push({
+  path: '/',
+  query: { deptId: parentDeptId.value ?? undefined, subId: parentSubId.value ?? undefined }
+})
+
+// optional: go to the list that contains this sub-sub, and optionally highlight it
+const goSubSubList = () => router.push({
+  path: '/',
+  query: {
+    deptId: parentDeptId.value ?? undefined,
+    subId : parentSubId.value ?? undefined,
+    subSubId: slugId.value ?? undefined
+  }
+})
+
+
+
+
+
+ 
+
 
 interface FilterValue {
   id: number
@@ -46,7 +130,8 @@ const clearAllFilters = () => {                            // clear all groups
 }
 
 
-const router = useRouter()
+
+ 
 const goProduct = (slug: string) => router.push(`/product/${slug}`)
 
 
@@ -59,12 +144,15 @@ interface FilterCategory {
 }
 
 interface SubSubDepartment {
-  id: string
+  id: number
   Product_Sub_Sub_Department_Name: string
   Slug: string
-  Product_Sub_Sub_Department_Description: string
-  Image_Path: string
-  View_Options: boolean
+  Product_Sub_Sub_Department_Description?: string
+  Image_Path?: string
+  View_Options?: boolean
+  // Optional if your API sends them:
+  Product_Department_Name?: string
+  Sub_Department_Name?: string
 }
 
 interface SubSubDepartmentResponse {
@@ -84,58 +172,60 @@ interface Products {
   image: ProductImage | null
 }
 
-const subsubdepartment = ref<SubSubDepartment | null>(null)
 const filters = ref<FilterCategory[]>([])
 const products = ref<Products[]>([])
 const view_option = ref<boolean>(false)
 // selected filters by description id -> array of value ids
 const selectedFilters = ref<Record<number, number[]>>({})
+const slugId = ref<number | null>(null);
+
+const getSlugId = async () => {
+  try {
+    const res = await $axios.get(`/api/subsubdepartments/slug/${slug.value}`)
+ 
+    slugId.value = res.data.data.id;
+
+  } catch (error) {
+    console.error('Error fetching slug ID:', error)
+    return null
+  }
+}
 
 
-
-const getDepartment = async () => {
+ const getDepartment = async () => {
   isloadingsubsubdepartments.value = true
   try {
+    const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
+    
+    // ✅ store the whole object for title/breadcrumb fallbacks
+    subsubdepartment.value = res.data?.data ?? null
 
-      const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
+    // tolerate API casing: View_Options vs view_options
+    view_option.value = !!(res.data?.data?.view_options ?? res.data?.data?.View_Options)
 
+    const apiFilters = res.data.filters as any[]
 
-      view_option.value = res.data.data.view_options;
+    filters.value = apiFilters.map((f) => ({
+      id: Number(f.id),
+      name: String(f.Product_Specification_Description_Name ?? ''),
+      type: (f.input_type ?? 'select') as 'text'|'number'|'select'|'multiselect'|'boolean',
+      values: (f.values ?? []).map((v: any) => ({
+        id: Number(v.id),
+        value: String(v.value),
+      })),
+    }))
 
-      const apiFilters = res.data.filters as any[]
-
-     console.log('API Filters:', apiFilters);
-
-      // Normalize to a clean shape with number IDs
-      filters.value = apiFilters.map((f) => ({
-        id: Number(f.id),
-        name: String(f.Product_Specification_Description_Name ?? ''),
-        type: (f.input_type ?? 'select') as 'text'|'number'|'select'|'multiselect'|'boolean',
-        values: (f.values ?? []).map((v: any) => ({
-          id: Number(v.id),
-          value: String(v.value),
-        })),
-      }))
-
-      // init selected filters AFTER filters are set
-      selectedFilters.value = filters.value.reduce((acc, f) => {
-        acc[f.id] = [] as number[]
-        return acc
-      }, {} as Record<number, number[]>)
-
-      // optional: debug to ensure numbers
-      console.table(filters.value.map(f => ({
-        id: f.id,
-        name: f.name,
-        valueIds: f.values.map(v => v.id).join(',')
-      })))
-   
+    selectedFilters.value = filters.value.reduce((acc, f) => {
+      acc[f.id] = [] as number[]
+      return acc
+    }, {} as Record<number, number[]>)
   } catch (error) {
     console.error('Error fetching department:', error)
   } finally {
     isloadingsubsubdepartments.value = false
   }
 }
+
 
 const getProducts = async () => {
    isloadingproducts.value = true
@@ -169,8 +259,9 @@ watch(showFilters, (val) => {
 })
 
 onMounted(async () => {
-  await getDepartment()
-  await getProducts()
+  await getDepartment();
+  await getProducts();
+  await getSlugId();
 })
 </script>
 
@@ -239,96 +330,96 @@ onMounted(async () => {
 
      <!-- Sidebar Filters -->
    <!-- Sidebar Filters -->
-<aside class="hidden md:block w-full md:w-1/4">
-  <div class="sticky top-6">
-    <div class="bg-white/90 backdrop-blur rounded-xl border border-gray-200 shadow-lg">
-      <!-- Header -->
-      <div class="px-5 py-4 flex items-center justify-between border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <i class="fas fa-filter text-teal-600"></i>
-          Filters
-        </h2>
-        <button
-          type="button"
-          @click="clearAllFilters"
-          class="text-xs font-medium text-teal-700 hover:text-teal-900 hover:underline"
-        >
-          Clear all
-        </button>
-      </div>
-
-      <!-- Body (scrolls if tall) -->
-      <div class="max-h-[70vh] overflow-auto px-2 py-3">
-        <ul class="space-y-3">
-          <!-- Category -->
-          <li
-            v-for="category in filters"
-            :key="category.id"
-            class="rounded-lg border border-gray-200 bg-gray-50"
-          >
-            <!-- Category header / accordion toggle -->
+    <aside class="hidden md:block w-full md:w-1/4">
+      <div class="sticky top-6">
+        <div class="bg-white/90 backdrop-blur rounded-xl border border-gray-200 shadow-lg">
+          <!-- Header -->
+          <div class="px-5 py-4 flex items-center justify-between border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <i class="fas fa-filter text-teal-600"></i>
+              Filters
+            </h2>
             <button
               type="button"
-              @click="toggleCat(category.id)"
-              class="w-full flex items-center justify-between px-4 py-3"
+              @click="clearAllFilters"
+              class="text-xs font-medium text-teal-700 hover:text-teal-900 hover:underline"
             >
-              <div class="flex items-center gap-2 text-gray-800">
-                <span class="text-sm font-semibold">{{ category.name }}</span>
-                <span
-                  v-if="(selectedFilters[category.id] ?? []).length"
-                  class="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700"
-                >
-                  {{ selectedFilters[category.id].length }}
-                </span>
-              </div>
+              Clear all
+            </button>
+          </div>
 
-              <div class="flex items-center gap-3">
+          <!-- Body (scrolls if tall) -->
+          <div class="max-h-[70vh] overflow-auto px-2 py-3">
+            <ul class="space-y-3">
+              <!-- Category -->
+              <li
+                v-for="category in filters"
+                :key="category.id"
+                class="rounded-lg border border-gray-200 bg-gray-50"
+              >
+                <!-- Category header / accordion toggle -->
                 <button
                   type="button"
-                  @click.stop="clearCategory(category.id)"
-                  class="text-[11px] text-gray-500 hover:text-teal-700"
+                  @click="toggleCat(category.id)"
+                  class="w-full flex items-center justify-between px-4 py-3"
                 >
-                  Reset
-                </button>
-                <svg
-                  class="h-4 w-4 text-gray-500 transition-transform"
-                  :class="isOpen(category.id) ? 'rotate-180' : ''"
-                  viewBox="0 0 20 20" fill="currentColor"
-                >
-                  <path fill-rule="evenodd"
-                        d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
-                        clip-rule="evenodd" />
-                </svg>
-              </div>
-            </button>
+                  <div class="flex items-center gap-2 text-gray-800">
+                    <span class="text-sm font-semibold">{{ category.name }}</span>
+                    <span
+                      v-if="(selectedFilters[category.id] ?? []).length"
+                      class="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700"
+                    >
+                      {{ selectedFilters[category.id].length }}
+                    </span>
+                  </div>
 
-            <!-- Options -->
-            <transition name="fade">
-              <div v-show="isOpen(category.id)" class="px-4 pb-3">
-                <div class="max-h-48 overflow-auto pr-1 space-y-1.5">
-                  <label
-                    v-for="opt in category.values"
-                    :key="opt.id"
-                    :title="opt.value"
-                    class="flex items-center gap-2 text-[13px] text-gray-700 hover:text-teal-700"
-                  >
-                    <input
-                      type="checkbox"
-                      class="h-4 w-4 rounded-sm border-gray-300 accent-teal-600 focus:ring-2 focus:ring-teal-400"
-                      :value="opt.id"
-                      v-model="selectedFilters[category.id]"
-                    />
-                    <span class="truncate">{{ opt.value }}</span>
-                  </label>
-                </div>
-              </div>
-            </transition>
-          </li>
-        </ul>
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="button"
+                      @click.stop="clearCategory(category.id)"
+                      class="text-[11px] text-gray-500 hover:text-teal-700"
+                    >
+                      Reset
+                    </button>
+                    <svg
+                      class="h-4 w-4 text-gray-500 transition-transform"
+                      :class="isOpen(category.id) ? 'rotate-180' : ''"
+                      viewBox="0 0 20 20" fill="currentColor"
+                    >
+                      <path fill-rule="evenodd"
+                            d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                            clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </button>
+
+                <!-- Options -->
+                <transition name="fade">
+                  <div v-show="isOpen(category.id)" class="px-4 pb-3">
+                    <div class="max-h-48 overflow-auto pr-1 space-y-1.5">
+                      <label
+                        v-for="opt in category.values"
+                        :key="opt.id"
+                        :title="opt.value"
+                        class="flex items-center gap-2 text-[13px] text-gray-700 hover:text-teal-700"
+                      >
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded-sm border-gray-300 accent-teal-600 focus:ring-2 focus:ring-teal-400"
+                          :value="opt.id"
+                          v-model="selectedFilters[category.id]"
+                        />
+                        <span class="truncate">{{ opt.value }}</span>
+                      </label>
+                    </div>
+                  </div>
+                </transition>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-</aside>
+    </aside>
 
 
 
@@ -343,13 +434,49 @@ onMounted(async () => {
         <p class="text-sm text-gray-700">
           {{ subsubdepartment?.Product_Sub_Sub_Department_Description }}
 
-          {{ view_option }} 
+        
          </p>
       </div>
+      
+
+      <nav aria-label="Breadcrumb" class="mb-4">
+  <ol class="flex items-center gap-2 text-sm text-slate-600">
+    <li>
+      <NuxtLink to="/" class="hover:text-emerald-700">Home</NuxtLink>
+    </li>
+    <li class="text-slate-400">›</li>
+
+    <li v-if="parentDeptId">
+      <button @click="goDept" class="hover:text-emerald-700">
+        {{ parentDeptName || 'Department' }}
+      </button>
+    </li>
+    <li v-if="parentDeptId" class="text-slate-400">›</li>
+
+    <li v-if="parentSubId">
+      <button @click="goSub" class="hover:text-emerald-700">
+        {{ parentSubName || 'Category' }}
+      </button>
+    </li>
+    <li v-if="parentSubId" class="text-slate-400">›</li>
+
+    <!-- Current sub-sub: label only (or make it a button to go to list) -->
+    <li class="text-slate-900 font-semibold">
+      <button @click="goSubSubList" class="hover:text-emerald-700">
+        {{ subsubdepartment?.Product_Sub_Sub_Department_Name || 'Products' }}
+      </button>
+      <!-- If you prefer non-clickable current crumb, replace the <button> with a <span>. -->
+    </li>
+  </ol>
+</nav>
+
 
       <!-- Product Types -->
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        
         <div class="border rounded p-4 flex flex-col items-center text-center">
+
+         
           <img :src="`${$r2Url}/` + subsubdepartment?.Image_Path" alt="Insulated" class="h-16 mb-2">
          
         </div>

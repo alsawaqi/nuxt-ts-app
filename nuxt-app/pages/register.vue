@@ -149,7 +149,7 @@ const submitForm = async (): Promise<void> => {
 
     <Transition name="fade-slide" mode="out-in">
 
-    <div v-if="!success" class="min-h-[70vh] flex items-center justify-center px-4 py-10 bg-gradient-to-b from-slate-50 to-slate-100">
+    <div v-if="!success" class="min-h-[60vh] flex items-center justify-center px-4 py-10 bg-gradient-to-b from-slate-50 to-slate-100">
   <div class="w-full max-w-4xl bg-white/95 backdrop-blur rounded-2xl border border-slate-200 shadow-xl p-8 md:p-12">
       <div class="flex justify-center mb-4">
 
