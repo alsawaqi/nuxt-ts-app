@@ -31,6 +31,11 @@ const features = ref<any>([]);
 const swiperRef = ref<any>(null)
 const activeIndex = ref(0)
 
+// --- Favorites (UI + API) ---
+const isFavorited = ref(false)
+const favBusy = ref(false)
+
+
 const onSwiper = (sw: any) => (swiperRef.value = sw)
 const onSlideChange = (sw: any) => (activeIndex.value = sw.activeIndex)
 
@@ -167,6 +172,54 @@ const normalizedIsActive = computed(() =>
       value: x?.spec_value?.value ?? '',
     }))
 )
+
+
+const setLocalFav = (on: boolean) => {
+  if (!product.value) return
+  localStorage.setItem(`fav:${product.value.id}`, on ? '1' : '0')
+}
+
+const loadLocalFav = () => {
+  if (!product.value) return
+  isFavorited.value = localStorage.getItem(`fav:${product.value.id}`) === '1'
+}
+
+// call after product loads
+watch(product, (p) => {
+  if (p) loadLocalFav()
+})
+
+const toggleFavorite = async () => {
+  if (!product.value || favBusy.value) return
+  favBusy.value = true
+
+  // optimistic toggle
+  const prev = isFavorited.value
+  isFavorited.value = !prev
+  setLocalFav(isFavorited.value)
+
+  try {
+    const { data } = await $axios.post(
+      `/api/favorites/${product.value.Slug}/toggle`,
+      {},
+      { withCredentials: true }
+    )
+    // trust server truth if present
+    if (typeof data?.favorited === 'boolean') {
+      isFavorited.value = data.favorited
+      setLocalFav(isFavorited.value)
+    }
+    toast.success(isFavorited.value ? 'Added to favorites' : 'Removed from favorites')
+  } catch (e: any) {
+    // revert on error
+    isFavorited.value = prev
+    setLocalFav(prev)
+    toast.error(e?.response?.status === 401 ? 'Please log in to use favorites' : 'Couldn’t update favorite')
+  } finally {
+    favBusy.value = false
+  }
+}
+
 
 
 const incrementQty = () => {
@@ -490,7 +543,8 @@ onMounted(async(): Promise<void> => {
                   v-model.number="quantity"
                   min="1"
                   class="w-20 h-9 border border-slate-300 text-center rounded-lg text-sm focus:ring-2 focus:ring-[#00bfa5] focus:outline-none"
-                />
+                   disabled
+                   />
                 <button
                   @click="incrementQty()"
                   class="h-9 w-9 flex items-center justify-center rounded-lg bg-slate-100 border border-slate-300 hover:bg-slate-200"
@@ -498,6 +552,38 @@ onMounted(async(): Promise<void> => {
                 >+</button>
               </div>
             </div>
+
+
+            <!-- Favorite button -->
+              <button
+                type="button"
+                @click="toggleFavorite"
+                :disabled="favBusy"
+                class="mt-3 inline-flex items-center justify-center gap-2 w-full
+                      rounded-xl ring-1 ring-slate-200 bg-white hover:bg-rose-50
+                      text-sm font-medium text-slate-700 px-3 py-2 transition
+                      disabled:opacity-60"
+                :aria-pressed="isFavorited"
+              >
+                <!-- Heart icon (animated) -->
+                <span class="relative inline-flex">
+                  <!-- filled when favorited -->
+                  <svg v-if="isFavorited" class="h-5 w-5 text-rose-500 transition-transform duration-150 scale-110"
+                      viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M11.99 21s-6.72-4.35-9.54-7.17A6.37 6.37 0 0 1 3 3.88a5 5 0 0 1 7.07 0l1.92 1.93 1.93-1.93A5 5 0 0 1 21 3.88a6.37 6.37 0 0 1 .55 9.95C18.73 16.65 12 21 11.99 21z"/>
+                  </svg>
+                  <!-- outline when not favorited -->
+                  <svg v-else class="h-5 w-5 text-rose-500 transition-transform duration-150 group-hover:scale-110"
+                      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <path d="M12 21s-6.5-4.4-9.3-7.2A6.3 6.3 0 0 1 3 4a5 5 0 0 1 7.1 0L12 5.9 13.9 4A5 5 0 0 1 21 4a6.3 6.3 0 0 1 .3 9.8C18.5 16.6 12 21 12 21z"/>
+                  </svg>
+                  <!-- subtle ping when adding -->
+                  <span v-if="favBusy" class="absolute inset-0 rounded-full animate-ping bg-rose-400/40"></span>
+                </span>
+
+                <span>{{ isFavorited ? 'Favorited' : 'Add to Favorites' }}</span>
+              </button>
+
 
             <!-- Add to cart -->
             <button

@@ -25,6 +25,9 @@ const totalsForQuotes = computed(() => {
 })
 
 
+
+
+
 // Persist selected address
 watch(() => cart.selectedAddressId, (id) => {
   if (id) localStorage.setItem('selected_address_id', String(id))
@@ -161,8 +164,72 @@ const submitAddress = async () => {
 
 const onClearCart = () => {
   cart.clearCart()
+   shippingOptions.value = []
+   selectedOption.value = null
+
 }
 
+const onRemoveItem = (id: number) => {
+  cart.removeFromCart(id)
+   shippingOptions.value = []
+   selectedOption.value = null
+
+}
+
+
+// --- PERSIST CHECKOUT SELECTION & TOTALS ---
+const persistCheckout = () => {
+  const payload = {
+    deliveryMethod: cart.deliveryMethod,               // 'ship' | 'pickup'
+    addressId: cart.selectedAddressId ?? null,         // the selected address
+    // keep just what you need from the quote (avoid circular/huge objects)
+    shippingOption: selectedOption.value
+      ? {
+          shipper_id: selectedOption.value.shipper_id,
+          destination_id: selectedOption.value.destination_id,
+          basis: selectedOption.value.basis,           // 'weight' | 'volume' | 'heavy'
+          currency: selectedOption.value.currency ?? 'OMR',
+          total_price: Number(selectedOption.value.total_price),
+          breakdown: selectedOption.value.breakdown ?? null,
+        }
+      : null,
+    totals: {
+      currency: 'OMR',
+      subtotal: +subtotal.value.toFixed(3),
+      shipping: +shippingCost.value.toFixed(3),
+      vat: +vat.value.toFixed(3),
+      grand: +grandTotal.value.toFixed(3),
+    },
+    items: cart.cartItems.map(i => ({
+      id: i.id, slug: i.slug, qty: i.quantity, price: i.price,
+    })),
+    savedAt: new Date().toISOString(),
+  }
+
+  localStorage.setItem('checkout_prefill', JSON.stringify(payload))
+}
+
+
+watch(
+  [
+    () => cart.deliveryMethod,
+    () => cart.selectedAddressId,
+    selectedOption,
+    subtotal,
+    shippingCost,
+    vat,
+    grandTotal,
+    () => cart.cartItems,
+  ],
+  persistCheckout,
+  { deep: true, immediate: true }
+)
+
+const router = useRouter()
+const goCheckout = () => {
+  persistCheckout()
+  router.push('/cart/checkout')
+}
 
 onMounted(async () => {
   if (isAuthenticated.value === true) {
@@ -178,12 +245,17 @@ onMounted(async () => {
 
 <template>
   <section class="bg-white py-10 px-4 max-w-screen-xl mx-auto font-sans">
-    <h1 class="text-3xl font-bold mb-6 text-gray-800 tracking-wide">
+    <h5 class="text-3xl font-bold mb-6 text-gray-800 tracking-wide">
       <span class="text-gradient">Your Cart</span>
-    </h1>
+    </h5>
 
-  
-    
+    <div class="space-y-4">
+      <p class="text-gray-600">You have {{ cart.cartItems.length }} items in your cart.</p>
+      <NuxtLink to="/" class="text-sm text-blue-600 hover:underline">Continue Shopping</NuxtLink>
+    </div>
+   
+ 
+
     <!-- Products -->
     <!-- ============ PRODUCTS + SUMMARY IN ONE GRID ============ -->
 <div class="grid md:grid-cols-3 gap-6 items-start">
@@ -217,7 +289,7 @@ onMounted(async () => {
         <div class="min-w-0">
           <h3 class="font-medium text-gray-800 truncate">{{ item.name }}</h3>
           <p class="text-[11px] text-gray-500">Item #{{ item.id }}</p>
-          <button @click="cart.removeFromCart(item.id)"
+          <button @click.prevent="onRemoveItem(item.id)"
                   class="text-xs text-[#00bfa5] hover:underline mt-1.5">Remove</button>
         </div>
       </div>
@@ -229,7 +301,7 @@ onMounted(async () => {
                   class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">−</button>
           <input type="number" min="1" v-model.number="item.quantity"
                  @change="onQtyInputChange($event, item.id)"
-                 class="w-14 border rounded-md text-center text-sm py-1" />
+                 class="w-14 border rounded-md text-center text-sm py-1"  disabled/>
           <button @click="incrementQty(item.id)"
                   class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">+</button>
         </div>
@@ -311,15 +383,16 @@ onMounted(async () => {
           <input type="radio" name="shipOpt" :value="opt" v-model="selectedOption" class="accent-[#00bfa5]">
           <div>
             <div class="font-medium">
-              {{ opt.shipper_name }} — <span class="capitalize">{{ opt.basis }}</span>
+              {{ opt.shipper_name }} 
+               <!-- — <span class="capitalize">{{ opt.basis }}</span> -->
             </div>
-            <div class="text-[11px] text-gray-500" v-if="opt.breakdown">
+            <!-- <div class="text-[11px] text-gray-500" v-if="opt.breakdown">
               {{ opt.breakdown.band_label || 'Band' }} |
               Std: {{ opt.breakdown.standard_rate }} |
               Base: {{ opt.breakdown.base_fee }} |
               Per-unit: {{ opt.breakdown.per_unit_fee }} × {{ opt.breakdown.units_used }} |
               Flat: {{ opt.breakdown.flat_fee }}
-            </div>
+            </div> -->
           </div>
         </label>
         <div class="font-semibold text-[#00bfa5]">
@@ -348,13 +421,14 @@ onMounted(async () => {
         <span>OMR {{ grandTotal.toFixed(3) }}</span>
       </div>
 
-      <NuxtLink
-        :to="'/cart/checkout'"
+      <button
+  type="button"
+        @click="goCheckout"
         class="block mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
         :disabled="cart.cartItems.length===0 || (cart.deliveryMethod==='ship' && !selectedOption)"
       >
         Proceed to Checkout
-      </NuxtLink>
+    </button>
     </div>
   </div>
 </div>

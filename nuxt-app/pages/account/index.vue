@@ -8,6 +8,23 @@ import AccountOrders from '~/components/account/AccountOrders.vue'
 import AccountProfile from '~/components/account/AccountProfile.vue'
 import AccountAddresses from '~/components/account/AccountAddresses.vue'
 import AccountTickets from '~/components/account/AccountTickets.vue'
+import AccountFavorites from '~/components/account/AccountFavorites.vue'
+
+import AccountLoyalty from '~/components/account/AccountLoyalty.vue'
+
+/** Matches your Customers_Loyalty_Transactions_T */
+interface LoyaltyTx {
+  id: number
+  Loyalty_Transaction_Code: string
+  Customer_Id: number
+  Orders_Placed_Id?: number | null
+  Points_Earned: number
+  Points_Redeemed: number
+  created_at: string
+  updated_at?: string
+}
+
+
 
 const addresses = ref([])           // fetch these from your API
  
@@ -37,12 +54,14 @@ interface Order {
 }
 
 
+
+ 
 const orders = ref<Order[]>([]); 
 const loading = ref<boolean>(true); 
 const selectedOrderDetails = ref<OrderDetail[]>([]) 
 const showDetailsModal = ref(false) 
 const loadingDetails = ref(false)
-
+const points = ref<any>('')
 
  
 const activeOrderId = ref<number | null>(null)
@@ -50,8 +69,37 @@ const activeOrderId = ref<number | null>(null)
 
  
  
-type TabKey = 'orders' | 'profile' | 'addresses' | 'tickets'
+type TabKey = 'orders' | 'profile' | 'addresses' | 'tickets' | 'favorites' | 'loyalty'
 const activeTab = ref<TabKey>('orders')
+
+
+ 
+
+// Loyalty state
+const loyaltyLoading = ref(false)
+const loyaltyLoaded  = ref(false)
+const loyaltyTx = ref<LoyaltyTx[]>([])
+
+const fetchLoyalty = async () => {
+  if (loyaltyLoaded.value) return
+  loyaltyLoading.value = true
+  try {
+    // Your endpoint. If your Axios base has /api already, keep as '/loyalty/points'
+    const { data } = await $axios.get('/api/loyalty/points', { withCredentials: true })
+
+    // Be defensive about shape: accept array or {transactions:[...]}
+    const arr = Array.isArray(data) ? data : (data?.transactions ?? data?.items ?? [])
+    loyaltyTx.value = (arr || []) as LoyaltyTx[]
+    loyaltyLoaded.value = true
+  } catch (e) {
+    console.error('Failed to fetch loyalty points', e)
+  } finally {
+    loyaltyLoading.value = false
+  }
+}
+
+// Lazy-load when tab is opened
+watch(activeTab, (t) => { if (t === 'loyalty') fetchLoyalty() })
 
 
 // Tickets state you can wire to your API later
@@ -86,6 +134,20 @@ const fetchOrderDetails = async (orderId: number) => {
         loadingDetails.value = false 
       } 
     } 
+
+
+    const getloyalitypoints = async () => { 
+      
+      try { 
+        const response = await $axios.get('/api/loyalty', { withCredentials: true }) 
+        
+        points.value = response.data
+      } catch(e){
+
+      }finally { 
+       
+      } 
+    }
   
     const getOrders = async () => {
   loading.value = true
@@ -115,8 +177,14 @@ const onShowOrderDetails = async (orderId: number) => {
 }
 
 
+ 
+
+
+
+
   onMounted(async (): Promise<void> => { 
     await getOrders(); 
+    await getloyalitypoints();
   })
 
 
@@ -165,12 +233,12 @@ const onShowOrderDetails = async (orderId: number) => {
               />
               <div>
                 <p class="text-lg font-semibold text-slate-900">{{ user?.User_Name }}</p>
-                <p class="text-xs text-slate-500">Member since <span class="font-medium">February 06, 2017</span></p>
+                <p class="text-xs text-slate-500">Member since <span class="font-medium">{{ new Date(user?.created_at).toLocaleDateString('en-US', { month:'long', day:'2-digit', year:'numeric' }) }}</span></p>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center gap-2 rounded-lg bg-amber-50 text-amber-700 px-3 py-1 ring-1 ring-amber-200">
-                <span>🎖</span><span class="text-sm font-medium">0 points</span>
+                <span>🎖</span><span class="text-sm font-medium">{{ points }} points </span>
               </span>
                
             </div>
@@ -197,7 +265,7 @@ const onShowOrderDetails = async (orderId: number) => {
         : 'text-slate-700 hover:bg-slate-50'"
     >
       <span class="mr-2">🛒</span>
-      Orders
+      Order Placed
       <span class="ml-auto text-xs rounded px-2 py-0.5"
             :class="activeTab==='orders' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
        
@@ -220,6 +288,30 @@ const onShowOrderDetails = async (orderId: number) => {
 
       </span>
     </button>
+
+    <button
+  role="tab"
+  :aria-selected="activeTab==='loyalty'"
+  @click="activeTab='loyalty'"
+  class="w-full flex items-center px-3 py-2 rounded-md transition"
+  :class="activeTab==='loyalty'
+    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+    : 'text-slate-700 hover:bg-slate-50'">
+  <span class="mr-2">🎖</span>
+  Loyalty
+</button>
+
+    <button
+  role="tab"
+  :aria-selected="activeTab==='favorites'"
+  @click="activeTab='favorites'"
+  class="w-full flex items-center px-3 py-2 rounded-md transition"
+  :class="activeTab==='favorites'
+    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+    : 'text-slate-700 hover:bg-slate-50'">
+  <span class="mr-2">♡</span>
+  Favorites
+</button>
 
     <button
       role="tab"
@@ -280,6 +372,15 @@ const onShowOrderDetails = async (orderId: number) => {
            
          />
 
+
+         <AccountLoyalty
+  v-show="activeTab==='loyalty'"
+  :loading="loyaltyLoading"
+  :transactions="loyaltyTx"
+/>
+
+
+         <AccountFavorites v-show="activeTab==='favorites'" />
 
 
          <AccountTickets

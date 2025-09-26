@@ -1,157 +1,61 @@
-<script setup lang="ts">
+ <script setup lang="ts">
 definePageMeta({
-   layout: 'layouts',
-   middleware: 'auth',
+  layout: 'layouts',
+  middleware: 'auth',
 })
 
 import { useCartStore } from '~/stores/cart'
-import { ref, onMounted, computed,watch } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useToast } from 'vue-toastification'
-import { useShippingQuotes } from '@/composables/useShippingQuotes'
- 
-
 
 const { user, isAuthenticated } = useAuth()
-
 const { $axios, $r2Url } = useNuxtApp()
 
-const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShippingQuotes()
-const selectedOption = ref<any|null>(null)
-
-
-
-interface ShippingOption {
+// ---------------------
+// Types
+// ---------------------
+type Basis = 'weight' | 'volume' | 'heavy'
+interface SavedShippingOption {
   shipper_id: number
   destination_id: number
-  basis: 'weight' | 'volume' | 'heavy'
-  price: number
+  basis: Basis
   currency: string
-  weight_kg?: number | null
-  volume_cbm?: number | null
+  total_price: number
+  breakdown?: any | null
 }
-
-
-
-interface OrderPayload {
-  customer_id: number
-  delivery_method: 'ship' | 'pickup'
-  Customers_Contacts_Id: number | null // ✅ Nullable for pickup
-  shipping_cost: number
-  shipping_option: ShippingOption | null
-  cart_items: {
-    product_id: number
-    quantity: number
-    price: number
+interface SavedCheckoutPrefill {
+  deliveryMethod: 'ship' | 'pickup'
+  addressId: number | null
+  shippingOption: SavedShippingOption | null
+  totals: {
+    currency: string
     subtotal: number
+    shipping: number
     vat: number
-  }[]
+    grand: number
+  }
+  items: { id: number; slug?: string; qty: number; price: number }[]
+  savedAt: string
 }
 
+// ---------------------
+// State
+// ---------------------
+const cart = useCartStore()
+const toast = useToast()
 
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
-const itemsOpen = ref(false) 
-const cart = useCartStore()
- 
-const toast = useToast()
- 
+const itemsOpen = ref(false)
 
+const selectedAddress = ref<any>(null)
+const saved = ref<SavedCheckoutPrefill | null>(null)
 
-const selectedAddress = ref<any>(null);
-
-
-const shippingOk = computed(() =>
-  cart.deliveryMethod === 'pickup' ||
-  (Boolean(selectedAddress.value) && Boolean(selectedOption.value))
-)
-
-// Payment requirements OK per method
-const paymentOk = computed(() => {
-  if (paymentMethod.value === 'card') return cardValid.value
-  if (paymentMethod.value === 'transfer') return transferValid.value
-  if (paymentMethod.value === 'cod') return true
-  return false
-})
-
-// Final gate for enabling the button
-const canSubmit = computed(() => shippingOk.value && paymentOk.value)
-
-
-const totals = computed(() => {
-  const weight = cart.cartItems.reduce((s,i)=> s + (i.weight * i.quantity), 0)
-  const volume = cart.cartItems.reduce((s,i)=> {
-    const cbm = (i.length * i.width * i.height) / 1_000_000
-    return s + (cbm * i.quantity)
-  }, 0)
-  return { weight_kg: +weight.toFixed(3), volume_cbm: +volume.toFixed(4) }
-})
-
-// Helper: read items from localStorage for quoting
-const readCartItemsForQuote = (): { product_id: number; qty: number }[] => {
-  // Adjust the key if your app uses a different one
-  const raw = localStorage.getItem('cart_items') || localStorage.getItem('cart')
-  if (!raw) {
-    // fallback to Pinia store if LS empty
-    return cart.cartItems.map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
-  }
-  try {
-    const parsed = JSON.parse(raw)
-
-    // shape A: [{ id, quantity }]
-    if (Array.isArray(parsed)) {
-      return parsed
-        .filter(i => i?.id && i?.quantity)
-        .map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
-    }
-
-    // shape B: { items: [{ product_id, qty }] }
-    if (Array.isArray((parsed as any).items)) {
-      return (parsed as any).items
-        .filter((i: any) => i?.product_id && i?.qty)
-        .map((i: any) => ({ product_id: Number(i.product_id), qty: Number(i.qty) }))
-    }
-  } catch {
-    // fallback to Pinia store on parse error
-    return cart.cartItems.map(i => ({ product_id: Number(i.id), qty: Number(i.quantity) }))
-  }
-  return []
-}
-
-
-
-const requestQuotes = async () => {
-  if (cart.deliveryMethod !== 'ship') return
-  const storedId = localStorage.getItem('selected_address_id')
-  if (!storedId) return
-
-  const items = readCartItemsForQuote()
-  if (!items.length) return
-
-  try {
-    const { data } = await $axios.post('/api/v1/shipping/quotes', {
-      address_id: parseInt(storedId, 10),
-      items,              // ✅ send items instead of totals
-      include_heavy: false
-    })
-
-    // server returns options sorted by price; keep your existing handling
-    shippingOptions.value = data?.options ?? []
-    selectedOption.value = shippingOptions.value[0] || null
-
-    // (optional) you can store server totals if you want:
-    // totalsFromServer.value = data?.totals
-  } catch (e:any) {
-    console.error('Failed to fetch shipping quotes', e)
-  }
-}
- 
-
-watch([() => cart.cartItems, () => cart.deliveryMethod, selectedAddress, totals], requestQuotes, { deep: true })
-
-
+// ---------------------
+// Payment state
+// ---------------------
 type Brand = 'visa' | 'mastercard' | 'amex' | 'unknown'
 const onlyDigits = (s: string) => (s || '').replace(/\D/g, '')
-
 const detectBrand = (num: string): Brand => {
   const s = onlyDigits(num)
   if (/^4\d{0,15}$/.test(s)) return 'visa'
@@ -159,8 +63,6 @@ const detectBrand = (num: string): Brand => {
   if (/^3[47]\d{0,13}$/.test(s)) return 'amex'
   return 'unknown'
 }
-
-// format number as you type (AmEx 4-6-5, others 4-4-4-4)
 const formatNumber = (raw: string): string => {
   const s = onlyDigits(raw)
   const b = detectBrand(s)
@@ -168,193 +70,219 @@ const formatNumber = (raw: string): string => {
     ? s.replace(/^(\d{0,4})(\d{0,6})(\d{0,5}).*$/, (_, a, b, c) => [a, b, c].filter(Boolean).join(' '))
     : s.replace(/(\d{4})(?=\d)/g, '$1 ').trim()
 }
-
 const MAX_DIGITS = 16
-
 const onCardNumberInput = (e: Event) => {
   const el = e.target as HTMLInputElement
-  // keep only digits and cap to 16
   const digits = el.value.replace(/\D/g, '').slice(0, MAX_DIGITS)
-  // format (your formatNumber already handles spacing)
   const formatted = formatNumber(digits)
-
-  // reflect sanitized value in both the input and your state
   if (el.value !== formatted) el.value = formatted
   card.value.number = formatted
-
-  // keep caret at the end
   requestAnimationFrame(() => el.setSelectionRange(formatted.length, formatted.length))
 }
-
+const formatExpiry = (raw: string) => {
+  let d = raw.replace(/\D/g, '').slice(0, 4)
+  if (d.length >= 1 && parseInt(d[0], 10) > 1) d = ('0' + d).slice(0, 4)
+  let mm = d.slice(0, 2)
+  let yy = d.slice(2, 4)
+  if (mm.length === 2) {
+    const m = parseInt(mm, 10)
+    if (m === 0) mm = '01'
+    else if (m > 12) mm = '12'
+  }
+  return yy ? `${mm}/${yy}` : (d.length > 2 ? `${mm}/` : mm)
+}
 const onExpiryInput = (e: Event) => {
   const el = e.target as HTMLInputElement
   const formatted = formatExpiry(el.value)
   if (el.value !== formatted) el.value = formatted
   card.value.expiry = formatted
 }
-
-// keep only digits, max 4 (MMYY), auto-insert slash, clamp month
-const formatExpiry = (raw: string) => {
-  let d = raw.replace(/\D/g, '').slice(0, 4)
-
-  // if first digit > 1, treat it as 0X (e.g. 3 -> 03…)
-  if (d.length >= 1 && parseInt(d[0], 10) > 1) {
-    d = ('0' + d).slice(0, 4)
-  }
-
-  let mm = d.slice(0, 2)
-  let yy = d.slice(2, 4)
-
-  if (mm.length === 2) {
-    const m = parseInt(mm, 10)
-    if (m === 0) mm = '01'
-    else if (m > 12) mm = '12'
-  }
-
-  return yy ? `${mm}/${yy}` : (d.length > 2 ? `${mm}/` : mm)
-}
-const brand = computed<Brand>(() => detectBrand(card.value.number))
-const maskedNumber = computed(
-  () => (formatNumber(card.value.number) || '•••• •••• •••• ••••').replace(/\d(?=\d{4})/g, '•')
-)
-const nameDisplay = computed(() => (card.value.name || 'FULL NAME').toUpperCase().slice(0, 26))
-const expiryDisplay = computed(() => card.value.expiry || 'MM/YY')
-
-// flip to the back while CVC is focused
-const focusedBack = ref(false)
-
 const paymentMethod = ref<'card' | 'cod' | 'transfer'>('card')
-
-const triedSubmit = ref(false) // you reference this in the template
-
-const card = ref({
-  number: '',
-  name: '',
-  expiry: '',
-  cvc: '',
-})
-
-// Bank transfer fields + validity
+const triedSubmit = ref(false)
+const card = ref({ number: '', name: '', expiry: '', cvc: '' })
+const focusedBack = ref(false)
 const transfer = ref({ reference: '', payerName: '' })
-const transferValid = computed(() =>
-  Boolean(transfer.value.reference.trim() && transfer.value.payerName.trim())
-)
-
-// Minimal card validation (Luhn + basic format)
+const transferValid = computed(() => Boolean(transfer.value.reference.trim() && transfer.value.payerName.trim()))
 const luhn = (num: string) => {
   const s = (num || '').replace(/\D/g, '')
   if (!s) return false
-  let sum = 0
-  let dbl = false
+  let sum = 0, dbl = false
   for (let i = s.length - 1; i >= 0; i--) {
     let d = parseInt(s[i], 10)
     if (dbl) { d *= 2; if (d > 9) d -= 9 }
-    sum += d
-    dbl = !dbl
+    sum += d; dbl = !dbl
   }
   return sum % 10 === 0
 }
-
+const brand = computed<Brand>(() => detectBrand(card.value.number))
+const maskedNumber = computed(() => (formatNumber(card.value.number) || '•••• •••• •••• ••••').replace(/\d(?=\d{4})/g, '•'))
+const nameDisplay = computed(() => (card.value.name || 'FULL NAME').toUpperCase().slice(0, 26))
+const expiryDisplay = computed(() => card.value.expiry || 'MM/YY')
 const cardValid = computed(() => {
   const numberStripped = card.value.number.replace(/\s+/g, '')
   const numberOk = numberStripped.length >= 13 && luhn(numberStripped)
   const nameOk = card.value.name.trim().length >= 3
-  const expOk = /^((0[1-9])|(1[0-2]))\/\d{2}$/.test(card.value.expiry) // MM/YY
+  const expOk = /^((0[1-9])|(1[0-2]))\/\d{2}$/.test(card.value.expiry)
   const cvcOk = /^\d{3,4}$/.test(card.value.cvc)
   return numberOk && nameOk && expOk && cvcOk
 })
 
-
- 
-
-
-
-const fetchSelectedAddress = async () => {
-  if (cart.deliveryMethod !== 'ship') return
-
-  const id = localStorage.getItem('selected_address_id')
-  if (!id) return
-
+// ---------------------
+// Load saved prefill + address
+// ---------------------
+const fetchSelectedAddress = async (addressId: number | null) => {
+  if (cart.deliveryMethod !== 'ship' || !addressId) return
   try {
-    const res = await $axios.get(`/api/contacts/${id}`)
+    const res = await $axios.get(`/api/contacts/${addressId}`)
     selectedAddress.value = res.data
-
-    console.log(selectedAddress.value);
   } catch (error) {
     console.error('Failed to fetch selected address:', error)
   }
 }
 
+onMounted(async () => {
+  try {
+    const raw = localStorage.getItem('checkout_prefill')
+    saved.value = raw ? JSON.parse(raw) as SavedCheckoutPrefill : null
+  } catch {
+    saved.value = null
+  }
+
+  if (!saved.value) {
+    // nothing persisted, bounce back to cart
+    return navigateTo('/cart')
+  }
+
+  // sync cart method/addr for consistency
+  cart.deliveryMethod = saved.value.deliveryMethod
+  if (saved.value.addressId) cart.selectedAddressId = saved.value.addressId
+
+  // If shipping required but no saved option, back to cart
+  if (saved.value.deliveryMethod === 'ship' && !saved.value.shippingOption) {
+    return navigateTo('/cart')
+  }
+
+  await fetchSelectedAddress(saved.value.addressId ?? null)
+})
+
+// ---------------------
+// Totals (from saved blob; fallback to runtime if needed)
+// ---------------------
+const savedSubtotal = computed(() => Number(saved.value?.totals?.subtotal ?? cart.totalPrice()))
+const savedShippingCost = computed(() => Number(saved.value?.totals?.shipping ?? 0))
+const savedVat = computed(() => Number(saved.value?.totals?.vat ?? ((savedSubtotal.value + savedShippingCost.value) * 0.05)))
+const savedGrand = computed(() => Number(saved.value?.totals?.grand ?? (savedSubtotal.value + savedShippingCost.value + savedVat.value)))
+
+// For enabling the button (no shipping UI here; we trust saved)
+
+const shippingOk = computed(() => {
+  return cart.deliveryMethod === 'pickup' || (saved.value?.addressId && saved.value?.shippingOption)
+})
+const paymentOk = computed(() => {
+  if (paymentMethod.value === 'card') return cardValid.value
+  if (paymentMethod.value === 'transfer') return transferValid.value
+  if (paymentMethod.value === 'cod') return true
+  return false
+})
+
+
+const canSubmit = computed(() => shippingOk.value && paymentOk.value)
+
+// ---------------------
+// Qty handlers (unchanged)
+// ---------------------
+const incrementQty = (id: number) => {
+  const item = cart.cartItems.find(i => i.id === id)
+  if (item) item.quantity++
+}
+const decrementQty = (id: number) => {
+  const item = cart.cartItems.find(i => i.id === id)
+  if (item && item.quantity > 1) item.quantity--
+}
+const onQtyInputChange = (event: Event, id: number) => {
+  const value = parseInt((event.target as HTMLInputElement).value)
+  const item = cart.cartItems.find(i => i.id === id)
+  if (!item) return
+  item.quantity = isNaN(value) || value < 1 ? 1 : value
+}
+
+// Keep address in sync if method flips
+watch(() => cart.deliveryMethod, (val) => {
+  if (val !== 'ship') selectedAddress.value = null
+  else fetchSelectedAddress(saved.value?.addressId ?? null)
+})
+
+// ---------------------
+// Submit
+// ---------------------
 const submitOrder = async () => {
   if (cart.cartItems.length === 0 || isSubmitting.value) return
+  if (!canSubmit.value) {
+    triedSubmit.value = true
+    return
+  }
 
   isSubmitting.value = true
 
   try {
-    // ✅ Retrieve selected address ID from localStorage
-    const storedAddressId = localStorage.getItem('selected_address_id')
-    const addressId = storedAddressId ? parseInt(storedAddressId) : null
 
-    if (!addressId && cart.deliveryMethod === 'ship') {
-      toast.error('Please select a shipping address.')
-      isSubmitting.value = false
-      return
+    
+    const parseExp = (mmYY: string) => {
+      const m = Number(mmYY.slice(0, 2)) || null
+      const y = Number(mmYY.slice(3, 5))
+      const year = isNaN(y) ? null : 2000 + y
+      return { m, year }
+    }
+    const { m: exp_month, year: exp_year } = parseExp(card.value.expiry)
+
+    const payment = {
+      method: paymentMethod.value,
+      currency: 'OMR',
+      amount: Number(savedGrand.value.toFixed(3)),
+      card: paymentMethod.value === 'card' ? {
+        brand: brand.value,
+        last4: onlyDigits(card.value.number).slice(-4),
+        exp_month, exp_year
+      } : null,
+      transfer: paymentMethod.value === 'transfer' ? {
+        reference: transfer.value.reference,
+        payer_name: transfer.value.payerName
+      } : null
     }
 
-    const parseExp = (mmYY: string) => {
-  const m = Number(mmYY.slice(0, 2)) || null
-  const y = Number(mmYY.slice(3, 5))
-  const year = isNaN(y) ? null : 2000 + y
-  return { m, year }
-}
+    const payload = {
+      customer_id: 1, // TODO: real id
+      delivery_method: cart.deliveryMethod,
+      shipping_cost: savedShippingCost.value,
+      Customers_Contacts_Id: cart.deliveryMethod === 'ship' ? (saved.value?.addressId ?? null) : null,
+      VAT: savedVat.value,
 
-const { m: exp_month, year: exp_year } = parseExp(card.value.expiry)
 
-const payment = {
-  method: paymentMethod.value,                  // 'card' | 'cod' | 'transfer'
-  currency: 'OMR',
-  amount: Number((cart.totalPrice() + shippingCost.value).toFixed(3)),
-  card: paymentMethod.value === 'card' ? {
-    brand: brand.value,                         // 'visa' | 'mastercard' | 'amex' | 'unknown'
-    last4: onlyDigits(card.value.number).slice(-4),
-    exp_month, exp_year
-  } : null,
-  transfer: paymentMethod.value === 'transfer' ? {
-    reference: transfer.value.reference,
-    payer_name: transfer.value.payerName
-  } : null
-}
-
-   const payload: OrderPayload & { payment: any } = {
-  customer_id: 1,  // TODO: real customer id
-  delivery_method: cart.deliveryMethod,
-  shipping_cost: shippingCost.value,
-  Customers_Contacts_Id: cart.deliveryMethod === 'ship' ? addressId : null,
-  // ✅ include the chosen quote (or null if pickup / none selected)
-  shipping_option: cart.deliveryMethod === 'ship' && selectedOption.value ? {
-    shipper_id: selectedOption.value.shipper_id,
-    destination_id: selectedOption.value.destination_id,
-    basis: selectedOption.value.basis,         // 'weight' | 'volume' | 'heavy'
-    price: Number(selectedOption.value.total_price),
-    currency: selectedOption.value.currency ?? 'OMR',
-    // helpful for auditing/calculation reproducibility:
-    weight_kg: totals.value.weight_kg,
-    volume_cbm: totals.value.volume_cbm
-  } : null,
-  cart_items: cart.cartItems.map(item => ({
-    product_id: item.id,
-    quantity: item.quantity,
-    price: item.price,
-    subtotal: item.price * item.quantity,
-    vat: 0,
-  })),
-   payment
-}
+      shipping_option: cart.deliveryMethod === 'ship' && saved.value?.shippingOption ? {
+        shipper_id: saved.value.shippingOption.shipper_id,
+        destination_id: saved.value.shippingOption.destination_id,
+        basis: saved.value.shippingOption.basis,
+        price: Number(saved.value.shippingOption.total_price),
+        currency: saved.value.shippingOption.currency ?? 'OMR',
+        // Optional: include any server totals you persisted
+        // weight_kg: saved.value.totalsFromServer?.weight_kg,
+        // volume_cbm: saved.value.totalsFromServer?.volume_cbm,
+      } : null,
+      cart_items: cart.cartItems.map(item => ({
+        product_id: item.id,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.price * item.quantity,
+        vat: 0,
+      })),
+      payment
+    }
 
     const response = await $axios.post('/api/orders/place', payload, { withCredentials: true })
 
     if (response.status === 200) {
       cart.clearCart()
+      localStorage.removeItem('checkout_prefill') // clean up persisted checkout
       isSuccess.value = true
       toast.success('Order placed successfully!')
     }
@@ -365,55 +293,8 @@ const payment = {
     isSubmitting.value = false
   }
 }
-
-
-
-const incrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item) item.quantity++
-}
-
-const decrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item && item.quantity > 1) item.quantity--
-}
-
-
-const onQtyInputChange = (event: Event, id: number) => {
-  const value = parseInt((event.target as HTMLInputElement).value)
-  const item = cart.cartItems.find(i => i.id === id)
-
-  if (!item) return
-
-  if (isNaN(value) || value < 1) {
-    item.quantity = 1 // fallback to 1 if invalid
-  } else {
-    item.quantity = value
-  }
-
-  // Optionally trigger backend update here
-  // await $axios.post('/api/cart/update', { id, quantity: item.quantity })
-}
-
-watch(() => cart.deliveryMethod, (val) => {
-  if (val !== 'ship') {
-    selectedAddress.value = null
-  } else {
-    fetchSelectedAddress()
-  }
-})
-
-const shippingCost = computed(() => {
-  return cart.deliveryMethod === 'ship' && selectedOption.value
-    ? Number(selectedOption.value.total_price)
-    : 0
-})
-
-onMounted(()=>{
-          fetchSelectedAddress()
-          requestQuotes()
-          })
 </script>
+
 <template>
 
 <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white text-center animate-fade-in" v-if="isSuccess">
@@ -437,19 +318,7 @@ onMounted(()=>{
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
       <!-- Left Column -->
       <div class="md:col-span-2 space-y-8">
-
-  <!-- ✅ Checkout Title -->
-  <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
-    <h2 class="text-2xl font-bold text-gray-800 mb-4"><span role="img" aria-label="receipt">🧾</span> Checkout Information</h2>
-
-    <!-- Purchase Order -->
-    <div>
-
-       <p>Name : {{ user?.User_Name  }}</p>
-      
-
-    </div>
-  </div>
+ 
 
 
   <!-- Products Review (Accordion) -->
@@ -533,46 +402,7 @@ onMounted(()=>{
 </div>
 
 
-   <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
-
-
   
-  <div class="mt-4">
-  <div class="flex items-center justify-between">
-    <h4 class="font-semibold">Shipping Options</h4>
-    <span v-if="quotesLoading" class="text-xs text-gray-500">Calculating…</span>
-  </div>
-
-  <div v-if="shippingOptions.length === 0 && !quotesLoading" class="text-sm text-gray-500 mt-2">
-    No shipping options available for this address and cart totals.
-  </div>
-
-  <div v-for="opt in shippingOptions" :key="`${opt.shipper_id}-${opt.basis}-${opt.destination_id}`"
-       class="mt-2 p-3 border rounded flex items-center justify-between">
-    <label class="flex items-center gap-3">
-      <input type="radio" name="shippingOption"
-             :value="opt"
-             v-model="selectedOption">
-      <div>
-        <div class="font-semibold">
-          {{ opt.shipper_name }} — <span class="capitalize">{{ opt.basis }}</span>
-        </div>
-        <div class="text-xs text-gray-500">
-          {{ opt.breakdown.band_label || 'Band' }} |
-          Std: {{ opt.breakdown.standard_rate }} |
-          Base: {{ opt.breakdown.base_fee }} |
-          Per-unit: {{ opt.breakdown.per_unit_fee }} × {{ opt.breakdown.units_used }} |
-          Flat: {{ opt.breakdown.flat_fee }}
-        </div>
-      </div>
-    </label>
-    <div class="font-semibold text-[#00bfa5]">
-      {{ opt.currency }} {{ opt.total_price }}
-    </div>
-  </div>
-</div>
- </div>
- 
 <div class="bg-[#f9f9f9] border border-gray-200 rounded-lg p-5 shadow-sm">
   <h3 class="font-semibold text-gray-800 text-lg mb-4">Choose Payment Method</h3>
 
@@ -797,19 +627,20 @@ onMounted(()=>{
             <span>Subtotal</span>
             <span>OMR {{ cart.totalPrice() }}</span>
           </div>
+          
           <div class="flex justify-between">
-            <span>Tax</span>
-            <span>TBD</span>
-          </div>
-          <div class="flex justify-between">
-            <span>Shipping</span>
-            <span>OMR {{ shippingCost }}</span>
-          </div>
+    <span>Shipping</span>
+    <span>OMR {{ savedShippingCost.toFixed(3) }}</span>
+  </div>
+  <div class="flex justify-between">
+    <span>VAT (5%)</span>
+    <span>OMR {{ savedVat.toFixed(3) }}</span>
+  </div>
           <hr class="my-3" />
-          <div class="flex justify-between font-semibold text-[#00bfa5] text-base">
-            <span>Total</span>
-            <span>OMR {{ (cart.totalPrice() + shippingCost).toFixed(3) }}</span>
-          </div>
+           <div class="flex justify-between font-semibold text-[#00bfa5] text-base">
+    <span>Total</span>
+    <span>OMR {{ savedGrand.toFixed(3) }}</span>
+  </div>
         </div>
 
         <!-- Submit Order -->

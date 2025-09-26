@@ -440,35 +440,35 @@ onMounted(async () => {
       
 
       <nav aria-label="Breadcrumb" class="mb-4">
-  <ol class="flex items-center gap-2 text-sm text-slate-600">
-    <li>
-      <NuxtLink to="/" class="hover:text-emerald-700">Home</NuxtLink>
-    </li>
-    <li class="text-slate-400">›</li>
+        <ol class="flex items-center gap-2 text-sm text-slate-600">
+          <li>
+            <NuxtLink to="/" class="hover:text-emerald-700">Home</NuxtLink>
+          </li>
+          <li class="text-slate-400">›</li>
 
-    <li v-if="parentDeptId">
-      <button @click="goDept" class="hover:text-emerald-700">
-        {{ parentDeptName || 'Department' }}
-      </button>
-    </li>
-    <li v-if="parentDeptId" class="text-slate-400">›</li>
+          <li v-if="parentDeptId">
+            <button @click="goDept" class="hover:text-emerald-700">
+              {{ parentDeptName || 'Department' }}
+            </button>
+          </li>
+          <li v-if="parentDeptId" class="text-slate-400">›</li>
 
-    <li v-if="parentSubId">
-      <button @click="goSub" class="hover:text-emerald-700">
-        {{ parentSubName || 'Category' }}
-      </button>
-    </li>
-    <li v-if="parentSubId" class="text-slate-400">›</li>
+          <li v-if="parentSubId">
+            <button @click="goSub" class="hover:text-emerald-700">
+              {{ parentSubName || 'Category' }}
+            </button>
+          </li>
+          <li v-if="parentSubId" class="text-slate-400">›</li>
 
-    <!-- Current sub-sub: label only (or make it a button to go to list) -->
-    <li class="text-slate-900 font-semibold">
-      <button @click="goSubSubList" class="hover:text-emerald-700">
-        {{ subsubdepartment?.Product_Sub_Sub_Department_Name || 'Products' }}
-      </button>
-      <!-- If you prefer non-clickable current crumb, replace the <button> with a <span>. -->
-    </li>
-  </ol>
-</nav>
+          <!-- Current sub-sub: label only (or make it a button to go to list) -->
+          <li class="text-slate-900 font-semibold">
+            <button @click="goSubSubList" class="hover:text-emerald-700">
+              {{ subsubdepartment?.Product_Sub_Sub_Department_Name || 'Products' }}
+            </button>
+            <!-- If you prefer non-clickable current crumb, replace the <button> with a <span>. -->
+          </li>
+        </ol>
+      </nav>
 
 
       <!-- Product Types -->

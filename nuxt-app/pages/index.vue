@@ -246,9 +246,13 @@ const selectedSubCategoryName = computed(() => {
   return subCategories.value.find(s => s.id === selectedSubCategory.value)?.Sub_Department_Name || ''
 })
 
+
+
+
+
 const categoryPath = computed(() => {
-  let path = 'Browse Categories'
-  if (selectedDepartmentName.value) path += ` > ${selectedDepartmentName.value}`
+  let path = ''
+  if (selectedDepartmentName.value) path += ` ${selectedDepartmentName.value}`
   if (selectedSubCategoryName.value) path += ` > ${selectedSubCategoryName.value}`
   return path
 })
@@ -394,7 +398,7 @@ onMounted(async () => {
           class="shrink-0 relative rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 transition">
           <span
             class="absolute -top-1.5 -right-1.5 min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 text-[10px] sm:text-[12px]
-                   rounded-full bg-emerald-600 text-white flex items-center justify-center shadow">
+                   rounded-full bg-[#2F5FB6] text-white flex items-center justify-center shadow">
             {{ cart.totalItems() }}
           </span>
           <svg class="w-7 h-7 md:w-7 md:h-7 lg:w-8 lg:h-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -406,7 +410,7 @@ onMounted(async () => {
        <NuxtLink
   v-if="isAuthenticated"
   to="/cart/checkout"
-  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
+  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
 >
   <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
     <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
@@ -418,7 +422,7 @@ onMounted(async () => {
 <NuxtLink
   v-if="isAuthenticated"
   to="/cart/checkout"
-  class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-emerald-600 text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
+  class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
 >
   <svg viewBox="0 0 24 24" class="w-4 h-4 lg:w-5 lg:h-5 fill-current" aria-hidden="true">
     <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
@@ -462,7 +466,7 @@ onMounted(async () => {
           placeholder="Search by keyword, item, model or part #"
           class="w-full px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] text-slate-700 placeholder:text-slate-400 outline-none"
         />
-        <button class="px-4 sm:px-5 bg-emerald-600 text-white hover:brightness-95 rounded-r-full" aria-label="Search">
+        <button class="px-4 sm:px-5 bg-[#2F5FB6] text-white hover:brightness-95 rounded-r-full" aria-label="Search">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/>
           </svg>
@@ -577,53 +581,80 @@ onMounted(async () => {
       <section id="categories" v-if="currentSection === 'categories'" class="mb-10">
 
 
-         <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center gap-4">
-              <!-- Show back button if we're not at root -->
-              <button
-                v-if="selectedDepartment !== null || selectedSubCategory !== null"
-                @click="goBack"
-                class="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
-              >
-                ← Back
-              </button>
+         <!-- Header -->
+          <div class="flex items-center justify-between mb-3 sm:mb-6">
+            <!-- Left: Back + breadcrumb -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Back button (tiny) -->
+            <button
+              v-if="selectedDepartment !== null || selectedSubCategory !== null"
+              @click="goBack"
+              class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] sm:text-xs
+                    bg-white ring-1 ring-slate-200 hover:bg-slate-50 hover:shadow-sm
+                    transition-all duration-150 active:scale-[0.98] focus:outline-none
+                    focus-visible:ring-2 focus-visible:ring-sky-500"
+              aria-label="Go back"
+            >
+              <span class="text-slate-600 leading-none">←</span>
+              <span class="text-slate-700 font-medium leading-none">Back</span>
+            </button>
 
-              <!-- Dynamic breadcrumb -->
-              <h2 class="text-2xl font-bold">{{ categoryPath }}</h2>
+            <!-- Breadcrumb -->
+            <nav aria-label="Breadcrumb" class="mb-0">
+              <ol class="flex items-center gap-1.5 sm:gap-2 text-[12px] sm:text-sm text-slate-600">
+               
+  
+                <li class="text-slate-400" v-if="categoryPath">›</li>
+                <li class="text-slate-900 font-semibold truncate max-w-[55vw] sm:max-w-none">
+                  {{ categoryPath }}
+                </li>
+              </ol>
+            </nav>
             </div>
 
-              <!-- View mode buttons -->
-              <div class="space-x-2">
-                <button
-                  @click="viewMode = 'grid'"
-                  :class="[
-                    'px-3 py-2 rounded border',
-                    viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
-                  ]"
-                >
-                  <Squares2X2Icon class="w-5 h-5" />
-                </button>
-                <button
-                  @click="viewMode = 'list'"
-                  :class="[
-                    'px-3 py-2 rounded border',
-                    viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
-                  ]"
-                >
-                  <ListBulletIcon class="w-5 h-5" />
-                </button>
+            <!-- Right: view mode (segmented control, compact) -->
+            <div class="inline-flex items-center rounded-xl ring-1 ring-slate-300 bg-white p-1 overflow-hidden">
+              <button
+                @click="viewMode = 'grid'"
+                :aria-pressed="viewMode==='grid'"
+                :class="[
+                  'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
+                  viewMode === 'grid'
+                    ? 'bg-slate-900 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-100'
+                ]"
+              >
+                <Squares2X2Icon class="w-4 h-4 md:w-5 md:h-5" />
+              </button>
 
-                  <button
-                    @click="viewMode = 'pie'"
-                    :class="[
-                      'px-3 py-2 rounded border', 
-                      viewMode === 'pie' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600'
-                      ]"
-                      >
-                     <ChartPieIcon class="w-5 h-5" />
-                </button>
-              </div>
-         </div>
+              <button
+                @click="viewMode = 'list'"
+                :aria-pressed="viewMode==='list'"
+                :class="[
+                  'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
+                  viewMode === 'list'
+                    ? 'bg-slate-900 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-100'
+                ]"
+              >
+                <ListBulletIcon class="w-4 h-4 md:w-5 md:h-5" />
+              </button>
+
+              <button
+                @click="viewMode = 'pie'"
+                :aria-pressed="viewMode==='pie'"
+                :class="[
+                  'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
+                  viewMode === 'pie'
+                    ? 'bg-slate-900 text-white shadow'
+                    : 'text-slate-600 hover:bg-slate-100'
+                ]"
+              >
+                <ChartPieIcon class="w-4 h-4 md:w-5 md:h-5" />
+              </button>
+            </div>
+          </div>
+
 
 
           <div class="flex items-center space-x-2 mb-4">
@@ -679,7 +710,11 @@ onMounted(async () => {
                     v-if="viewMode === 'grid'"
                     class="overflow-hidden rounded-md ring-1 ring-gray-300 bg-white"
                   >
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 -m-px">
+                    <TransitionGroup
+                      name="cat"
+                      tag="div"
+                      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 -m-px"
+                    >
                       <button
                         v-for="department in prodcutsDepartments"
                         :key="department.id"
@@ -693,7 +728,7 @@ onMounted(async () => {
                           {{ department.Product_Department_Name }}
                         </h3>
                       </button>
-                    </div>
+                    </TransitionGroup>
                   </div>
 
                   <!-- List Mode -->
@@ -829,11 +864,7 @@ onMounted(async () => {
       </section>
     </main>
 
-
-
-
-  
-   
+ 
  
 </template>
 
@@ -911,6 +942,18 @@ onMounted(async () => {
   }
 }
 
+
+/* Smooth entrance for grid items */
+.cat-enter-active,
+.cat-leave-active { transition: all .18s ease; }
+.cat-enter-from,
+.cat-leave-to { opacity: 0; transform: translateY(6px) scale(.98); }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .cat-enter-active,
+  .cat-leave-active { transition: none !important; }
+}
 </style>
 
 

@@ -257,7 +257,19 @@
           <!-- Designation -->
           <div class="md:col-span-1">
             <label class="block text-sm font-medium text-slate-700 mb-1">Designation</label>
-            <input v-model.trim="form.Designation" :class="inputCls" type="text" />
+            <select v-model="form.Designation" :class="selectCls">
+
+            <option value="">-- Select Designation --</option>
+                <option value="Mr">Mr</option>
+                <option value="Ms">Ms</option>
+                <option value="Mrs">Mrs</option>
+                <option value="Dr">Dr</option>
+                <option value="Prof">Prof</option>
+                
+                <option value="Sir">Sir</option>
+                <option value="Eng">Eng</option>
+                </select>
+
           </div>
 
           <!-- Email -->

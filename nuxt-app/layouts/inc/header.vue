@@ -116,7 +116,7 @@ const mobileMenuOpen = ref(false)
           class="shrink-0 relative rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 transition">
           <span
             class="absolute -top-1.5 -right-1.5 min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 text-[10px] sm:text-[12px]
-                   rounded-full bg-emerald-600 text-white flex items-center justify-center shadow">
+                   rounded-full bg-[#2F5FB6] text-white flex items-center justify-center shadow">
             {{ cart.totalItems() }}
           </span>
           <svg class="w-7 h-7 md:w-7 md:h-7 lg:w-8 lg:h-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -128,7 +128,7 @@ const mobileMenuOpen = ref(false)
        <NuxtLink
   v-if="isAuthenticated"
   to="/cart/checkout"
-  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
+  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6]text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
 >
   <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
     <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
@@ -140,7 +140,7 @@ const mobileMenuOpen = ref(false)
 <NuxtLink
   v-if="isAuthenticated"
   to="/cart/checkout"
-  class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-emerald-600 text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
+  class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
 >
   <svg viewBox="0 0 24 24" class="w-4 h-4 lg:w-5 lg:h-5 fill-current" aria-hidden="true">
     <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
@@ -183,7 +183,7 @@ const mobileMenuOpen = ref(false)
           placeholder="Search by keyword, item, model or part #"
           class="w-full px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] text-slate-700 placeholder:text-slate-400 outline-none"
         />
-        <button class="px-4 sm:px-5 bg-emerald-600 text-white hover:brightness-95 rounded-r-full" aria-label="Search">
+        <button class="px-4 sm:px-5 bg-[#2F5FB6] text-white hover:brightness-95 rounded-r-full" aria-label="Search">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/>
           </svg>
