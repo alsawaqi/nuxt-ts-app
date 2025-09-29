@@ -573,7 +573,7 @@ onMounted(async () => {
 
       <div class="flex items-center space-x-2 justify-start md:justify-end px-4 py-2">
         <input type="checkbox" id="hideBannerCheckbox" v-model="hideBanner" class="accent-blue-600">
-        <label for="hideBannerCheckbox" class="text-sm text-gray-600 cursor-pointer">Hide banner next time</label>
+        <label for="hideBannerCheckbox" class="text-sm text-gray-600 cursor-pointer">{{!hideBanner ? 'Hide Advertisement Banner' : 'Show Advertisements'}}</label>
       </div>
 
     <main class="container mx-auto p-6 flex-grow">
