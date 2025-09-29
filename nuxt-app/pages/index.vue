@@ -407,16 +407,16 @@ onMounted(async () => {
         </NuxtLink>
 
         <!-- Checkout (compact at md, pillier at lg) -->
-       <NuxtLink
-  v-if="isAuthenticated"
-  to="/cart/checkout"
-  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
->
-  <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
-    <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
-  </svg>
-  Checkout
-</NuxtLink>
+      <NuxtLink
+            v-if="isAuthenticated"
+            to="/cart/checkout"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
+          >
+            <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
+              <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
+            </svg>
+           
+       </NuxtLink>
 
 <!-- Tablet & Desktop: full pill button -->
 <NuxtLink

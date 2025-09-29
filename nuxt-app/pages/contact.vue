@@ -40,114 +40,196 @@ const submit = async () => {
 }
 </script>
 
-<template>
+ <template>
   <div class="relative">
     <!-- HERO -->
-
- 
-<section class="relative overflow-hidden pt-28 lg:pt-32">
-  <!-- BG image -->
-  <div
-    class="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-    style="background-image:url('/images/contact-hero.jpg')"
-    aria-hidden="true"
-  ></div>
-      <div class="absolute inset-0 z-10 bg-gradient-to-br from-cyan-600/80 via-teal-600/75 to-emerald-600/75"></div>
-
-      <!-- ambient blobs -->
-      <div class="pointer-events-none absolute -top-16 -left-16 h-72 w-72 rounded-full bg-white/10 blur-3xl animate-pulse -z-10"></div>
-  <div class="pointer-events-none absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-black/10 blur-3xl animate-[pulse_5s_ease-in-out_infinite] -z-10"></div>
-
-      <div class="max-w-screen-xl mx-auto px-6 pb-16 lg:pb-24">
-        <div class="grid lg:grid-cols-2 gap-10 items-center">
-          <!-- LEFT (text stays white) -->
-          <div class="text-white">
-            <p class="uppercase tracking-widest   text-xs mb-3">we’d love to hear from you</p>
-            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-tight">
-              Contact
-              <span class="inline-block bg-white/15 px-2 py-0.5 rounded-lg">Industrial Supplies Center</span>
+    <section class="bg-gradient-to-b from-slate-50 via-white to-slate-50">
+      <div class="max-w-screen-xl mx-auto px-6 pt-24 pb-12 lg:pt-28">
+        <div class="grid lg:grid-cols-2 gap-10 items-start">
+          <!-- LEFT -->
+          <div>
+            <span class="inline-flex items-center gap-2 text-xs font-medium text-sky-700 bg-sky-50 ring-1 ring-sky-100 px-2.5 py-1 rounded-full">
+              <span>✉️</span> Get in touch
+            </span>
+            <h1 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900">
+              Contact Industrial Supplies Center
             </h1>
-            <p class="mt-4  max-w-prose">
-              Questions about products, orders, or partnerships? Our team is here to help.
-              Reach out and we’ll get back to you shortly.
+            <p class="mt-3 text-slate-600 max-w-prose">
+              Questions about products, orders, or partnerships? Our team is here to help and typically replies within one business day.
             </p>
 
-            <!-- Quick contacts -->
-            <div class="mt-8 grid sm:grid-cols-3 gap-4">
-              <div class="group rounded-2xl bg-white/10 backdrop-blur p-4 ring-1 ring-white/20 hover:ring-white/40 transition transform hover:-translate-y-0.5">
-                <div class="text-sm opacity-80">Call</div>
-                <div class="font-semibold">+968 0000 0000</div>
-              </div>
-              <div class="group rounded-2xl bg-white/10 backdrop-blur p-4 ring-1 ring-white/20 hover:ring-white/40 transition transform hover:-translate-y-0.5">
-                <div class="text-sm opacity-80">Email</div>
-                <div class="font-semibold">support@isc-depot.com</div>
-              </div>
-              <div class="group rounded-2xl bg-white/10 backdrop-blur p-4 ring-1 ring-white/20 hover:ring-white/40 transition transform hover:-translate-y-0.5">
-                <div class="text-sm opacity-80">Hours</div>
-                <div class="font-semibold">Sun–Thu, 9:00–18:00</div>
+            <!-- Quick actions -->
+            <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <a href="tel:+96800000000" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
+                <div class="h-9 w-9 grid place-items-center rounded-lg bg-sky-50 ring-1 ring-sky-100">
+                  <svg class="h-5 w-5 text-sky-600" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.36 11.36 0 003.56.57 1 1 0 011 1V20a1 1 0 01-1 1C10.07 21 3 13.93 3 5a1 1 0 011-1h2.5a1 1 0 011 1c0 1.23.2 2.43.57 3.56a1 1 0 01-.25 1.02l-2.2 2.21z"/></svg>
+                </div>
+                <div>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-500">Call</div>
+                  <div class="font-semibold text-slate-900">+968 0000 0000</div>
+                </div>
+              </a>
+
+              <a href="mailto:support@isc-depot.com" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
+                <div class="h-9 w-9 grid place-items-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
+                  <svg class="h-5 w-5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path d="M2.94 6.34A2 2 0 014.6 5h10.8a2 2 0 011.67.94l-7.07 4.12a1.5 1.5 0 01-1.53 0L2.94 6.34z"/><path d="M18 8.12v5.38A2.5 2.5 0 0115.5 16h-11A2.5 2.5 0 012 13.5V8.12l6.34 3.7a3 3 0 002.98 0L18 8.12z"/></svg>
+                </div>
+                <div>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-500">Email</div>
+                  <div class="font-semibold text-slate-900">support@isc-depot.com</div>
+                </div>
+              </a>
+
+              <div class="flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3">
+                <div class="h-9 w-9 grid place-items-center rounded-lg bg-amber-50 ring-1 ring-amber-100">
+                  <svg class="h-5 w-5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v2H6zM4 6h16v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm4 3v2h8V9H8z"/></svg>
+                </div>
+                <div>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-500">Hours</div>
+                  <div class="font-semibold text-slate-900">Sun–Thu, 9:00–18:00</div>
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- RIGHT (card uses dark text) -->
-          <div class="relative">
-            <div class="relative z-10 rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200/70 p-6 sm:p-8 animate-[fadeInUp_.6s_ease-out] text-slate-800">
-              <h2 class="text-xl font-bold text-slate-800">Send us a message</h2>
-              <p class="text-slate-500 text-sm mt-1">We typically respond within 1–2 business days.</p>
+          <!-- RIGHT: Form card -->
+<div class="relative">
+  <div
+    class="isolate rounded-2xl bg-white/98 supports-[backdrop-filter]:bg-white/90 backdrop-blur
+           ring-1 ring-slate-200 shadow-lg p-5 sm:p-7 antialiased"
+  >
+    <h2 class="text-xl font-bold text-slate-900">Send us a message</h2>
+    <p class="text-slate-600 text-sm mt-1">We usually reply within 24 hours.</p>
 
-              <form class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Name</label>
-                  <input v-model="form.name" type="text" class="input" placeholder="Your name" />
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Email</label>
-                  <input v-model="form.email" type="email" class="input" placeholder="you@email.com" />
-                </div>
+    <form class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4" @submit.prevent="submit">
+      <!-- Name -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-800 mb-1">Name</label>
+        <input
+          v-model="form.name"
+          type="text"
+          placeholder="Your name"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
+                 text-[15px] text-slate-900 placeholder-slate-400 shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+        />
+      </div>
 
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Phone (optional)</label>
-                  <input v-model="form.phone" type="tel" class="input" placeholder="+968…" />
-                </div>
-                <div>
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Subject</label>
-                  <input v-model="form.subject" type="text" class="input" placeholder="How can we help?" />
-                </div>
+      <!-- Email -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-800 mb-1">Email</label>
+        <input
+          v-model="form.email"
+          type="email"
+          placeholder="you@email.com"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
+                 text-[15px] text-slate-900 placeholder-slate-400 shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+        />
+      </div>
 
-                <div class="sm:col-span-2">
-                  <label class="block text-xs font-semibold text-slate-600 mb-1">Message</label>
-                  <textarea v-model="form.message" rows="5" class="input resize-y" placeholder="Your message…"></textarea>
-                </div>
+      <!-- Phone -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-800 mb-1">Phone (optional)</label>
+        <input
+          v-model="form.phone"
+          type="tel"
+          placeholder="+968…"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
+                 text-[15px] text-slate-900 placeholder-slate-400 shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+        />
+      </div>
 
-                <div class="sm:col-span-2 flex items-center gap-2 text-xs text-slate-600">
-                  <input id="agree" v-model="form.agree" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500" />
-                  <label for="agree">I agree to the privacy notice.</label>
-                </div>
+      <!-- Subject -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-800 mb-1">Subject</label>
+        <input
+          v-model="form.subject"
+          type="text"
+          placeholder="How can we help?"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
+                 text-[15px] text-slate-900 placeholder-slate-400 shadow-sm
+                 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+        />
+      </div>
 
-                <div class="sm:col-span-2">
-                  <div v-if="error" class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {{ error }}
-                  </div>
-                  <button
-                    type="submit"
-                    :disabled="sending || sent"
-                    class="w-full inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600  font-semibold py-2.5 shadow hover:opacity-95 disabled:opacity-60 transition"
-                  >
-                    <svg v-if="sending" class="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24" fill="none">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                    <span>{{ sent ? 'Sent ✓' : sending ? 'Sending…' : 'Send message' }}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
+      <!-- Message -->
+      <div class="sm:col-span-2">
+        <label class="block text-xs font-semibold text-slate-800 mb-1">Message</label>
+        <textarea
+          v-model="form.message"
+          rows="5"
+          placeholder="Your message…"
+          class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5
+                 text-[15px] text-slate-900 placeholder-slate-400 shadow-sm resize-y
+                 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+        ></textarea>
+      </div>
 
-            <!-- floating badge -->
-             <div class="absolute -top-4 -right-4 rounded-full bg-emerald-500 text-white text-xs px-3 py-1 shadow-lg animate-bounce z-20">
-              <span class="font-semibold">24h Reply</span>
-            </div>
-          </div>
+      <!-- Agree -->
+      <label
+        class="sm:col-span-2 inline-flex items-center gap-2 text-xs text-slate-700 select-none"
+      >
+        <input
+          id="agree"
+          v-model="form.agree"
+          type="checkbox"
+          class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+        />
+        I agree to the privacy notice.
+      </label>
+
+      <!-- Submit -->
+      <div class="sm:col-span-2">
+        <div
+          v-if="error"
+          class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          {{ error }}
+        </div>
+
+        <button
+          type="submit"
+          :disabled="sending || sent"
+          class="w-full inline-flex items-center justify-center rounded-lg
+                 bg-[#2f5fb6] hover:bg-[#274f97] text-white font-semibold py-2.5
+                 shadow-sm transition disabled:opacity-60"
+        >
+          <svg
+            v-if="sending"
+            class="animate-spin h-5 w-5 mr-2"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            />
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            />
+          </svg>
+          <span>{{ sent ? 'Sent ✓' : sending ? 'Sending…' : 'Send message' }}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Subtle floating badge (kept small & clear) -->
+  <div
+    class="absolute -top-3 -right-3 rounded-full bg-emerald-500 text-white text-xs px-3 py-1 shadow"
+  >
+    24h Reply
+  </div>
+</div>
+
         </div>
       </div>
     </section>
@@ -155,31 +237,31 @@ const submit = async () => {
     <!-- MAP + INFO -->
     <section class="bg-white">
       <div class="max-w-screen-xl mx-auto px-6 py-12 grid lg:grid-cols-2 gap-8">
-        <div class="rounded-3xl overflow-hidden shadow-xl ring-1 ring-slate-200">
+        <div class="rounded-2xl overflow-hidden ring-1 ring-slate-200 shadow">
           <iframe
             title="ISC Location"
-            class="w-full h-[360px]"
+            class="w-full h-[320px] sm:h-[360px]"
             loading="lazy"
             src="https://maps.google.com/maps?q=Muscat%20Oman&t=&z=12&ie=UTF8&iwloc=&output=embed"
           ></iframe>
         </div>
 
         <div class="grid sm:grid-cols-2 gap-6">
-          <div class="card">
-            <h3 class="card-title">Head Office</h3>
-            <p class="card-body">Al Qurum, Muscat, Oman<br/>PO Box 1234</p>
+          <div class="info-card">
+            <h3 class="info-title">Head Office</h3>
+            <p class="info-body">Al Qurum, Muscat, Oman<br/>PO Box 1234</p>
           </div>
-          <div class="card">
-            <h3 class="card-title">Sales</h3>
-            <p class="card-body">sales@isc-depot.com<br/>+968 0000 0001</p>
+          <div class="info-card">
+            <h3 class="info-title">Sales</h3>
+            <p class="info-body">sales@isc-depot.com<br/>+968 0000 0001</p>
           </div>
-          <div class="card">
-            <h3 class="card-title">Support</h3>
-            <p class="card-body">support@isc-depot.com<br/>+968 0000 0002</p>
+          <div class="info-card">
+            <h3 class="info-title">Support</h3>
+            <p class="info-body">support@isc-depot.com<br/>+968 0000 0002</p>
           </div>
-          <div class="card">
-            <h3 class="card-title">WhatsApp</h3>
-            <p class="card-body">+968 0000 0003</p>
+          <div class="info-card">
+            <h3 class="info-title">WhatsApp</h3>
+            <p class="info-body">+968 0000 0003</p>
           </div>
         </div>
       </div>
@@ -187,33 +269,25 @@ const submit = async () => {
 
     <!-- FAQ -->
     <section class="bg-slate-50">
-      <div class="max-w-screen-xl mx-auto px-6 py-14">
+      <div class="max-w-screen-xl mx-auto px-6 py-12">
         <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 text-center">Frequently Asked Questions</h2>
-        <div class="mt-8 mx-auto max-w-3xl space-y-3">
-          <details class="accordion">
-            <summary class="accordion-summary">How fast do you respond?</summary>
-            <div class="accordion-panel">
-              We aim to reply within 24 hours on business days.
-            </div>
+        <div class="mt-6 mx-auto max-w-3xl space-y-3">
+          <details class="faq">
+            <summary>How fast do you respond?</summary>
+            <p>We aim to reply within 24 hours on business days.</p>
           </details>
-          <details class="accordion">
-            <summary class="accordion-summary">Do you ship internationally?</summary>
-            <div class="accordion-panel">
-              Yes, we work with multiple carriers for international shipments.
-            </div>
+          <details class="faq">
+            <summary>Do you ship internationally?</summary>
+            <p>Yes, we work with multiple carriers for international shipments.</p>
           </details>
-          <details class="accordion">
-            <summary class="accordion-summary">Can I request a quotation?</summary>
-            <div class="accordion-panel">
-              Absolutely—use the form above or email sales@isc-depot.com with item codes and quantities.
-            </div>
+          <details class="faq">
+            <summary>Can I request a quotation?</summary>
+            <p>Absolutely—use the form above or email sales@isc-depot.com with item codes and quantities.</p>
           </details>
         </div>
       </div>
     </section>
   </div>
 </template>
-
-<style scoped lang="postcss">
  
-</style>
+ 

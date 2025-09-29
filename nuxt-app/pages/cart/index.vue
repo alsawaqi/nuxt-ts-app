@@ -237,210 +237,248 @@ onMounted(async () => {
     await loadCountries()
     await loadRegions()
     await loadDistricts()
-      requestQuotes()
+    await requestQuotes()
   }
 })
 </script>
 
 
 <template>
-  <section class="bg-white py-10 px-4 max-w-screen-xl mx-auto font-sans">
-    <h5 class="text-3xl font-bold mb-6 text-gray-800 tracking-wide">
-      <span class="text-gradient">Your Cart</span>
-    </h5>
 
-    <div class="space-y-4">
-      <p class="text-gray-600">You have {{ cart.cartItems.length }} items in your cart.</p>
-      <NuxtLink to="/" class="text-sm text-blue-600 hover:underline">Continue Shopping</NuxtLink>
+  <section class="bg-white py-6 sm:py-10 px-4 max-w-screen-xl mx-auto font-sans">
+  <!-- Header -->
+  <header class="mb-4 sm:mb-6">
+    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Your Cart</h1>
+    <div class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
+      You have {{ cart.cartItems.length }} items in your cart.
+      <NuxtLink to="/" class="ml-2 text-[#2f5fb6] hover:underline">Continue shopping</NuxtLink>
     </div>
-   
- 
+  </header>
 
-    <!-- Products -->
-    <!-- ============ PRODUCTS + SUMMARY IN ONE GRID ============ -->
-<div class="grid md:grid-cols-3 gap-6 items-start">
+  <!-- GRID -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 items-start">
+    <!-- LEFT: Products -->
+    <div class="lg:col-span-2 rounded-xl ring-1 ring-gray-200/80 shadow-sm overflow-hidden">
+      <!-- Bar -->
+      <div class="flex items-center justify-between px-3 sm:px-5 py-3 bg-gray-50/80 border-b">
+        <h2 class="text-sm sm:text-base font-semibold text-gray-800">Items in Cart</h2>
+        <button
+          @click="onClearCart"
+          class="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-xs sm:text-sm transition"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Clear
+        </button>
+      </div>
 
-  <!-- Products (left, span 2) -->
-  <div class="md:col-span-2 border rounded-xl shadow-sm">
-    <div class="flex justify-between items-center px-4 md:px-5 py-3 border-b bg-[#f9f9f9]">
-      <h2 class="font-semibold text-gray-800 text-base md:text-lg">Items in Cart</h2>
-      <button
-        @click="onClearCart"
-        class="flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-sm transition"
+      <!-- Rows -->
+      <div
+        v-for="item in cart.cartItems"
+        :key="item.id"
+        class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90"
       >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        Clear Cart
-      </button>
-    </div>
+        <div class="grid grid-cols-[64px,1fr,auto] sm:grid-cols-[84px,1fr,auto] gap-3 sm:gap-4 items-start">
+          <!-- image -->
+          <NuxtLink :to="`/product/${item.slug}`" class="block rounded-lg overflow-hidden ring-1 ring-gray-200">
+            <img :src="`${$r2Url}/${item.image}`" alt="" class="w-16 h-16 sm:w-20 sm:h-20 object-cover" />
+          </NuxtLink>
 
-    <div
-      v-for="item in cart.cartItems"
-      :key="item.id"
-      class="flex justify-between items-center px-4 md:px-5 py-3 md:py-4 border-b last:border-b-0 hover:bg-gray-50 transition"
-    >
-      <div class="flex items-start gap-3 md:gap-4 min-w-0">
-        <NuxtLink :to="`/product/${item.slug}`" class="shrink-0">
-          <img :src="`${$r2Url}/${item.image}`"
-               alt="Product"
-               class="w-16 h-16 md:w-20 md:h-20 object-cover border rounded-lg shadow-sm" />
-        </NuxtLink>
-        <div class="min-w-0">
-          <h3 class="font-medium text-gray-800 truncate">{{ item.name }}</h3>
-          <p class="text-[11px] text-gray-500">Item #{{ item.id }}</p>
-          <button @click.prevent="onRemoveItem(item.id)"
-                  class="text-xs text-[#00bfa5] hover:underline mt-1.5">Remove</button>
+          <!-- info -->
+          <div class="min-w-0">
+            <h3 class="text-sm sm:text-base font-medium text-gray-900 truncate">{{ item.name }}</h3>
+            <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5">Item #{{ item.id }}</p>
+            <button
+              @click.prevent="cart.removeFromCart(item.id)"
+              class="mt-1.5 text-xs text-[#00bfa5] hover:underline"
+            >
+              Remove
+            </button>
+          </div>
+
+          <!-- qty + price -->
+          <div class="text-right">
+            <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1">Qty</label>
+            <div class="flex items-center justify-end gap-1">
+              <button
+                @click="decrementQty(item.id)"
+                class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
+                aria-label="Decrease quantity"
+              >−</button>
+              <input
+                type="number"
+                min="1"
+                v-model.number="item.quantity"
+                @change="onQtyInputChange($event, item.id)"
+                class="w-14 h-7 border rounded-md text-center text-sm"
+                disabled
+              />
+              <button
+                @click="incrementQty(item.id)"
+                class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
+                aria-label="Increase quantity"
+              >+</button>
+            </div>
+            <p class="text-xs sm:text-sm text-emerald-700 font-semibold mt-1.5">
+              OMR {{ item.price }} <span class="text-[10px] sm:text-xs text-gray-500 font-normal">/ each</span>
+            </p>
+          </div>
         </div>
       </div>
-
-      <div class="text-right">
-        <label class="text-[12px] font-semibold text-gray-600 block mb-1">Qty</label>
-        <div class="flex items-center justify-end gap-1">
-          <button @click="decrementQty(item.id)"
-                  class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">−</button>
-          <input type="number" min="1" v-model.number="item.quantity"
-                 @change="onQtyInputChange($event, item.id)"
-                 class="w-14 border rounded-md text-center text-sm py-1"  disabled/>
-          <button @click="incrementQty(item.id)"
-                  class="px-2 py-1 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">+</button>
-        </div>
-        <p class="text-sm text-green-700 font-semibold mt-1.5">
-          OMR {{ item.price }} <span class="text-xs text-gray-500 font-normal">/ each</span>
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Summary (right, sticky) -->
-<div class="md:col-span-1">
-  <div class="w-full border rounded-xl shadow-lg bg-[#fafafa] p-5 md:sticky md:top-24 space-y-4">
-
-    <!-- STEP 1: Delivery method -->
-    <div>
-      <h2 class="text-base md:text-lg font-bold text-gray-800 mb-2">Delivery</h2>
-      <div class="space-y-2">
-        <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer"
-               :class="cart.deliveryMethod==='ship' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
-          <input type="radio" value="ship" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
-          Ship to Address
-        </label>
-        <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer"
-               :class="cart.deliveryMethod==='pickup' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
-          <input type="radio" value="pickup" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
-          Local Pickup
-        </label>
-      </div>
     </div>
 
-    <!-- STEP 2: Address (if ship) -->
-    <div v-if="cart.deliveryMethod==='ship'">
-      <h3 class="font-semibold text-gray-800 text-sm mb-2">Shipping Address</h3>
+    <!-- RIGHT: Summary -->
+    <aside class="lg:col-span-1">
+      <div class="w-full rounded-xl ring-1 ring-gray-200 shadow-sm bg-white p-4 sm:p-5 lg:sticky lg:top-24 space-y-4">
+        <!-- Delivery (collapsible on mobile) -->
+        <details class="lg:open">
+          <summary class="list-none cursor-pointer flex items-center justify-between">
+            <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery</h3>
+            <span class="lg:hidden text-xs text-gray-500">tap to expand</span>
+          </summary>
+          <div class="mt-2 space-y-2">
+            <label
+              class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm"
+              :class="cart.deliveryMethod==='ship' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'"
+            >
+              <input type="radio" value="ship" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
+              Ship to Address
+            </label>
+            <label
+              class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm"
+              :class="cart.deliveryMethod==='pickup' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'"
+            >
+              <input type="radio" value="pickup" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
+              Local Pickup
+            </label>
+          </div>
+        </details>
 
-      <div v-if="!isAuthenticated" class="text-sm text-gray-600">
-        Please <NuxtLink to="/login" class="text-teal-600 hover:underline">log in</NuxtLink> to select an address.
-      </div>
+        <!-- Address -->
+        <details v-if="cart.deliveryMethod==='ship'" class="lg:open">
+          <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
+            <h3 class="text-sm sm:text-base font-bold text-gray-800">Shipping Address</h3>
+          </summary>
 
-      <template v-else>
-        <div v-if="addresses.length" class="space-y-2">
-          <select
-            v-model="cart.selectedAddressId"
-            class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm"
+          <div class="mt-2">
+            <div v-if="!isAuthenticated" class="text-sm text-gray-600">
+              Please
+              <NuxtLink to="/login" class="text-teal-600 hover:underline">log in</NuxtLink>
+              to select an address.
+            </div>
+
+            <template v-else>
+              <div v-if="addresses.length" class="space-y-2">
+                <select
+                  v-model="cart.selectedAddressId"
+                  class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm"
+                >
+                  <option v-for="a in addresses" :key="a.id" :value="a.id">
+                    {{ a.Contact_Person_Name }} — {{ a.country?.Country_Name }}, {{ a.city?.City_Name }}
+                  </option>
+                </select>
+                <button type="button" @click="showAddressModal = true" class="text-xs text-teal-700 hover:underline">
+                  Add new address
+                </button>
+              </div>
+              <div v-else class="text-sm text-gray-600">
+                No addresses yet.
+                <button @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
+                  Add one
+                </button>
+              </div>
+            </template>
+          </div>
+        </details>
+
+        <!-- Shipping options -->
+        <details v-if="cart.deliveryMethod==='ship' && cart.selectedAddressId" class="lg:open">
+          <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
+            <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery Options</h3>
+            <span v-if="quotesLoading" class="text-[11px] text-gray-500">Calculating…</span>
+          </summary>
+
+          <div class="mt-2">
+            <div v-if="!quotesLoading && shippingOptions.length===0" class="text-xs text-gray-500">
+              No options for this address/cart.
+            </div>
+
+            <div
+              v-for="opt in shippingOptions"
+              :key="`${opt.shipper_id}-${opt.basis}-${opt.destination_id}`"
+              class="mt-2 p-3 rounded-md border bg-white flex items-center justify-between text-sm"
+              :class="selectedOption && selectedOption===opt ? 'border-teal-500' : 'border-slate-200'"
+            >
+              <label class="flex items-center gap-3 cursor-pointer">
+                <input type="radio" name="shipOpt" :value="opt" v-model="selectedOption" class="accent-[#00bfa5]" />
+                <div class="font-medium">{{ opt.shipper_name }}</div>
+              </label>
+              <div class="font-semibold text-[#00bfa5]">
+                {{ opt.currency }} {{ opt.total_price }}
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Totals -->
+        <div class="pt-2 border-t">
+          <h3 class="text-sm sm:text-base font-bold text-gray-800 mb-2">Order Summary</h3>
+          <div class="space-y-1.5 text-sm">
+            <div class="flex justify-between"><span>Subtotal</span><span>OMR {{ subtotal.toFixed(3) }}</span></div>
+            <div class="flex justify-between">
+              <span>Shipping</span><span>OMR {{ shippingCost.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span>VAT (5%)</span><span>OMR {{ vat.toFixed(3) }}</span>
+            </div>
+          </div>
+          <hr class="my-3" />
+          <div class="flex justify-between font-semibold text-base sm:text-lg text-[#00bfa5]">
+            <span>Total</span>
+            <span>OMR {{ grandTotal.toFixed(3) }}</span>
+          </div>
+
+          <button
+            type="button"
+            @click="goCheckout"
+            class="mt-3 sm:mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
+            :disabled="cart.cartItems.length===0 || (cart.deliveryMethod==='ship' && !selectedOption)"
           >
-            <option v-for="a in addresses" :key="a.id" :value="a.id">
-              {{ a.Contact_Person_Name }} — {{ a.country?.Country_Name }}, {{ a.city?.City_Name }}
-            </option>
-          </select>
-          <button type="button" @click="showAddressModal = true"
-                  class="text-xs text-teal-700 hover:underline">Add new address</button>
-        </div>
-
-        <div v-else class="text-sm text-gray-600">
-          No addresses yet.
-          <button @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
-            Add one
+            Proceed to Checkout
           </button>
         </div>
-      </template>
-    </div>
-
-    <!-- STEP 3: Shipping options (after address) -->
-    <div v-if="cart.deliveryMethod==='ship' && cart.selectedAddressId">
-      <div class="flex items-center justify-between">
-        <h3 class="font-semibold text-gray-800 text-sm">Delivery Options</h3>
-        <span v-if="quotesLoading" class="text-[11px] text-gray-500">Calculating…</span>
       </div>
+    </aside>
+  </div>
 
-      <div v-if="!quotesLoading && shippingOptions.length===0" class="text-xs text-gray-500 mt-1">
-        No options for this address/cart.
+  <!-- Mobile sticky bar -->
+  <div
+    class="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3
+           shadow-[0_-6px_16px_rgba(15,23,42,0.05)]"
+    v-if="cart.cartItems.length"
+  >
+    <div class="flex items-center justify-between">
+      <div class="text-sm">
+        <div class="text-slate-500">Total</div>
+        <div class="font-semibold text-slate-900">OMR {{ grandTotal.toFixed(3) }}</div>
       </div>
-
-      <div v-for="opt in shippingOptions"
-           :key="`${opt.shipper_id}-${opt.basis}-${opt.destination_id}`"
-           class="mt-2 p-3 rounded-md border bg-white flex items-center justify-between"
-           :class="selectedOption && selectedOption===opt ? 'border-teal-500' : 'border-slate-200'">
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="radio" name="shipOpt" :value="opt" v-model="selectedOption" class="accent-[#00bfa5]">
-          <div>
-            <div class="font-medium">
-              {{ opt.shipper_name }} 
-               <!-- — <span class="capitalize">{{ opt.basis }}</span> -->
-            </div>
-            <!-- <div class="text-[11px] text-gray-500" v-if="opt.breakdown">
-              {{ opt.breakdown.band_label || 'Band' }} |
-              Std: {{ opt.breakdown.standard_rate }} |
-              Base: {{ opt.breakdown.base_fee }} |
-              Per-unit: {{ opt.breakdown.per_unit_fee }} × {{ opt.breakdown.units_used }} |
-              Flat: {{ opt.breakdown.flat_fee }}
-            </div> -->
-          </div>
-        </label>
-        <div class="font-semibold text-[#00bfa5]">
-          {{ opt.currency }} {{ opt.total_price }}
-        </div>
-      </div>
-    </div>
-
-    <!-- Totals -->
-    <div class="pt-2 border-t">
-      <h3 class="text-base md:text-lg font-bold text-gray-800 mb-2">Order Summary</h3>
-      <div class="space-y-1.5 text-sm">
-        <div class="flex justify-between"><span>Subtotal</span><span>OMR {{ subtotal.toFixed(3) }}</span></div>
-        <div class="flex justify-between">
-          <span>Shipping</span>
-          <span>OMR {{ shippingCost.toFixed(3) }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span>VAT (5%)</span>
-          <span>OMR {{ vat.toFixed(3) }}</span>
-        </div>
-      </div>
-      <hr class="my-3" />
-      <div class="flex justify-between font-semibold text-lg text-[#00bfa5]">
-        <span>Total</span>
-        <span>OMR {{ grandTotal.toFixed(3) }}</span>
-      </div>
-
       <button
-  type="button"
+        type="button"
         @click="goCheckout"
-        class="block mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
+        class="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white
+               bg-[#2f5fb6] hover:bg-[#274f97] transition disabled:bg-gray-300"
         :disabled="cart.cartItems.length===0 || (cart.deliveryMethod==='ship' && !selectedOption)"
       >
-        Proceed to Checkout
-    </button>
+        Checkout
+      </button>
     </div>
+    <div class="h-[env(safe-area-inset-bottom)]"></div>
   </div>
-</div>
-
-</div>
+</section>
 
 
-   
-  </section>
 
-  <!-- Address Modal -->
-<!-- Add Address Modal -->
 <Transition
   enter-active-class="transition-opacity duration-200"
   enter-from-class="opacity-0"
