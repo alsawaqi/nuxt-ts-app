@@ -3,14 +3,27 @@ import { ref } from 'vue'
 import { useUserStore } from '~/stores/user'
 
 import { useCartStore } from '~/stores/cart'
+import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 const cart = useCartStore()
-
+const router = useRouter()
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
  
 
 const logout = async () => {
    await userStore.logout()
+}
+
+
+
+function gotoProduct(item: any) {
+  // Prefer slug route if you have it
+  if (item.Slug) {
+    router.push(`/product/${item.Slug}`)
+  } else {
+    // fallback by id
+    router.push(`/product/id/${item.id}`)
+  }
 }
 
 
@@ -176,20 +189,14 @@ const mobileMenuOpen = ref(false)
 
   <!-- Search bar -->
   <div class="bg-white">
-    <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-      <div class="flex items-stretch rounded-full bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-        <input
-          type="text"
-          placeholder="Search by keyword, item, model or part #"
-          class="w-full px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] text-slate-700 placeholder:text-slate-400 outline-none"
-        />
-        <button class="px-4 sm:px-5 bg-[#2F5FB6] text-white hover:brightness-95 rounded-r-full" aria-label="Search">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m21 21-4.35-4.35M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
+      <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+    <SearchAutocomplete
+      :min-chars="2"
+      :limit="10"
+      placeholder="Search by keyword, item, model or part #"
+      @select="gotoProduct"
+    />
+  </div>
   </div>
 
   <hr/>

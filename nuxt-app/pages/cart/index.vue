@@ -332,7 +332,7 @@ onMounted(async () => {
     <aside class="lg:col-span-1">
       <div class="w-full rounded-xl ring-1 ring-gray-200 shadow-sm bg-white p-4 sm:p-5 lg:sticky lg:top-24 space-y-4">
         <!-- Delivery (collapsible on mobile) -->
-        <details class="lg:open">
+        <details class="lg:open" open>
           <summary class="list-none cursor-pointer flex items-center justify-between">
             <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery</h3>
             <span class="lg:hidden text-xs text-gray-500">tap to expand</span>
@@ -356,7 +356,7 @@ onMounted(async () => {
         </details>
 
         <!-- Address -->
-        <details v-if="cart.deliveryMethod==='ship'" class="lg:open">
+        <details v-if="cart.deliveryMethod==='ship'" class="lg:open" open>
           <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
             <h3 class="text-sm sm:text-base font-bold text-gray-800">Shipping Address</h3>
           </summary>
@@ -393,7 +393,7 @@ onMounted(async () => {
         </details>
 
         <!-- Shipping options -->
-        <details v-if="cart.deliveryMethod==='ship' && cart.selectedAddressId" class="lg:open">
+        <details v-if="cart.deliveryMethod==='ship' && cart.selectedAddressId" class="lg:open" open>
           <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
             <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery Options</h3>
             <span v-if="quotesLoading" class="text-[11px] text-gray-500">Calculating…</span>
