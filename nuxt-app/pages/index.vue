@@ -4,9 +4,10 @@ definePageMeta({
 })
 import { ref, watch, onMounted, computed  } from 'vue'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
-import { Squares2X2Icon, ListBulletIcon, ChartPieIcon } from '@heroicons/vue/24/solid'
+import { Squares2X2Icon, ListBulletIcon, ChartPieIcon,ShoppingBagIcon,CreditCardIcon } from '@heroicons/vue/24/solid'
 import { useUserStore } from '~/stores/user'
 import { useCartStore } from '~/stores/cart'
+ 
 const cart = useCartStore()
 
 
@@ -408,41 +409,57 @@ onMounted(async () => {
       <!-- Right: Cart + Checkout + Account -->
       <div class="justify-self-end flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-5">
         <!-- Cart (compact at md, larger at lg) -->
-        <NuxtLink to="/cart"
-          class="shrink-0 relative rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 transition">
-          <span
-            class="absolute -top-1.5 -right-1.5 min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 text-[10px] sm:text-[12px]
-                   rounded-full bg-[#2F5FB6] text-white flex items-center justify-center shadow">
-            {{ cart.totalItems() }}
-          </span>
-          <svg class="w-7 h-7 md:w-7 md:h-7 lg:w-8 lg:h-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l3.6 7.59L7.25 13a1 1 0 0 0 .9 1.45H19v-2H9.42l1.1-2H17a1 1 0 0 0 .92-.61l3-7A1 1 0 0 0 20 1H6.21l-.94-2H1v2h2Z"/>
-          </svg>
+        <NuxtLink
+              to="/cart"
+              class="relative inline-flex items-center justify-center rounded-full p-1.5 md:p-2
+                    ring-1 ring-slate-200 bg-white/90 hover:bg-white transition
+                    hover:shadow-sm hover:ring-slate-300 focus:outline-none focus-visible:ring-2
+                    focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 text-slate-700"
+              aria-label="Open cart"
+              title="Cart"
+            >
+              <!-- count badge -->
+              <span
+                v-if="cart.totalItems()"
+                class="pointer-events-none absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
+                      text-[10px] leading-[18px] text-white font-semibold grid place-items-center
+                      rounded-full shadow-sm ring-1 ring-white
+                      bg-gradient-to-br from-[#2F5FB6] to-[#07B6C6]"
+              >
+                {{ cart.totalItems() }}
+              </span>
+
+  <!-- icon -->
+  <ShoppingBagIcon class="w-5 h-5 md:w-5 md:h-5" aria-hidden="true" />
         </NuxtLink>
 
-        <!-- Checkout (compact at md, pillier at lg) -->
-      <NuxtLink
-            v-if="isAuthenticated"
-            to="/cart/checkout"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
-          >
-            <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
-              <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
-            </svg>
-           
-       </NuxtLink>
-
-<!-- Tablet & Desktop: full pill button -->
+  <!-- Compact mobile checkout -->
 <NuxtLink
   v-if="isAuthenticated"
   to="/cart/checkout"
-  class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
+  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+         bg-gradient-to-r from-[#2F5FB6] to-[#07B6C6] text-white 
+         hover:opacity-90 shadow-sm text-[12px] font-medium 
+         md:hidden transition"
 >
-  <svg viewBox="0 0 24 24" class="w-4 h-4 lg:w-5 lg:h-5 fill-current" aria-hidden="true">
-    <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
-  </svg>
-  Checkout
+  <CreditCardIcon class="w-4 h-4" aria-hidden="true" />
+ 
 </NuxtLink>
+
+<!-- Tablet + Desktop checkout -->
+<NuxtLink
+  v-if="isAuthenticated"
+  to="/cart/checkout"
+  class="hidden md:inline-flex items-center gap-2 px-3.5 lg:px-4 
+         py-1.5 lg:py-2 rounded-full bg-gradient-to-r from-[#2F5FB6] to-[#07B6C6]
+         text-white hover:opacity-90 shadow-sm text-[13px] lg:text-[14px] 
+         font-semibold transition"
+>
+  <CreditCardIcon class="w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />
+  <span>Checkout</span>
+</NuxtLink>
+
+
 
         <!-- Account / Auth (HIDE at md to save width, show at lg) -->
         <div class="hidden lg:flex items-center gap-3 text-[15px]">
@@ -713,31 +730,48 @@ onMounted(async () => {
 
                  <!-- Category View -->
                 <div v-else-if="!selectedDepartment">
-                  <!-- Grid Mode -->
-                  <div
-                    v-if="viewMode === 'grid'"
-                    class="overflow-hidden rounded-md ring-1 ring-gray-300 bg-white"
-                  >
-                    <TransitionGroup
-                      name="cat"
-                      tag="div"
-                      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 -m-px"
-                    >
-                      <button
-                        v-for="department in prodcutsDepartments"
-                        :key="department.id"
-                        @click="fetchSubCategories(department.id)"
-                        class="border border-gray-300 bg-white p-6 text-center cursor-pointer hover:bg-gray-50"
+                  <!-- Grid Mode: Premium card layout -->
+                    <div v-if="viewMode === 'grid'">
+                      <TransitionGroup
+                        name="cat"
+                        tag="div"
+                        class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
                       >
-                        <div class="h-24 flex items-center justify-center">
-                          <img :src="`${$r2Url}/` + department.Image_path" alt="" class="max-h-24 w-auto object-contain" />
-                        </div>
-                        <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
-                          {{ department.Product_Department_Name }}
-                        </h3>
-                      </button>
-                    </TransitionGroup>
-                  </div>
+                        <button
+                          v-for="department in prodcutsDepartments"
+                          :key="department.id"
+                          @click="fetchSubCategories(department.id)"
+                          :aria-label="department.Product_Department_Name"
+                          class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+                                hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
+                                focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1"
+                        >
+                          <div class="p-4">
+                            <!-- Image area -->
+                            <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                                        ring-1 ring-slate-100 overflow-hidden">
+                              <img
+                                :src="`${$r2Url}/` + department.Image_path"
+                                alt=""
+                                class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                                      group-hover:scale-[1.03]"
+                              />
+                            </div>
+
+                            <!-- Title -->
+                            <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                              {{ department.Product_Department_Name }}
+                            </h3>
+                          </div>
+
+                          <!-- Hover underline accent -->
+                          <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                                      from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                                      group-hover:opacity-100 transition-opacity"></span>
+                        </button>
+                      </TransitionGroup>
+                    </div>
+
 
                   <!-- List Mode -->
                   <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
@@ -757,23 +791,40 @@ onMounted(async () => {
                     <div v-else-if="selectedDepartment && !selectedSubCategory">
 
                       <!-- GRID mode -->
-                      <div v-if="viewMode === 'grid'" class="overflow-hidden rounded-md ring-1 ring-gray-300 bg-white">
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 -m-px">
-                          <button
-                            v-for="sub in subCategories"
-                            :key="sub.id"
-                            @click="fetchSubSubCategories(sub.id)"
-                            class="border border-gray-300 bg-white p-6 text-center cursor-pointer hover:bg-gray-50 focus:outline-none"
-                          >
-                            <div class="h-24 flex items-center justify-center">
-                              <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="max-h-24 w-auto object-contain" />
-                            </div>
-                            <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
-                              {{ sub.Sub_Department_Name }}
-                            </h3>
-                          </button>
-                        </div>
-                      </div>
+                       <div v-if="viewMode === 'grid'" class="">
+  <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <button
+      v-for="sub in subCategories"
+      :key="sub.id"
+      @click="fetchSubSubCategories(sub.id)"
+      :aria-label="sub.Sub_Department_Name"
+      class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+             hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
+             focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1"
+    >
+      <div class="p-4">
+        <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                    ring-1 ring-slate-100 overflow-hidden">
+          <img
+            :src="`${$r2Url}/` + sub.Image_path"
+            alt=""
+            class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                   group-hover:scale-[1.03]"
+          />
+        </div>
+
+        <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+          {{ sub.Sub_Department_Name }}
+        </h3>
+      </div>
+
+      <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                   from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                   group-hover:opacity-100 transition-opacity"></span>
+    </button>
+  </div>
+</div>
+
 
                       <!-- LIST mode -->
                       <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
@@ -795,30 +846,46 @@ onMounted(async () => {
                         <div v-else>
 
                           <!-- GRID mode -->
-                          <div v-if="viewMode === 'grid'" class="overflow-hidden rounded-md ring-1 ring-gray-300 bg-white">
-                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 -m-px">
-                              <NuxtLink
-                                v-for="subSub in subSubCategories"
-                                :key="subSub.id"
-                                :to="{
-                                  path: `/departments/${subSub.Slug}`,
-                                  query: {
-                                    deptId: selectedDepartment ?? undefined,
-                                    subId: selectedSubCategory ?? undefined,
-                                    subSubId: subSub.id
-                                  }
-                                }"
-                                class="border border-gray-300 bg-white p-6 text-center hover:bg-gray-50"
-                              >
-                                <div class="h-24 flex items-center justify-center">
-                                  <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="max-h-24 w-auto object-contain" />
-                                </div>
-                                <h3 class="mt-3 text-sm font-medium text-gray-800 leading-tight">
-                                  {{ subSub.Product_Sub_Sub_Department_Name }}
-                                </h3>
-                              </NuxtLink>
-                            </div>
-                          </div>
+                          <div v-if="viewMode === 'grid'">
+  <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <NuxtLink
+      v-for="subSub in subSubCategories"
+      :key="subSub.id"
+      :to="{
+        path: `/departments/${subSub.Slug}`,
+        query: {
+          deptId: selectedDepartment ?? undefined,
+          subId: selectedSubCategory ?? undefined,
+          subSubId: subSub.id
+        }
+      }"
+      :aria-label="subSub.Product_Sub_Sub_Department_Name"
+      class="group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+             hover:shadow-md hover:ring-slate-300 transition-all duration-200"
+    >
+      <div class="p-4">
+        <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                    ring-1 ring-slate-100 overflow-hidden">
+          <img
+            :src="`${$r2Url}/` + subSub.Image_Path"
+            alt=""
+            class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                   group-hover:scale-[1.03]"
+          />
+        </div>
+
+        <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+          {{ subSub.Product_Sub_Sub_Department_Name }}
+        </h3>
+      </div>
+
+      <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                   from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                   group-hover:opacity-100 transition-opacity"></span>
+    </NuxtLink>
+  </div>
+</div>
+
 
                           <!-- LIST mode -->
                           <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">

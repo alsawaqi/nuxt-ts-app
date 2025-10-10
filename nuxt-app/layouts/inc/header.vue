@@ -4,6 +4,8 @@ import { useUserStore } from '~/stores/user'
 
 import { useCartStore } from '~/stores/cart'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
+import { ShoppingBagIcon,CreditCardIcon } from '@heroicons/vue/24/solid'
+
 const cart = useCartStore()
 const router = useRouter()
 const { user, isAuthenticated } = useAuth()
@@ -125,42 +127,55 @@ const mobileMenuOpen = ref(false)
       <!-- Right: Cart + Checkout + Account -->
       <div class="justify-self-end flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-5">
         <!-- Cart (compact at md, larger at lg) -->
-        <NuxtLink to="/cart"
-          class="shrink-0 relative rounded-lg sm:rounded-xl p-2 sm:p-2.5 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 transition">
-          <span
-            class="absolute -top-1.5 -right-1.5 min-w-5 sm:min-w-6 h-5 sm:h-6 px-1 text-[10px] sm:text-[12px]
-                   rounded-full bg-[#2F5FB6] text-white flex items-center justify-center shadow">
-            {{ cart.totalItems() }}
-          </span>
-          <svg class="w-7 h-7 md:w-7 md:h-7 lg:w-8 lg:h-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l3.6 7.59L7.25 13a1 1 0 0 0 .9 1.45H19v-2H9.42l1.1-2H17a1 1 0 0 0 .92-.61l3-7A1 1 0 0 0 20 1H6.21l-.94-2H1v2h2Z"/>
-          </svg>
-        </NuxtLink>
-
-        <!-- Checkout (compact at md, pillier at lg) -->
-       <NuxtLink
-            v-if="isAuthenticated"
-            to="/cart/checkout"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[13px] font-medium md:hidden"
-          >
-            <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current" aria-hidden="true">
-              <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
-            </svg>
-           
-       </NuxtLink>
-
-        <!-- Tablet & Desktop: full pill button -->
         <NuxtLink
-          v-if="isAuthenticated"
-          to="/cart/checkout"
-          class="hidden md:inline-flex items-center gap-2.5 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-[#2F5FB6] text-white hover:brightness-95 shadow-sm text-[14px] lg:text-[15px] font-semibold"
-        >
-          <svg viewBox="0 0 24 24" class="w-4 h-4 lg:w-5 lg:h-5 fill-current" aria-hidden="true">
-            <path d="M9 21c-1.1 0-1.99-.9-1.99-2L7 7H5V5h4v-.99C9 2.34 10.34 1 12 1s3 1.34 3 3V5h4v2h-2l-.01 12c0 1.1-.88 2-1.99 2H9Zm1-16V4a2 2 0 1 1 4 0v1h-4Z"/>
-          </svg>
-          Checkout
+              to="/cart"
+              class="relative inline-flex items-center justify-center rounded-full p-1.5 md:p-2
+                    ring-1 ring-slate-200 bg-white/90 hover:bg-white transition
+                    hover:shadow-sm hover:ring-slate-300 focus:outline-none focus-visible:ring-2
+                    focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 text-slate-700"
+              aria-label="Open cart"
+              title="Cart"
+            >
+              <!-- count badge -->
+              <span
+                v-if="cart.totalItems()"
+                class="pointer-events-none absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
+                      text-[10px] leading-[18px] text-white font-semibold grid place-items-center
+                      rounded-full shadow-sm ring-1 ring-white
+                      bg-gradient-to-br from-[#2F5FB6] to-[#07B6C6]"
+              >
+                {{ cart.totalItems() }}
+              </span>
+
+  <!-- icon -->
+  <ShoppingBagIcon class="w-5 h-5 md:w-5 md:h-5" aria-hidden="true" />
         </NuxtLink>
 
+      <!-- Compact mobile checkout -->
+<NuxtLink
+  v-if="isAuthenticated"
+  to="/cart/checkout"
+  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+         bg-gradient-to-r from-[#2F5FB6] to-[#07B6C6] text-white 
+         hover:opacity-90 shadow-sm text-[12px] font-medium 
+         md:hidden transition"
+>
+  <CreditCardIcon class="w-4 h-4" aria-hidden="true" />
+ 
+</NuxtLink>
+
+<!-- Tablet + Desktop checkout -->
+<NuxtLink
+  v-if="isAuthenticated"
+  to="/cart/checkout"
+  class="hidden md:inline-flex items-center gap-2 px-3.5 lg:px-4 
+         py-1.5 lg:py-2 rounded-full bg-gradient-to-r from-[#2F5FB6] to-[#07B6C6]
+         text-white hover:opacity-90 shadow-sm text-[13px] lg:text-[14px] 
+         font-semibold transition"
+>
+  <CreditCardIcon class="w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />
+  <span>Checkout</span>
+</NuxtLink>
         <!-- Account / Auth (HIDE at md to save width, show at lg) -->
         <div class="hidden lg:flex items-center gap-3 text-[15px]">
           <NuxtLink v-if="isAuthenticated" to="/account"
