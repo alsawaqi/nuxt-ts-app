@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref ,onMounted} from 'vue'
 import { useUserStore } from '~/stores/user'
 
 import { useCartStore } from '~/stores/cart'
@@ -10,6 +10,8 @@ const cart = useCartStore()
 const router = useRouter()
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
+const points = ref<any>('')
+const { $axios  } = useNuxtApp();
  
 
 const logout = async () => {
@@ -29,8 +31,24 @@ function gotoProduct(item: any) {
 }
 
 
+const getloyalitypoints = async () => { 
+      
+      try { 
+        const response = await $axios.get('/api/loyalty', { withCredentials: true }) 
+        
+        points.value = response.data
+      } catch(e){
+
+      }finally { 
+       
+      } 
+    }
+
  
-const mobileMenuOpen = ref(false)
+const mobileMenuOpen = ref(false);
+onMounted(() => {
+  getloyalitypoints()
+})
 </script>
 <template>
 
@@ -55,7 +73,7 @@ const mobileMenuOpen = ref(false)
       </div>
 
       <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
-        Welcome, {{ user?.User_Name}}
+        Welcome, {{ user?.User_Name}}  <span v-if="isAuthenticated">🎖</span><span class="text-sm font-medium">{{ points }} points </span>
       </span>
     </div>
   </div>

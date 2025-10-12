@@ -518,8 +518,69 @@ onMounted(async () => {
 
           <!-- Body (unchanged form) -->
           <form @submit.prevent="submitAddress" class="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Your existing form fields here -->
-            <!-- ... -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Country</label>
+              <select v-model="newAddress.Country_Id" @change="loadStates" required
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
+                <option value="" disabled>Select country</option>
+                <option v-for="c in countries" :key="c.Country_Id" :value="c.Country_Id">{{ c.Country_Name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Region</label>
+              <select v-model="newAddress.Region_Id" required
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
+                <option value="" disabled>Select region</option>
+                <option v-for="r in regions" :key="r.id" :value="     
+r.id">{{ r.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text  -sm font-medium text-gray-700 mb-1">District</label>  
+              <select v-model="newAddress.District_Id" @change="loadCities" required
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
+                <option value="" disabled>Select district</option>
+                <option v-for="d in districts" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">City</label>
+              <select v-model="newAddress.City_Id" required
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
+                <option value="" disabled>Select city</option>
+                <option v-for="c in cities" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>   
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Contact Person Name</label>
+              <input type="text" v-model="newAddress.Contact_Person_Name" required    
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Telephone</label>   
+              <input type="text" v-model="newAddress.Telephone" required    
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Designation</label>
+              <input type="text" v-model="newAddress.Designation" required  
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
+            </div>      
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+              <input type="text" v-model="newAddress.Remarks"    
+                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
+            </div>
+            <div class="md:col-span-2 flex justify-end gap-3 mt-4">
+              <button type="button" @click="showAddressModal = false"
+                class="px-4 py-2 rounded-md border border-slate-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="submit"
+                class="px-4 py-2 rounded-md bg-[#2f5fb6] text-sm font-medium text-white hover:bg-[#274f97]">
+                Save Address
+              </button>   
+            </div>
           </form>
         </div>
       </Transition>

@@ -13,7 +13,7 @@ const cart = useCartStore()
 
 const router = useRouter()
 const route  = useRoute()
-
+const points = ref<any>('')
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
  
@@ -33,6 +33,22 @@ function gotoProduct(item: any) {
     router.push(`/product/id/${item.id}`)
   }
 }
+
+
+ const getloyalitypoints = async () => { 
+      
+      try { 
+        const response = await $axios.get('/api/loyalty', { withCredentials: true }) 
+        
+        points.value = response.data
+      } catch(e){
+
+      }finally { 
+       
+      } 
+    }
+
+
 
 interface ProductDepartment {
   id: number;
@@ -308,7 +324,7 @@ onMounted(async () => {
   await fetchData();
   await getBrands();
   await restoreFromQuery()
-  
+  await getloyalitypoints ()
   if (typeof window !== 'undefined') {
     const storedTopbar = localStorage.getItem('hideTopbar')
     const storedBanner = localStorage.getItem('hideBanner')
@@ -345,8 +361,10 @@ onMounted(async () => {
       </div>
 
       <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
-        Welcome, {{ user?.User_Name}}
+        Welcome, {{ user?.User_Name}}  <span v-if="isAuthenticated">🎖</span><span class="text-sm font-medium">{{ points }} points </span>
       </span>
+
+      
     </div>
   </div>
 

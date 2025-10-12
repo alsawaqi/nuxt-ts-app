@@ -11,6 +11,8 @@ import { useToast } from 'vue-toastification'
 const { user, isAuthenticated } = useAuth()
 const { $axios, $r2Url } = useNuxtApp()
 
+const step = ref<'confirm' | 'payment'>('confirm')
+
 // ---------------------
 // Types
 // ---------------------
@@ -24,6 +26,7 @@ interface SavedShippingOption {
   breakdown?: any | null
 }
 interface SavedCheckoutPrefill {
+  orderRef?: string
   deliveryMethod: 'ship' | 'pickup'
   addressId: number | null
   shippingOption: SavedShippingOption | null
@@ -50,6 +53,11 @@ const itemsOpen = ref(false)
 
 const selectedAddress = ref<any>(null)
 const saved = ref<SavedCheckoutPrefill | null>(null)
+
+
+const confirmOrder = () => {
+  step.value = 'payment'
+}
 
 // ---------------------
 // Payment state
@@ -293,6 +301,8 @@ const submitOrder = async () => {
     isSubmitting.value = false
   }
 }
+
+ 
 </script>
 
 <template>
@@ -308,8 +318,65 @@ const submitOrder = async () => {
   </NuxtLink>
 </section>
 
+<!-- STEP 1: Confirmation -->
+<section v-if="step === 'confirm'" class="max-w-screen-xl mx-auto px-4 py-8 bg-white">
+   <OrderConfirm
+  v-if="step === 'confirm'"
+  :orderRef="saved?.orderRef || 'ISC-…'"
+  :invoiceDate="new Date().toLocaleDateString()"
+  :supplier="{
+    name: 'Industrial Supplies Center LLC',
+    lines: ['PO BOX 39, M.C.C., PC: 101', '101, Way No: 7715', 'Mabelah, Sanaiya, Muscat, Oman']
+  }"
+  :buyer="{
+    name: user?.Company_Name || '—',
+    lines: selectedAddress ? [
+      selectedAddress?.street || '',
+      `${selectedAddress?.city?.City_Name || ''}, ${selectedAddress?.district?.District_Name || ''}`,
+      `${selectedAddress?.region?.Region_Name || ''}, ${selectedAddress?.country?.Country_Name || ''}`
+    ].filter(Boolean) : ['—']
+  }"
+  :supplierContact="{ label: 'SUPPLIER CONTACT', name: 'Muhammed Shanid', phone: '+968 93219447', tel: '+968 24460320', email: 'motorsales@isc-depot.com' }"
+  :buyerContact="selectedAddress ? { label: 'BUYER CONTACT', name: selectedAddress?.Contact_Person_Name, phone: selectedAddress?.Telephone, email: user?.Email } : undefined"
+  paymentTerms="60 Days"
+  currency="OMR"
+  supplierTin="OM1100033153"
+  buyerVatin="—"
+  supplierDoRef="—"
+  buyerPoRef="—"
+  deliveryTerms="DDP Muscat"
+  :bank="{
+    accountName: 'INDUSTRIAL SUPPLIES CENTER LLC',
+    accountNumber: '1074-0105031-001',
+    currency: 'OMR',
+    swift: 'NBOMOMRXXXX',
+    bankName: 'National Bank of Oman',
+    bankAddress: 'Corporate Branch, PO Box 751, PC:112, Ruwi, Muscat, Sultanate of Oman'
+  }"
+  :items="cart.cartItems.map((i, idx) => ({
+     sl: idx + 1,
+  description: `${i.name}\nSKU: ${i.slug || i.id}`,
+  qty: i.quantity,
+  unit: 'EA',
+  unitPrice: Number(i.price),
+  totalExcl: Number(i.price) * Number(i.quantity),
+  vatPct: 5,
+  vatAmt: Number(i.price) * Number(i.quantity) * 0.05,
+  totalIncl: Number(i.price) * Number(i.quantity) * 1.05
+  }))"
+  :totals="{
+    taxable: savedSubtotal,
+    vat: savedVat,
+    grand: savedGrand
+  }"
+  :onConfirm="() => { step = 'payment' }"
+/>
 
-  <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white" v-else>
+</section>
+
+
+
+  <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white" v-if="step === 'payment'">
     <!-- Back link -->
     <div class="mb-4">
       <NuxtLink to="/cart" class="text-[#00bfa5] hover:underline text-sm">← Back to Cart</NuxtLink>
