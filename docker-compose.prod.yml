@@ -9,7 +9,7 @@ services:
       - npm_network
     environment:
       NODE_ENV: production
-      NUXT_PUBLIC_API_BASE: https://app.abdallahweb.com
+      NUXT_PUBLIC_API_BASE: https://app.avinaq.com
 
   nginx:
     image: nginx:alpine
