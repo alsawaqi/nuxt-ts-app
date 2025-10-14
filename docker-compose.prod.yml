@@ -5,11 +5,14 @@ services:
       dockerfile: ../docker/prod/nuxt.dockerfile
     container_name: nuxt-ui-app
     restart: always
-    networks:
-      - npm_network
     environment:
       NODE_ENV: production
+      HOST: 0.0.0.0
+      NITRO_PORT: 3000
       NUXT_PUBLIC_API_BASE: https://app.avinaq.com
+    networks:
+      - npm_network
+   
 
   nginx:
     image: nginx:alpine
