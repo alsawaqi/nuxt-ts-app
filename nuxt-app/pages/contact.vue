@@ -249,7 +249,7 @@ const submit = async () => {
         <div class="grid sm:grid-cols-2 gap-6">
           <div class="info-card">
             <h3 class="info-title">Head Office</h3>
-            <p class="info-body">Al Qurum, Muscat, Oman<br/>PO Box 1234</p>
+            <p class="info-body">Al Mahbeela, Muscat, Oman<br/>PO Box 1234</p>
           </div>
           <div class="info-card">
             <h3 class="info-title">Sales</h3>

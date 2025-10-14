@@ -11,7 +11,7 @@ export default defineNuxtPlugin(() => {
   })
 
   // ✅ Forward browser cookies on SSR so /api/user works during server-render
-  if (process.server) {
+  if (import.meta.server) {
     const headers = useRequestHeaders(['cookie'])
     if (headers.cookie) {
       instance.defaults.headers.common['cookie'] = headers.cookie
@@ -22,7 +22,10 @@ export default defineNuxtPlugin(() => {
   instance.interceptors.request.use((cfg) => {
     if (import.meta.client) {
       const csrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
-      if (csrf) cfg.headers['X-XSRF-TOKEN'] = decodeURIComponent(csrf[1])
+      if (csrf && csrf[1]) {
+        const token = decodeURIComponent(csrf[1])
+        cfg.headers['X-XSRF-TOKEN'] = token
+      }
     }
     return cfg
   })

@@ -1,32 +1,33 @@
-// https://nuxt.com/docs/api/configuration/nuxt-config
+// nuxt.config.ts
+import { defineNuxtConfig } from 'nuxt/config'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
-  ssr: true ,  
+  ssr: true,
+
   plugins: [
-  '~/plugins/axios',
-  '~/plugins/init-auth.global.ts'
-],
+    '~/plugins/axios',
+    '~/plugins/init-auth.global.ts',
+  ],
+
   css: ['assets/css/card.min.css'],
-  modules: ['@pinia/nuxt'],
+
+  modules: ['@pinia/nuxt','nuxt-pdfeasy'],
   components: true,
+
   devtools: {
     enabled: true,
-      
-    timeline: {
-      enabled: true,
-    },
+    timeline: { enabled: true },
   },
- vite: {
-    optimizeDeps: {
-      include: ['swiper', 'vue-easy-lightbox']
-    }
+
+  vite: {
+    optimizeDeps: { include: ['swiper', 'vue-easy-lightbox'] },
   },
+
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:83', 
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:83',
       r2Url: 'https://pub-85c3b7ddc4814c45b25c1a5fb5bdad3f.r2.dev',
-    }
+    },
   },
-   
-  
 })

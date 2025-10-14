@@ -1,0 +1,25 @@
+{
+  "deliveryMethod": "ship",
+  "addressId": 10003,
+  "shippingOption": {
+    "shipper_id": 60009,
+    "destination_id": 70008,
+    "basis": "volume",
+    "currency": "OMR",
+    "total_price": 1.5,
+    "breakdown": { "band_label": "0-5", "units_used": 2.576 }
+  },
+  "totals": {
+    "currency": "OMR",
+    "subtotal": 22.5,
+    "shipping": 1.5,
+    "vat": 1.2,
+    "grand": 25.2
+  },
+  "items": [
+    { "id": 40004, "slug": "a", "qty": 2, "price": "1.00" },
+    { "id": 30003, "slug": "asdsad", "qty": 1, "price": "10.00" },
+    { "id": 10002, "slug": "motor", "qty": 1, "price": "10.50" }
+  ],
+  "savedAt": "2025-10-14T17:59:10.781Z"
+}

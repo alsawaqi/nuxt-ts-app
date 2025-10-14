@@ -25,7 +25,7 @@ export const useUserStore = defineStore('user', () => {
       const { $axios } = useNuxtApp()
 
       // Forward cookie on SSR; no-op on client
-      const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+      const headers = import.meta.env.SSR ? useRequestHeaders(['cookie']) : undefined
 
       const res = await $axios.get('/api/user', {
         withCredentials: true,

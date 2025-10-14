@@ -35,7 +35,7 @@ const remember = ref(false)
   try {
     const response = await $axios.post('/api/login', form.value, {
       withCredentials: true, // ⬅️ This allows the browser to accept the cookie
-      validateStatus: (status) => status < 500,
+      validateStatus: (status: number) => status < 500,
     })
 
  

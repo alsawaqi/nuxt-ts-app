@@ -1,3 +1,301 @@
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { useToast } from 'vue-toastification'
+
+type Option = { id: number; Country_Name?: string; Region_Name?: string; District_Name?: string; City_Name?: string }
+
+type Address = {
+  id: number
+  Country_Id?: number | string
+  Region_Id?: number | string
+  District_Id?: number | string
+  City_Id?: number | string
+  Contact_Person_Name?: string
+  Telephone?: string
+  Designation?: string
+  Remarks?: string
+  Email?: string
+  is_default?: boolean
+  country?: { Country_Name: string } | null
+  region?: { Region_Name: string } | null
+  district?: { District_Name: string } | null
+  city?: { City_Name: string } | null
+}
+
+const { $axios } = useNuxtApp()
+const { isAuthenticated } = useAuth()
+const toast = useToast()
+
+
+const selectCls =
+  'w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm shadow-sm ' +
+  'transition focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
+
+const inputCls =
+  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition ' +
+  'focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
+
+const textareaCls = inputCls + ' resize-y';
+
+ 
+
+// state
+const addresses = ref<Address[]>([])
+const loading = ref<boolean>(true)
+const selectedId = ref<number | null>(null)
+
+const countries = ref<Option[]>([])
+const regions   = ref<Option[]>([])
+const districts = ref<Option[]>([])
+const states    = ref<Option[]>([]) // kept for parity if you later need state-level
+const cities    = ref<Option[]>([])
+
+const modalOpen = ref(false)
+const isEdit = ref(false)
+const deleteOpen = ref(false)
+const submitting = ref(false)
+const deleteId = ref<number | null>(null)
+
+// shared form for add/edit
+const form = reactive({
+  id: null as number | null,
+  Country_Id: '' as number | string,
+  Region_Id: '' as number | string,
+  District_Id: '' as number | string,
+  City_Id: '' as number | string,
+  Contact_Person_Name: '',
+  Telephone: '',
+  Designation: '',
+  Remarks: '',
+  Email: '',
+  Type: 'shipping', // optional if your API expects it
+})
+
+// ------------ fetchers ------------
+const fetchAddresses = async () => {
+  if (!isAuthenticated.value) return
+  loading.value = true
+  try {
+    const res = await $axios.get('/api/contacts')
+    addresses.value = res.data || []
+    // select default or first
+    const def = addresses.value.find(a => a.is_default)
+    selectedId.value = def?.id ?? addresses.value[0]?.id ?? null
+  } catch (e) {
+    console.error('Failed to fetch addresses', e)
+    toast.error('Failed to load addresses')
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadCountries = async () => {
+  try {
+    const res = await $axios.get('/api/countries')
+    countries.value = res.data
+  } catch (e) { console.error(e) }
+}
+const loadRegions = async () => {
+  try {
+    const res = await $axios.get('/api/region')
+    regions.value = res.data.data
+  } catch (e) { console.error(e) }
+}
+const loadDistricts = async () => {
+  try {
+    const res = await $axios.get('/api/district')
+    districts.value = res.data.data
+  } catch (e) { console.error(e) }
+}
+// states by country (if you have)
+const loadStates = async (countryId: number | string) => {
+  states.value = []
+  cities.value = []
+  if (!countryId) return
+  try {
+    const res = await $axios.get(`/api/contacts/by-country/${countryId}`)
+    states.value = res.data
+  } catch (e) { console.error(e) }
+}
+// cities by (your API calls it "by-state" but you pass District_Id in your example)
+const loadCities = async (districtId: number | string) => {
+  cities.value = []
+  if (!districtId) return
+  try {
+    const res = await $axios.get(`/api/contacts/by-state/${districtId}`)
+    cities.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+// ------------ helpers ------------
+const resetForm = () => {
+  form.id = null
+  form.Country_Id = ''
+  form.Region_Id = ''
+  form.District_Id = ''
+  form.City_Id = ''
+  form.Contact_Person_Name = ''
+  form.Telephone = ''
+  form.Designation = ''
+  form.Remarks = ''
+  form.Email = ''
+  form.Type = 'shipping'
+  states.value = []
+  cities.value = []
+}
+
+const openAdd = async () => {
+  isEdit.value = false
+  resetForm()
+  await ensureLookupsLoaded()
+  modalOpen.value = true
+}
+
+const openEdit = async (addr: Address) => {
+  isEdit.value = true
+  resetForm()
+  await ensureLookupsLoaded()
+  form.id = addr.id
+  form.Country_Id = addr.Country_Id || ''
+  form.Region_Id = addr.Region_Id || ''
+  form.District_Id = addr.District_Id || ''
+  form.City_Id = addr.City_Id || ''
+  form.Contact_Person_Name = addr.Contact_Person_Name || ''
+  form.Telephone = addr.Telephone || ''
+  form.Designation = addr.Designation || ''
+  form.Remarks = addr.Remarks || ''
+  form.Email = addr.Email || ''
+  // hydrate dependent lists
+  await loadStates(form.Country_Id)
+  await loadCities(form.District_Id)
+  modalOpen.value = true
+}
+
+const closeModal = () => {
+  if (submitting.value) return
+  modalOpen.value = false
+}
+
+const onCountryChange = async () => {
+  form.Region_Id = ''
+  form.District_Id = ''
+  form.City_Id = ''
+  await loadStates(form.Country_Id)
+  cities.value = []
+}
+const onDistrictChange = async () => {
+  form.City_Id = ''
+  await loadCities(form.District_Id)
+}
+
+const ensureLookupsLoaded = async () => {
+  // load basic lists if empty
+  if (!countries.value.length) await loadCountries()
+  if (!regions.value.length)   await loadRegions()
+  if (!districts.value.length) await loadDistricts()
+}
+
+// ------------ CRUD ------------
+const submitAdd = async () => {
+  submitting.value = true
+  try {
+    await $axios.post('/api/contacts', {
+      Country_Id: form.Country_Id || null,
+      Region_Id: form.Region_Id || null,
+      District_Id: form.District_Id || null,
+      City_Id: form.City_Id || null,
+      Contact_Person_Name: form.Contact_Person_Name || null,
+      Telephone: form.Telephone || null,
+      Designation: form.Designation || null,
+      Remarks: form.Remarks || null,
+      Email: form.Email || null,
+      Type: form.Type || null,
+    })
+    toast.success('Address saved')
+    modalOpen.value = false
+    await fetchAddresses()
+  } catch (e) {
+    console.error('Failed to save address', e)
+    toast.error('Failed to save address')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const submitEdit = async () => {
+  if (!form.id) return
+  submitting.value = true
+  try {
+    await $axios.put(`/api/contacts/${form.id}`, {
+      Country_Id: form.Country_Id || null,
+      Region_Id: form.Region_Id || null,
+      District_Id: form.District_Id || null,
+      City_Id: form.City_Id || null,
+      Contact_Person_Name: form.Contact_Person_Name || null,
+      Telephone: form.Telephone || null,
+      Designation: form.Designation || null,
+      Remarks: form.Remarks || null,
+      Email: form.Email || null,
+      Type: form.Type || null,
+    })
+    toast.success('Address updated')
+    modalOpen.value = false
+    await fetchAddresses()
+  } catch (e) {
+    console.error('Failed to update address', e)
+    toast.error('Failed to update address')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const requestDelete = (id: number) => {
+  deleteId.value = id
+  deleteOpen.value = true
+}
+const confirmDelete = async () => {
+  if (!deleteId.value) return
+  submitting.value = true
+  try {
+    await $axios.delete(`/api/contacts/${deleteId.value}`)
+    toast.success('Address deleted')
+    deleteOpen.value = false
+    deleteId.value = null
+    await fetchAddresses()
+  } catch (e) {
+    console.error('Failed to delete address', e)
+    toast.error('Failed to delete address')
+  } finally {
+    submitting.value = false
+  }
+}
+
+const makeDefault = async (id: number) => {
+  try {
+    await $axios.patch(`/api/contacts/${id}/default`)
+    toast.success('Default address updated')
+    await fetchAddresses()
+  } catch (e) {
+    console.error('Failed to set default', e)
+    toast.error('Failed to set default')
+  }
+}
+
+const selectAddress = (id: number) => {
+  selectedId.value = id
+  // If you want selecting radio to also set default automatically, call:
+  // makeDefault(id)
+}
+
+// ------------ mount ------------
+onMounted(async () => {
+  if (isAuthenticated.value) {
+    await Promise.all([fetchAddresses(), ensureLookupsLoaded()])
+  }
+})
+</script>
+
+
 <template>
   <section class="space-y-4">
     <!-- Toolbar -->
@@ -333,302 +631,6 @@
   </section>
 </template>
 
-<script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useToast } from 'vue-toastification'
-
-type Option = { id: number; Country_Name?: string; Region_Name?: string; District_Name?: string; City_Name?: string }
-
-type Address = {
-  id: number
-  Country_Id?: number | string
-  Region_Id?: number | string
-  District_Id?: number | string
-  City_Id?: number | string
-  Contact_Person_Name?: string
-  Telephone?: string
-  Designation?: string
-  Remarks?: string
-  Email?: string
-  is_default?: boolean
-  country?: { Country_Name: string } | null
-  region?: { Region_Name: string } | null
-  district?: { District_Name: string } | null
-  city?: { City_Name: string } | null
-}
-
-const { $axios } = useNuxtApp()
-const { isAuthenticated } = useAuth()
-const toast = useToast()
-
-
-const selectCls =
-  'w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm shadow-sm ' +
-  'transition focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
-
-const inputCls =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition ' +
-  'focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
-
-const textareaCls = inputCls + ' resize-y';
-
- 
-
-// state
-const addresses = ref<Address[]>([])
-const loading = ref<boolean>(true)
-const selectedId = ref<number | null>(null)
-
-const countries = ref<Option[]>([])
-const regions   = ref<Option[]>([])
-const districts = ref<Option[]>([])
-const states    = ref<Option[]>([]) // kept for parity if you later need state-level
-const cities    = ref<Option[]>([])
-
-const modalOpen = ref(false)
-const isEdit = ref(false)
-const deleteOpen = ref(false)
-const submitting = ref(false)
-const deleteId = ref<number | null>(null)
-
-// shared form for add/edit
-const form = reactive({
-  id: null as number | null,
-  Country_Id: '' as number | string,
-  Region_Id: '' as number | string,
-  District_Id: '' as number | string,
-  City_Id: '' as number | string,
-  Contact_Person_Name: '',
-  Telephone: '',
-  Designation: '',
-  Remarks: '',
-  Email: '',
-  Type: 'shipping', // optional if your API expects it
-})
-
-// ------------ fetchers ------------
-const fetchAddresses = async () => {
-  if (!isAuthenticated.value) return
-  loading.value = true
-  try {
-    const res = await $axios.get('/api/contacts')
-    addresses.value = res.data || []
-    // select default or first
-    const def = addresses.value.find(a => a.is_default)
-    selectedId.value = def?.id ?? addresses.value[0]?.id ?? null
-  } catch (e) {
-    console.error('Failed to fetch addresses', e)
-    toast.error('Failed to load addresses')
-  } finally {
-    loading.value = false
-  }
-}
-
-const loadCountries = async () => {
-  try {
-    const res = await $axios.get('/api/countries')
-    countries.value = res.data
-  } catch (e) { console.error(e) }
-}
-const loadRegions = async () => {
-  try {
-    const res = await $axios.get('/api/region')
-    regions.value = res.data.data
-  } catch (e) { console.error(e) }
-}
-const loadDistricts = async () => {
-  try {
-    const res = await $axios.get('/api/district')
-    districts.value = res.data.data
-  } catch (e) { console.error(e) }
-}
-// states by country (if you have)
-const loadStates = async (countryId: number | string) => {
-  states.value = []
-  cities.value = []
-  if (!countryId) return
-  try {
-    const res = await $axios.get(`/api/contacts/by-country/${countryId}`)
-    states.value = res.data
-  } catch (e) { console.error(e) }
-}
-// cities by (your API calls it "by-state" but you pass District_Id in your example)
-const loadCities = async (districtId: number | string) => {
-  cities.value = []
-  if (!districtId) return
-  try {
-    const res = await $axios.get(`/api/contacts/by-state/${districtId}`)
-    cities.value = res.data
-  } catch (e) { console.error(e) }
-}
-
-// ------------ helpers ------------
-const resetForm = () => {
-  form.id = null
-  form.Country_Id = ''
-  form.Region_Id = ''
-  form.District_Id = ''
-  form.City_Id = ''
-  form.Contact_Person_Name = ''
-  form.Telephone = ''
-  form.Designation = ''
-  form.Remarks = ''
-  form.Email = ''
-  form.Type = 'shipping'
-  states.value = []
-  cities.value = []
-}
-
-const openAdd = async () => {
-  isEdit.value = false
-  resetForm()
-  await ensureLookupsLoaded()
-  modalOpen.value = true
-}
-
-const openEdit = async (addr: Address) => {
-  isEdit.value = true
-  resetForm()
-  await ensureLookupsLoaded()
-  form.id = addr.id
-  form.Country_Id = addr.Country_Id || ''
-  form.Region_Id = addr.Region_Id || ''
-  form.District_Id = addr.District_Id || ''
-  form.City_Id = addr.City_Id || ''
-  form.Contact_Person_Name = addr.Contact_Person_Name || ''
-  form.Telephone = addr.Telephone || ''
-  form.Designation = addr.Designation || ''
-  form.Remarks = addr.Remarks || ''
-  form.Email = addr.Email || ''
-  // hydrate dependent lists
-  await loadStates(form.Country_Id)
-  await loadCities(form.District_Id)
-  modalOpen.value = true
-}
-
-const closeModal = () => {
-  if (submitting.value) return
-  modalOpen.value = false
-}
-
-const onCountryChange = async () => {
-  form.Region_Id = ''
-  form.District_Id = ''
-  form.City_Id = ''
-  await loadStates(form.Country_Id)
-  cities.value = []
-}
-const onDistrictChange = async () => {
-  form.City_Id = ''
-  await loadCities(form.District_Id)
-}
-
-const ensureLookupsLoaded = async () => {
-  // load basic lists if empty
-  if (!countries.value.length) await loadCountries()
-  if (!regions.value.length)   await loadRegions()
-  if (!districts.value.length) await loadDistricts()
-}
-
-// ------------ CRUD ------------
-const submitAdd = async () => {
-  submitting.value = true
-  try {
-    await $axios.post('/api/contacts', {
-      Country_Id: form.Country_Id || null,
-      Region_Id: form.Region_Id || null,
-      District_Id: form.District_Id || null,
-      City_Id: form.City_Id || null,
-      Contact_Person_Name: form.Contact_Person_Name || null,
-      Telephone: form.Telephone || null,
-      Designation: form.Designation || null,
-      Remarks: form.Remarks || null,
-      Email: form.Email || null,
-      Type: form.Type || null,
-    })
-    toast.success('Address saved')
-    modalOpen.value = false
-    await fetchAddresses()
-  } catch (e) {
-    console.error('Failed to save address', e)
-    toast.error('Failed to save address')
-  } finally {
-    submitting.value = false
-  }
-}
-
-const submitEdit = async () => {
-  if (!form.id) return
-  submitting.value = true
-  try {
-    await $axios.put(`/api/contacts/${form.id}`, {
-      Country_Id: form.Country_Id || null,
-      Region_Id: form.Region_Id || null,
-      District_Id: form.District_Id || null,
-      City_Id: form.City_Id || null,
-      Contact_Person_Name: form.Contact_Person_Name || null,
-      Telephone: form.Telephone || null,
-      Designation: form.Designation || null,
-      Remarks: form.Remarks || null,
-      Email: form.Email || null,
-      Type: form.Type || null,
-    })
-    toast.success('Address updated')
-    modalOpen.value = false
-    await fetchAddresses()
-  } catch (e) {
-    console.error('Failed to update address', e)
-    toast.error('Failed to update address')
-  } finally {
-    submitting.value = false
-  }
-}
-
-const requestDelete = (id: number) => {
-  deleteId.value = id
-  deleteOpen.value = true
-}
-const confirmDelete = async () => {
-  if (!deleteId.value) return
-  submitting.value = true
-  try {
-    await $axios.delete(`/api/contacts/${deleteId.value}`)
-    toast.success('Address deleted')
-    deleteOpen.value = false
-    deleteId.value = null
-    await fetchAddresses()
-  } catch (e) {
-    console.error('Failed to delete address', e)
-    toast.error('Failed to delete address')
-  } finally {
-    submitting.value = false
-  }
-}
-
-const makeDefault = async (id: number) => {
-  try {
-    await $axios.patch(`/api/contacts/${id}/default`)
-    toast.success('Default address updated')
-    await fetchAddresses()
-  } catch (e) {
-    console.error('Failed to set default', e)
-    toast.error('Failed to set default')
-  }
-}
-
-const selectAddress = (id: number) => {
-  selectedId.value = id
-  // If you want selecting radio to also set default automatically, call:
-  // makeDefault(id)
-}
-
-// ------------ mount ------------
-onMounted(async () => {
-  if (isAuthenticated.value) {
-    await Promise.all([fetchAddresses(), ensureLookupsLoaded()])
-  }
-})
-</script>
 
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity .15s ease; }

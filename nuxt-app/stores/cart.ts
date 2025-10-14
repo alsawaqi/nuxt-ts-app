@@ -21,7 +21,7 @@ export const useCartStore = defineStore('cart', () => {
   const selectedAddressId = ref<number | null>(null) // ✅ NEW
 
   // ✅ Load from localStorage on store init
-  if (import.meta.client) {
+  if (!import.meta.env.SSR) {
     const storedCart = localStorage.getItem('guest_cart')
     if (storedCart) cartItems.value = JSON.parse(storedCart)
 
@@ -38,14 +38,14 @@ export const useCartStore = defineStore('cart', () => {
 
   // ✅ Auto-save cartItems
   watch(cartItems, (val) => {
-    if (import.meta.client) {
+    if (!import.meta.env.SSR) {
       localStorage.setItem('guest_cart', JSON.stringify(val))
     }
   }, { deep: true })
 
   // ✅ Persist deliveryMethod
   watch(deliveryMethod, (val) => {
-    if (!import.meta.client) return
+    if (import.meta.env.SSR) return
     localStorage.setItem('delivery_method', val)
 
     // If method is not ship, remove saved address
@@ -57,7 +57,7 @@ export const useCartStore = defineStore('cart', () => {
 
   // ✅ Persist selected address only if ship
   watch(selectedAddressId, (val) => {
-    if (!import.meta.client) return
+    if (import.meta.env.SSR) return
     if (deliveryMethod.value === 'ship' && val !== null) {
       localStorage.setItem('selected_address_id', val.toString())
     } else {

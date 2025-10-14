@@ -46,8 +46,10 @@ const getloyalitypoints = async () => {
 
  
 const mobileMenuOpen = ref(false);
-onMounted(() => {
- // getloyalitypoints()
+onMounted(async() => {
+  if(isAuthenticated.value){
+     await getloyalitypoints ()
+   }
 })
 </script>
 <template>

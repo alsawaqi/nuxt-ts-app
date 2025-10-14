@@ -6,12 +6,18 @@ definePageMeta({
 
 import { useCartStore } from '~/stores/cart'
 import { ref, onMounted, computed, watch } from 'vue'
-import { useToast } from 'vue-toastification'
+import { useOrderConfirmPdf } from '@/composables/useOrderConfirmPdf'
+
+// import { useToast } from 'vue-toastification'
 
 const { user, isAuthenticated } = useAuth()
 const { $axios, $r2Url } = useNuxtApp()
 
 const step = ref<'confirm' | 'payment'>('confirm')
+
+const { buildPdfUrl } = useOrderConfirmPdf()
+
+const pdfUrl = ref<string>('')
 
 // ---------------------
 // Types
@@ -45,7 +51,7 @@ interface SavedCheckoutPrefill {
 // State
 // ---------------------
 const cart = useCartStore()
-const toast = useToast()
+//const toast = useToast()
 
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
@@ -58,6 +64,25 @@ const saved = ref<SavedCheckoutPrefill | null>(null)
 const confirmOrder = () => {
   step.value = 'payment'
 }
+
+
+const shippingAddressText = computed(() => {
+  const a = selectedAddress.value
+  return a
+    ? `${a?.Contact_Person_Name || ''}\n${a?.Telephone || ''}\n` +
+      `${a?.country?.Country_Name || ''}, ${a?.region?.Region_Name || ''}, ` +
+      `${a?.district?.District_Name || ''}, ${a?.city?.City_Name || ''}`
+    : '—'
+})
+
+const linesForPdf = () =>
+  cart.cartItems.map((i, idx) => ({
+    description: `${i.name}\nSKU: ${i.slug || i.id}`,
+    qty: Number(i.quantity || 0),
+    unit: 'EA',
+    unitPrice: Number(i.price || 0),
+    vatPct: 5,
+  }))
 
 // ---------------------
 // Payment state
@@ -89,7 +114,7 @@ const onCardNumberInput = (e: Event) => {
 }
 const formatExpiry = (raw: string) => {
   let d = raw.replace(/\D/g, '').slice(0, 4)
-  if (d.length >= 1 && parseInt(d[0], 10) > 1) d = ('0' + d).slice(0, 4)
+  if (d.length >= 1 && parseInt(d.charAt(0), 10) > 1) d = ('0' + d).slice(0, 4)
   let mm = d.slice(0, 2)
   let yy = d.slice(2, 4)
   if (mm.length === 2) {
@@ -105,6 +130,11 @@ const onExpiryInput = (e: Event) => {
   if (el.value !== formatted) el.value = formatted
   card.value.expiry = formatted
 }
+
+
+
+
+
 const paymentMethod = ref<'card' | 'cod' | 'transfer'>('card')
 const triedSubmit = ref(false)
 const card = ref({ number: '', name: '', expiry: '', cvc: '' })
@@ -116,7 +146,8 @@ const luhn = (num: string) => {
   if (!s) return false
   let sum = 0, dbl = false
   for (let i = s.length - 1; i >= 0; i--) {
-    let d = parseInt(s[i], 10)
+    const char = s[i] ?? '0'
+    let d = parseInt(char, 10)
     if (dbl) { d *= 2; if (d > 9) d -= 9 }
     sum += d; dbl = !dbl
   }
@@ -160,6 +191,8 @@ onMounted(async () => {
     // nothing persisted, bounce back to cart
     return navigateTo('/cart')
   }
+
+  console.log('Loaded saved checkout prefill:', saved.value?.shippingOption?.shipper_id)
 
   // sync cart method/addr for consistency
   cart.deliveryMethod = saved.value.deliveryMethod
@@ -259,7 +292,7 @@ const submitOrder = async () => {
     }
 
     const payload = {
-      customer_id: 1, // TODO: real id
+ 
       delivery_method: cart.deliveryMethod,
       shipping_cost: savedShippingCost.value,
       Customers_Contacts_Id: cart.deliveryMethod === 'ship' ? (saved.value?.addressId ?? null) : null,
@@ -276,6 +309,16 @@ const submitOrder = async () => {
         // weight_kg: saved.value.totalsFromServer?.weight_kg,
         // volume_cbm: saved.value.totalsFromServer?.volume_cbm,
       } : null,
+     
+      total: {
+        currency: 'OMR',
+        subtotal: Number(savedSubtotal.value.toFixed(3)),
+        shipping: Number(savedShippingCost.value.toFixed(3)),
+        vat: Number(savedVat.value.toFixed(3)),
+        grand: Number(savedGrand.value.toFixed(3))
+      },
+     
+
       cart_items: cart.cartItems.map(item => ({
         product_id: item.id,
         quantity: item.quantity,
@@ -288,38 +331,124 @@ const submitOrder = async () => {
 
     const response = await $axios.post('/api/orders/place', payload, { withCredentials: true })
 
+      console.log('Order response:', response.data)
+
     if (response.status === 200) {
-      cart.clearCart()
-      localStorage.removeItem('checkout_prefill') // clean up persisted checkout
-      isSuccess.value = true
-      toast.success('Order placed successfully!')
-    }
+  // 1) Build PDF *before* clearing the cart so item names/qtys appear
+  try {
+    pdfUrl.value = await buildPdfUrl({
+      saved: saved.value!, // uses your persisted totals/currency
+      company: {
+        name: 'Industrial Supplies Center LLC',
+        address: 'PO BOX 39, M.C.C., PC: 101 101, Way No: 7715\nMabelah, Sanaiya, Muscat, Oman',
+        phone: '+968 24460320',
+        vat: 'OM1100033153'
+      },
+      buyer: {
+        name: user?.value?.Company_Name || 'Customer',
+        address: shippingAddressText.value
+      },
+      supplierContact: { name: 'Sales Team', phone: '+968 93219447', email: 'motorsales@isc-depot.com' },
+      buyerContact: selectedAddress.value
+        ? { name: selectedAddress.value.Contact_Person_Name, phone: selectedAddress.value.Telephone, email: user?.value?.Email }
+        : undefined,
+      meta: {
+        title: 'ORDER CONFIRMATION',
+        ref: saved.value?.orderRef || `ISC-OC-${new Date().toISOString().slice(2,10).replace(/-/g,'')}`,
+        date: new Date().toLocaleDateString(),
+        terms: ['Delivery Terms: DDP Muscat'],
+        bank: {
+          accountName: 'INDUSTRIAL SUPPLIES CENTER LLC',
+          accountNo: '1074-0105031-001',
+          currency: saved.value?.totals?.currency || 'OMR',
+          swift: 'NBOMOMRXXXX',
+          bank: 'National Bank of Oman',
+          branch: 'Corporate Branch, PO Box 751, PC:112, Ruwi, Muscat, Oman',
+          iban: 'OMxx 0000 0000 0000 0000'
+        }
+      },
+      // Use cart items *now* (they’ll be cleared right after)
+      lines: linesForPdf()
+    })
+  } catch (e) {
+    console.error('PDF build failed:', e)
+    pdfUrl.value = '' // fallback
+  }
+
+  // 2) Now clean up the cart/localStorage
+  cart.clearCart()
+  localStorage.removeItem('checkout_prefill')
+
+  // 3) Show success section (which includes the PDF iframe)
+  isSuccess.value = true
+}
+
+
+
   } catch (error) {
     console.error('Order submission failed:', error)
-    toast.error('Failed to place order.')
+  //  toast.error('Failed to place order.')
   } finally {
     isSubmitting.value = false
   }
 }
 
- 
+
+onMounted(() => {
+
+    console.log('this is:', saved.value?.totals)
+})
+
 </script>
 
 <template>
 
-<section class="max-w-screen-xl mx-auto px-4 py-8 bg-white text-center animate-fade-in" v-if="isSuccess">
-  <h2 class="text-2xl font-bold text-green-600 mb-2">🎉 Order Placed Successfully!</h2>
-  <p class="text-gray-700 mb-4">Thank you for your order. A confirmation email has been sent.</p>
-  <NuxtLink
-    to="/"
-    class="inline-block bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white px-6 py-2 rounded-lg text-sm font-semibold transition"
-  >
-    Go to Home
-  </NuxtLink>
+ <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white animate-fade-in" v-if="isSuccess">
+  <div class="text-center mb-6">
+    <h2 class="text-2xl font-bold text-green-600 mb-2">🎉 Order Placed Successfully!</h2>
+    <p class="text-gray-700">Thank you for your order. A confirmation PDF is ready below.</p>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex items-center justify-center gap-3 mb-4">
+    <a
+      v-if="pdfUrl"
+      :href="pdfUrl"
+      download="order-confirmation.pdf"
+      class="inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
+    >
+      Download PDF
+    </a>
+    <button
+      v-if="pdfUrl"
+      type="button"
+      @click="() => { const w = window.open(pdfUrl, '_blank'); w?.print?.() }"
+      class="inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
+    >
+      Print
+    </button>
+    <NuxtLink
+      to="/"
+      class="inline-flex items-center rounded-md bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135] text-white px-4 py-2 text-sm font-semibold"
+    >
+      Go to Home
+    </NuxtLink>
+  </div>
+
+  <!-- PDF iframe -->
+  <div class="rounded-lg border border-slate-200 overflow-hidden shadow-sm bg-white">
+    <div v-if="pdfUrl">
+      <iframe :src="pdfUrl" class="w-full" style="height:min(80vh,900px)" title="Order confirmation PDF"></iframe>
+    </div>
+    <div v-else class="p-6 text-center text-sm text-slate-500">
+      Building your PDF…
+    </div>
+  </div>
 </section>
 
+
 <!-- STEP 1: Confirmation -->
-<section v-if="step === 'confirm'" class="max-w-screen-xl mx-auto px-4 py-8 bg-white">
+<section v-else-if="step === 'confirm'" class="max-w-screen-xl mx-auto px-4 py-8 bg-white">
    <OrderConfirm
   v-if="step === 'confirm'"
   :orderRef="saved?.orderRef || 'ISC-…'"
@@ -327,6 +456,15 @@ const submitOrder = async () => {
   :supplier="{
     name: 'Industrial Supplies Center LLC',
     lines: ['PO BOX 39, M.C.C., PC: 101', '101, Way No: 7715', 'Mabelah, Sanaiya, Muscat, Oman']
+  }"
+  :shipping="{
+    shipper_id: saved?.shippingOption?.shipper_id || 0,
+    destination_id: saved?.shippingOption?.destination_id || 0,
+    basis: saved?.shippingOption?.basis || 'weight',
+    currency: saved?.shippingOption?.currency || 'OMR',
+    total_price: saved?.shippingOption?.total_price || 0,
+    breakdown: saved?.shippingOption?.breakdown || [],
+    deliverymethod: saved?.deliveryMethod || '—' 
   }"
   :buyer="{
     name: user?.Company_Name || '—',
@@ -353,7 +491,7 @@ const submitOrder = async () => {
     bankName: 'National Bank of Oman',
     bankAddress: 'Corporate Branch, PO Box 751, PC:112, Ruwi, Muscat, Sultanate of Oman'
   }"
-  :items="cart.cartItems.map((i, idx) => ({
+  :items="cart.cartItems.map((i: { name: any; slug: any; id: any; quantity: any; price: any }, idx: number) => ({
      sl: idx + 1,
   description: `${i.name}\nSKU: ${i.slug || i.id}`,
   qty: i.quantity,
@@ -372,11 +510,13 @@ const submitOrder = async () => {
   :onConfirm="() => { step = 'payment' }"
 />
 
+
+
 </section>
 
 
 
-  <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white" v-if="step === 'payment'">
+  <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white" v-else-if="step === 'payment'">
     <!-- Back link -->
     <div class="mb-4">
       <NuxtLink to="/cart" class="text-[#00bfa5] hover:underline text-sm">← Back to Cart</NuxtLink>

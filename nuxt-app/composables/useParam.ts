@@ -1,3 +1,3 @@
-export const useParam = (key: string) => {
-  return useRoute().params[key].toString()
+export const useParam = (key: string): string => {
+  return useRoute().params[key]?.toString() ?? ''
 }
