@@ -47,7 +47,7 @@ const getloyalitypoints = async () => {
  
 const mobileMenuOpen = ref(false);
 onMounted(() => {
-  getloyalitypoints()
+ // getloyalitypoints()
 })
 </script>
 <template>

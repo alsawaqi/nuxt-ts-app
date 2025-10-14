@@ -324,7 +324,7 @@ onMounted(async () => {
   await fetchData();
   await getBrands();
   await restoreFromQuery()
-  await getloyalitypoints ()
+  //await getloyalitypoints ()
   if (typeof window !== 'undefined') {
     const storedTopbar = localStorage.getItem('hideTopbar')
     const storedBanner = localStorage.getItem('hideBanner')
