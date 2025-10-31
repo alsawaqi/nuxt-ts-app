@@ -1,4 +1,4 @@
- <script setup lang="ts">
+<script setup lang="ts">
 definePageMeta({
   layout: 'layouts',
   middleware: 'auth',
@@ -209,7 +209,7 @@ onMounted(async () => {
 // ---------------------
 // Totals (from saved blob; fallback to runtime if needed)
 // ---------------------
-const savedSubtotal = computed(() => Number(saved.value?.totals?.subtotal ?? cart.totalPrice()))
+const savedSubtotal = computed(() => Number(saved.value?.totals?.subtotal ?? cart.totalPrice().toFixed(3)))
 const savedShippingCost = computed(() => Number(saved.value?.totals?.shipping ?? 0))
 const savedVat = computed(() => Number(saved.value?.totals?.vat ?? ((savedSubtotal.value + savedShippingCost.value) * 0.05)))
 const savedGrand = computed(() => Number(saved.value?.totals?.grand ?? (savedSubtotal.value + savedShippingCost.value + savedVat.value)))
@@ -577,23 +577,10 @@ onMounted(() => {
 
             <!-- Quantity + Buttons -->
             <div class="flex items-center space-x-2 mt-1">
-              <button
-                @click="decrementQty(item.id)"
-                class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
-              >−</button>
+              
+            <span>{{ item.quantity }} Pc (s)</span>
 
-              <input
-                type="number"
-                min="1"
-                v-model.number="item.quantity"
-                class="w-12 border rounded text-center text-xs py-1"
-                @change="onQtyInputChange($event, item.id)"
-              />
-
-              <button
-                @click="incrementQty(item.id)"
-                class="px-2 py-1 bg-gray-100 border rounded hover:bg-gray-200"
-              >+</button>
+            
             </div>
 
             <p class="text-xs text-gray-500 mt-1">OMR {{ item.price }} / each</p>
@@ -832,7 +819,7 @@ onMounted(() => {
         <div class="space-y-2 text-sm text-gray-700">
           <div class="flex justify-between">
             <span>Subtotal</span>
-            <span>OMR {{ cart.totalPrice() }}</span>
+            <span>OMR {{ cart.totalPrice().toFixed(3) }}</span>
           </div>
           
           <div class="flex justify-between">

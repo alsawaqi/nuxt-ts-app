@@ -428,7 +428,7 @@ onMounted(async(): Promise<void> => {
   <!-- Lightbox -->
   <VueEasyLightbox
     :visible="visible"
-    :imgs="product?.images ? product.images.map(img => `${$r2Url}/${img.Image_Path}`) : []"
+    :imgs="product?.images ? product.images.map((img: { Image_Path: any }) => `${$r2Url}/${img.Image_Path}`) : []"
     :index="index"
     @hide="visible = false"
   />

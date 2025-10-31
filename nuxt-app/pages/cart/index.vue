@@ -127,7 +127,7 @@ const fetchAddresses = async () => {
 }
 
 // Totals (+5% VAT)
-const subtotal = computed(() => +cart.totalPrice().toFixed(3))
+const subtotal = computed(() => + cart.totalPrice().toFixed(3))
 const shippingCost = computed(() =>
   cart.deliveryMethod === 'ship' && selectedOption.value
     ? Number(selectedOption.value.total_price)

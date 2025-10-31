@@ -1,7 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
-   layout: 'layouts',
-   middleware: 'auth',
+  layout: 'layouts',
+  middleware: 'auth',
 })
 
 import AccountOrders from '~/components/account/AccountOrders.vue'
@@ -12,7 +12,7 @@ import AccountFavorites from '~/components/account/AccountFavorites.vue'
 
 import AccountLoyalty from '~/components/account/AccountLoyalty.vue'
 
-/** Matches your Customers_Loyalty_Transactions_T */
+
 interface LoyaltyTx {
   id: number
   Loyalty_Transaction_Code: string
@@ -26,27 +26,19 @@ interface LoyaltyTx {
 
 
 
-const addresses = ref([])           // fetch these from your API
- 
-const selectedAddressId = ref<number|null>(null)
-
-const addAddress    = () => { /* open your create modal */ }
-const editAddress   = (id:number) => { /* open your edit modal */ }
-const deleteAddress = (id:number) => { /* call API then refresh */ }
-const setDefault    = (id:number) => { /* call API then refresh */ }
 
 const { user, isAuthenticated } = useAuth()
 const { $axios } = useNuxtApp()
-interface Order { 
-                    id: number; 
-                    Transaction_Number: number; 
-                    Total_Price: string; 
-                    Status: string; 
-                    created_at: string; 
-                  } 
+interface Order {
+  id: number;
+  Transaction_Number: number;
+  Total_Price: string;
+  Status: string;
+  created_at: string;
+}
 
 
-                  interface OrderDetail {
+interface OrderDetail {
   id: number
   Quantity: number
   Price: number
@@ -55,29 +47,29 @@ interface Order {
 
 
 
- 
-const orders = ref<Order[]>([]); 
-const loading = ref<boolean>(true); 
-const selectedOrderDetails = ref<OrderDetail[]>([]) 
-const showDetailsModal = ref(false) 
+
+const orders = ref<Order[]>([]);
+const loading = ref<boolean>(true);
+const selectedOrderDetails = ref<OrderDetail[]>([])
+const showDetailsModal = ref(false)
 const loadingDetails = ref(false)
 const points = ref<any>('')
 
- 
+
 const activeOrderId = ref<number | null>(null)
 
 
- 
- 
+
+
 type TabKey = 'orders' | 'profile' | 'addresses' | 'tickets' | 'favorites' | 'loyalty'
 const activeTab = ref<TabKey>('orders')
 
 
- 
+
 
 // Loyalty state
 const loyaltyLoading = ref(false)
-const loyaltyLoaded  = ref(false)
+const loyaltyLoaded = ref(false)
 const loyaltyTx = ref<LoyaltyTx[]>([])
 
 const fetchLoyalty = async () => {
@@ -111,45 +103,45 @@ const ticketMessages = ref(null)        // TicketMessage[] | null
 const ticketMsgsLoading = ref(false)
 
 // Handlers
- 
-const closeTicket  = async (id:number) => { /* PATCH status=closed, refresh list */ }
-const replyTicket  = async ({id, body}:{id:number; body:string}) => { /* POST message, push into ticketMessages */ }
+
+const closeTicket = async (id: number) => { /* PATCH status=closed, refresh list */ }
+const replyTicket = async ({ id, body }: { id: number; body: string }) => { /* POST message, push into ticketMessages */ }
 const refreshTickets = async () => { /* GET list */ }
 
- 
 
 
 
-const fetchOrderDetails = async (orderId: number) => { 
-  
-  loadingDetails.value = true 
-  selectedOrderDetails.value = [] 
-  try { 
+
+const fetchOrderDetails = async (orderId: number) => {
+
+  loadingDetails.value = true
+  selectedOrderDetails.value = []
+  try {
     const res = await $axios.get(`/api/orders/${orderId}/details`)
-     selectedOrderDetails.value = res.data 
-     showDetailsModal.value = true 
-    } catch (e) {
-       console.error('Failed to fetch order details', e) 
-      } finally { 
-        loadingDetails.value = false 
-      } 
-    } 
+    selectedOrderDetails.value = res.data
+    showDetailsModal.value = true
+  } catch (e) {
+    console.error('Failed to fetch order details', e)
+  } finally {
+    loadingDetails.value = false
+  }
+}
 
 
-    const getloyalitypoints = async () => { 
-      
-      try { 
-        const response = await $axios.get('/api/loyalty', { withCredentials: true }) 
-        
-        points.value = response.data
-      } catch(e){
+const getloyalitypoints = async () => {
 
-      }finally { 
-       
-      } 
-    }
-  
-    const getOrders = async () => {
+  try {
+    const response = await $axios.get('/api/loyalty', { withCredentials: true })
+
+    points.value = response.data
+  } catch (e) {
+
+  } finally {
+
+  }
+}
+
+const getOrders = async () => {
   loading.value = true
   try {
     const { data } = await $axios.get('/api/orders', { withCredentials: true })
@@ -177,21 +169,21 @@ const onShowOrderDetails = async (orderId: number) => {
 }
 
 
- 
 
 
 
 
-  onMounted(async (): Promise<void> => { 
-    await getOrders(); 
-    await getloyalitypoints();
-  })
+
+onMounted(async (): Promise<void> => {
+  await getOrders();
+  await getloyalitypoints();
+})
 
 
- 
- 
 
- 
+
+
+
 
 </script>
 
@@ -207,18 +199,15 @@ const onShowOrderDetails = async (orderId: number) => {
     </div>
 
     <!-- Hero -->
-   <section class="relative">
-  <!-- decorative blobs -->
-  <div
-    class="absolute inset-0 overflow-hidden pointer-events-none -z-10"
-    aria-hidden="true"
-  >
-    <div class="absolute -top-16 -left-20 h-64 w-64 bg-teal-400/30 blur-3xl rounded-full"></div>
-    <div class="absolute -bottom-20 -right-24 h-72 w-72 bg-cyan-400/30 blur-3xl rounded-full"></div>
-  </div>
+    <section class="relative">
+      <!-- decorative blobs -->
+      <div class="absolute inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
+        <div class="absolute -top-16 -left-20 h-64 w-64 bg-teal-400/30 blur-3xl rounded-full"></div>
+        <div class="absolute -bottom-20 -right-24 h-72 w-72 bg-cyan-400/30 blur-3xl rounded-full"></div>
+      </div>
 
-  <!-- your actual content -->
-  <div class="relative z-10 max-w-7xl mx-auto px-4 pt-8 pb-24">
+      <!-- your actual content -->
+      <div class="relative z-10 max-w-7xl mx-auto px-4 pt-8 pb-24">
         <h1 class="text-2xl md:text-3xl font-bold text-slate-900">Welcome back</h1>
         <p class="text-sm text-slate-600">Manage your orders, profile and addresses</p>
 
@@ -226,21 +215,21 @@ const onShowOrderDetails = async (orderId: number) => {
         <div class="mt-6 bg-white/80 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-lg">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div class="flex items-center gap-4">
-              <img
-                src="https://i.pravatar.cc/100"
-                alt="Profile"
-                class="w-16 h-16 rounded-full ring-2 ring-white shadow"
-              />
+              <img src="https://i.pravatar.cc/100" alt="Profile"
+                class="w-16 h-16 rounded-full ring-2 ring-white shadow" />
               <div>
                 <p class="text-lg font-semibold text-slate-900">{{ user?.User_Name }}</p>
-                <p class="text-xs text-slate-500">Member since <span class="font-medium">{{ new Date(user?.created_at).toLocaleDateString('en-US', { month:'long', day:'2-digit', year:'numeric' }) }}</span></p>
+                <p class="text-xs text-slate-500">Member since <span class="font-medium">{{ new
+                  Date(user?.created_at).toLocaleDateString('en-US', { month: 'long', day: '2-digit', year:'numeric' })
+                    }}</span></p>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="inline-flex items-center gap-2 rounded-lg bg-amber-50 text-amber-700 px-3 py-1 ring-1 ring-amber-200">
+              <span
+                class="inline-flex items-center gap-2 rounded-lg bg-amber-50 text-amber-700 px-3 py-1 ring-1 ring-amber-200">
                 <span>🎖</span><span class="text-sm font-medium">{{ points }} points </span>
               </span>
-               
+
             </div>
           </div>
         </div>
@@ -252,204 +241,150 @@ const onShowOrderDetails = async (orderId: number) => {
 
       <!-- Sidebar -->
       <aside class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:sticky md:top-6 h-max">
-  <!-- avatar block unchanged -->
+        <!-- avatar block unchanged -->
 
-  <nav class="mt-6 space-y-1 text-sm font-medium" role="tablist" aria-orientation="vertical">
-    <button
-      role="tab"
-      :aria-selected="activeTab==='orders'"
-      @click="activeTab='orders'"
-      class="w-full flex items-center px-3 py-2 rounded-md transition"
-      :class="activeTab==='orders'
-        ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-        : 'text-slate-700 hover:bg-slate-50'"
-    >
-      <span class="mr-2">🛒</span>
-      Order Placed
-      <span class="ml-auto text-xs rounded px-2 py-0.5"
-            :class="activeTab==='orders' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
-       
-      </span>
-    </button>
+        <nav class="mt-6 space-y-1 text-sm font-medium" role="tablist" aria-orientation="vertical">
+          <button role="tab" :aria-selected="activeTab === 'orders'" @click="activeTab = 'orders'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'orders'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">🛒</span>
+            Order Placed
+            <span class="ml-auto text-xs rounded px-2 py-0.5"
+              :class="activeTab === 'orders' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
 
-    <button
-      role="tab"
-      :aria-selected="activeTab==='profile'"
-      @click="activeTab='profile'"
-      class="w-full flex items-center px-3 py-2 rounded-md transition"
-      :class="activeTab==='profile'
-        ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-        : 'text-slate-700 hover:bg-slate-50'"
-    >
-      <span class="mr-2">👤</span>
-      Profile
-      <span class="ml-auto text-xs rounded px-2 py-0.5"
-            :class="activeTab==='profile' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
+            </span>
+          </button>
 
-      </span>
-    </button>
+          <button role="tab" :aria-selected="activeTab === 'profile'" @click="activeTab = 'profile'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'profile'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">👤</span>
+            Profile
+            <span class="ml-auto text-xs rounded px-2 py-0.5"
+              :class="activeTab === 'profile' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
 
-    <button
-  role="tab"
-  :aria-selected="activeTab==='loyalty'"
-  @click="activeTab='loyalty'"
-  class="w-full flex items-center px-3 py-2 rounded-md transition"
-  :class="activeTab==='loyalty'
-    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-    : 'text-slate-700 hover:bg-slate-50'">
-  <span class="mr-2">🎖</span>
-  Loyalty
-</button>
+            </span>
+          </button>
 
-    <button
-  role="tab"
-  :aria-selected="activeTab==='favorites'"
-  @click="activeTab='favorites'"
-  class="w-full flex items-center px-3 py-2 rounded-md transition"
-  :class="activeTab==='favorites'
-    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-    : 'text-slate-700 hover:bg-slate-50'">
-  <span class="mr-2">♡</span>
-  Favorites
-</button>
+          <button role="tab" :aria-selected="activeTab === 'loyalty'" @click="activeTab = 'loyalty'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'loyalty'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">🎖</span>
+            Loyalty
+          </button>
 
-    <button
-      role="tab"
-      :aria-selected="activeTab==='addresses'"
-      @click="activeTab='addresses'"
-      class="w-full flex items-center px-3 py-2 rounded-md transition"
-      :class="activeTab==='addresses'
-        ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-        : 'text-slate-700 hover:bg-slate-50'"
-    >
-      <span class="mr-2">🏠</span>
-      Addresses
-      <span class="ml-auto text-xs rounded px-2 py-0.5"
-            :class="activeTab==='addresses' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
+          <button role="tab" :aria-selected="activeTab === 'favorites'" @click="activeTab = 'favorites'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'favorites'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">♡</span>
+            Favorites
+          </button>
 
-      </span>
-    </button>
+          <button role="tab" :aria-selected="activeTab === 'addresses'" @click="activeTab = 'addresses'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'addresses'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">🏠</span>
+            Addresses
+            <span class="ml-auto text-xs rounded px-2 py-0.5"
+              :class="activeTab === 'addresses' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
+
+            </span>
+          </button>
 
 
-    <button
-  role="tab"
-  :aria-selected="activeTab==='tickets'"
-  @click="activeTab='tickets'"
-  class="w-full flex items-center px-3 py-2 rounded-md transition"
-  :class="activeTab==='tickets'
-    ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
-    : 'text-slate-700 hover:bg-slate-50'">
-  <span class="mr-2">🎫</span>
-  Requests
-</button>
+          <button role="tab" :aria-selected="activeTab === 'tickets'" @click="activeTab = 'tickets'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'tickets'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">🎫</span>
+            Requests
+          </button>
 
-  </nav>
-</aside>
+        </nav>
+      </aside>
 
 
       <!-- Orders -->
       <main class="md:col-span-3 space-y-4">
 
 
-        <AccountOrders
-          v-if="activeTab === 'orders'"
-          :orders="orders"
-          :loading="loading"
-          @show-details="fetchOrderDetails"
-        />
+        <AccountOrders v-if="activeTab === 'orders'" :orders="orders" :loading="loading"
+          @show-details="fetchOrderDetails" />
 
 
-      <AccountProfile
-          v-show="activeTab==='profile'"
-          :loading="loading"
-        />
+        <AccountProfile v-show="activeTab === 'profile'" :loading="loading" />
 
 
-         <AccountAddresses
-           v-show="activeTab==='addresses'"
-           
-           :loading="loading"
-           
-         />
+        <AccountAddresses v-show="activeTab === 'addresses'" :loading="loading" />
 
 
-         <AccountLoyalty
-  v-show="activeTab==='loyalty'"
-  :loading="loyaltyLoading"
-  :transactions="loyaltyTx"
-/>
+        <AccountLoyalty v-show="activeTab === 'loyalty'" :loading="loyaltyLoading" :transactions="loyaltyTx" />
 
 
-         <AccountFavorites v-show="activeTab==='favorites'" />
+        <AccountFavorites v-show="activeTab === 'favorites'" />
 
 
-         <AccountTickets
-              v-show="activeTab==='tickets'"
-              :tickets="tickets"
-              :loading="ticketsLoading"
-              :creating="creatingTicket"
-              :active-ticket="activeTicket"
-              :messages="ticketMessages"
-              :messages-loading="ticketMsgsLoading"
-            
-              @close-ticket="closeTicket"
-              @reply="replyTicket"
-              @refresh="refreshTickets"
-            />
-  
+        <AccountTickets v-show="activeTab === 'tickets'" :tickets="tickets" :loading="ticketsLoading"
+          :creating="creatingTicket" :active-ticket="activeTicket" :messages="ticketMessages"
+          :messages-loading="ticketMsgsLoading" @close-ticket="closeTicket" @reply="replyTicket"
+          @refresh="refreshTickets" />
 
 
-            <transition name="fade">
-      <div
-        v-if="showDetailsModal"
-        class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-        @click.self="showDetailsModal=false"
-      >
-        <div class="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">
-              Order #{{ activeOrderId ?? '' }} &middot; Details
-            </h2>
-            <button class="px-3 py-1.5 rounded ring-1 ring-slate-200 hover:bg-slate-50"
-                    @click="showDetailsModal=false">
-              Close
-            </button>
+
+        <transition name="fade">
+          <div v-if="showDetailsModal" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
+            @click.self="showDetailsModal = false">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">
+                  Order #{{ activeOrderId ?? '' }} &middot; Details
+                </h2>
+                <button class="px-3 py-1.5 rounded ring-1 ring-slate-200 hover:bg-slate-50"
+                  @click="showDetailsModal = false">
+                  Close
+                </button>
+              </div>
+
+              <div v-if="loadingDetails" class="text-center py-10">Loading...</div>
+
+              <template v-else>
+                <table v-if="selectedOrderDetails.length"
+                  class="min-w-full text-sm text-left border rounded overflow-hidden">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="px-4 py-2">Product</th>
+                      <th class="px-4 py-2">Quantity</th>
+                      <th class="px-4 py-2">Price</th>
+                      <th class="px-4 py-2">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y">
+                    <tr v-for="d in selectedOrderDetails" :key="d.id">
+                      <td class="px-4 py-2">{{ d.product?.Product_Name ?? 'N/A' }}</td>
+                      <td class="px-4 py-2">{{ d.Quantity }}</td>
+                      <td class="px-4 py-2">OMR {{ d.Price }}</td>
+                      <td class="px-4 py-2">OMR {{ (d.Price * d.Quantity).toFixed(2) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div v-else class="text-slate-500 text-sm">No details found for this order.</div>
+              </template>
+            </div>
           </div>
-
-          <div v-if="loadingDetails" class="text-center py-10">Loading...</div>
-
-          <template v-else>
-            <table v-if="selectedOrderDetails.length" class="min-w-full text-sm text-left border rounded overflow-hidden">
-              <thead class="bg-slate-50">
-                <tr>
-                  <th class="px-4 py-2">Product</th>
-                  <th class="px-4 py-2">Quantity</th>
-                  <th class="px-4 py-2">Price</th>
-                  <th class="px-4 py-2">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y">
-                <tr v-for="d in selectedOrderDetails" :key="d.id">
-                  <td class="px-4 py-2">{{ d.product?.Product_Name ?? 'N/A' }}</td>
-                  <td class="px-4 py-2">{{ d.Quantity }}</td>
-                  <td class="px-4 py-2">OMR {{ d.Price }}</td>
-                  <td class="px-4 py-2">OMR {{ (d.Price * d.Quantity).toFixed(2) }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div v-else class="text-slate-500 text-sm">No details found for this order.</div>
-          </template>
-        </div>
-      </div>
-    </transition>
+        </transition>
 
 
 
       </main>
     </div>
 
-    
+
   </div>
 </template>
 
@@ -457,6 +392,7 @@ const onShowOrderDetails = async (orderId: number) => {
 .bg-primary {
   background-color: #00bfa5;
 }
+
 .text-primary {
   color: #00bfa5;
 }
