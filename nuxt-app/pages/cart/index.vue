@@ -15,6 +15,18 @@ const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShi
 const selectedOption = ref<any | null>(null)
 
 
+
+const selectCls =
+  'w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm shadow-sm ' +
+  'transition focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
+
+const inputCls =
+  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition ' +
+  'focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent hover:border-slate-400';
+
+const textareaCls = inputCls + ' resize-y';
+
+
 const totalsForQuotes = computed(() => {
   const weight = cart.cartItems.reduce((s, i) => s + ((i.weight || 0) * i.quantity), 0)
   const volume = cart.cartItems.reduce((s, i) => {
@@ -24,6 +36,9 @@ const totalsForQuotes = computed(() => {
   return { weight_kg: +weight.toFixed(3), volume_cbm: +volume.toFixed(4) }
 })
 
+
+
+type Option = { id: number; Country_Name?: string; Region_Name?: string; District_Name?: string; City_Name?: string }
 
 
 
@@ -102,11 +117,25 @@ watch([() => cart.cartItems, () => cart.deliveryMethod, totalsForQuotes], reques
 // Addresses
 const addresses = ref<any[]>([])
 const showAddressModal = ref(false)
-const countries = ref<any[]>([])
-const regions = ref<any[]>([])
-const districts = ref<any[]>([])
-const states = ref<any[]>([])
-const cities = ref<any[]>([])
+const countries = ref<Option[]>([])
+const regions   = ref<Option[]>([])
+const districts = ref<Option[]>([])
+const states    = ref<Option[]>([]) // kept for parity if you later need state-level
+const cities    = ref<Option[]>([])
+ const form = reactive({
+  id: null as number | null,
+  Country_Id: '' as number | string,
+  Region_Id: '' as number | string,
+  District_Id: '' as number | string,
+  City_Id: '' as number | string,
+  Contact_Person_Name: '',
+  Telephone: '',
+  Designation: '',
+  Remarks: '',
+  Email: '',
+  Type: 'shipping', // optional if your API expects it
+})
+ 
 const newAddress = reactive({
   Country_Id: '', State_Id: '', City_Id: '',
   Region_Id: '', District_Id: '', Contact_Person_Name: '',
@@ -146,19 +175,68 @@ const onQtyInputChange = (e: Event, id: number) => {
 const incrementQty = (id: number) => { const it = cart.cartItems.find(i => i.id === id); if (it) it.quantity++ }
 const decrementQty = (id: number) => { const it = cart.cartItems.find(i => i.id === id); if (it && it.quantity > 1) it.quantity-- }
 
-const loadCountries = async () => { if (!isAuthenticated) return; const r = await $axios.get('/api/countries'); countries.value = r.data }
-const loadRegions = async () => { const r = await $axios.get('/api/region'); regions.value = r.data.data }
-const loadDistricts = async () => { const r = await $axios.get('/api/district'); districts.value = r.data.data }
-const loadStates = async () => { states.value = []; cities.value = []; if (!newAddress.Country_Id) return; const r = await $axios.get(`/api/contacts/by-country/${newAddress.Country_Id}`); states.value = r.data }
-const loadCities = async () => { const r = await $axios.get(`/api/contacts/by-state/${newAddress.District_Id}`); cities.value = r.data }
+ const loadCountries = async () => {
+  try {
+    const res = await $axios.get('/api/countries')
+    countries.value = res.data
+  } catch (e) { console.error(e) }
+}
+const loadRegions = async () => {
+  try {
+    const res = await $axios.get('/api/region')
+    regions.value = res.data.data
+  } catch (e) { console.error(e) }
+}
+const loadDistricts = async () => {
+  try {
+    const res = await $axios.get('/api/district')
+    districts.value = res.data.data
+  } catch (e) { console.error(e) }
+}
+// states by country (if you have)
+const loadStates = async (countryId: number | string) => {
+  states.value = []
+  cities.value = []
+  if (!countryId) return
+  try {
+    const res = await $axios.get(`/api/contacts/by-country/${countryId}`)
+    states.value = res.data
+  } catch (e) { console.error(e) }
+}
+// cities by (your API calls it "by-state" but you pass District_Id in your example)
+const loadCities = async (districtId: number | string) => {
+  cities.value = []
+  if (!districtId) return
+  try {
+    const res = await $axios.get(`/api/contacts/by-state/${districtId}`)
+    cities.value = res.data
+  } catch (e) { console.error(e) }
+}
+
 
 const submitAddress = async () => {
+ 
   try {
-    await $axios.post('/api/contacts', newAddress)
-    showAddressModal.value = false
+    await $axios.post('/api/contacts', {
+      Country_Id: form.Country_Id || null,
+      Region_Id: form.Region_Id || null,
+      District_Id: form.District_Id || null,
+      City_Id: form.City_Id || null,
+      Contact_Person_Name: form.Contact_Person_Name || null,
+      Telephone: form.Telephone || null,
+      Designation: form.Designation || null,
+      Remarks: form.Remarks || null,
+      Email: form.Email || null,
+      Type: form.Type || null,
+    })
+     
+  showAddressModal.value = false
     await fetchAddresses()
   } catch (e) {
     console.error('Failed to save address', e)
+  
+  } finally {
+   
   }
 }
 
@@ -518,69 +596,114 @@ onMounted(async () => {
 
           <!-- Body (unchanged form) -->
           <form @submit.prevent="submitAddress" class="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Country</label>
-              <select v-model="newAddress.Country_Id" @change="loadStates" required
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
-                <option value="" disabled>Select country</option>
-                <option v-for="c in countries" :key="c.Country_Id" :value="c.Country_Id">{{ c.Country_Name }}</option>
+             <!-- Country -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Country</label>
+            <div class="relative">
+              <select
+                v-model="form.Country_Id"
+                @change="onCountryChange"
+                :class="selectCls"
+              >
+                <option value="">-- Select Country --</option>
+                <option v-for="c in countries" :key="c.id" :value="c.id">{{ c.Country_Name }}</option>
               </select>
+              <ChevronDown />
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Region</label>
-              <select v-model="newAddress.Region_Id" required
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
-                <option value="" disabled>Select region</option>
-                <option v-for="r in regions" :key="r.id" :value="     
-r.id">{{ r.name }}</option>
+          </div>
+
+          <!-- Region -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Region</label>
+            <div class="relative">
+              <select v-model="form.Region_Id" :class="selectCls">
+                <option value="">-- Select Region --</option>
+                <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.Region_Name }}</option>
               </select>
+              <ChevronDown />
             </div>
-            <div>
-              <label class="block text  -sm font-medium text-gray-700 mb-1">District</label>  
-              <select v-model="newAddress.District_Id" @change="loadCities" required
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
-                <option value="" disabled>Select district</option>
-                <option v-for="d in districts" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </div>
+
+          <!-- District -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">District</label>
+            <div class="relative">
+              <select v-model="form.District_Id" @change="onDistrictChange" :class="selectCls">
+                <option value="">-- Select District --</option>
+                <option v-for="d in districts" :key="d.id" :value="d.id">{{ d.District_Name }}</option>
               </select>
+              <ChevronDown />
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <select v-model="newAddress.City_Id" required
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
-                <option value="" disabled>Select city</option>
-                <option v-for="c in cities" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>   
+          </div>
+
+          <!-- City -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">City</label>
+            <div class="relative">
+              <select v-model="form.City_Id" :class="selectCls">
+                <option value="">-- Select City --</option>
+                <option v-for="ci in cities" :key="ci.id" :value="ci.id">{{ ci.City_Name }}</option>
+              </select>
+              <ChevronDown />
             </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Contact Person Name</label>
-              <input type="text" v-model="newAddress.Contact_Person_Name" required    
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Telephone</label>   
-              <input type="text" v-model="newAddress.Telephone" required    
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Designation</label>
-              <input type="text" v-model="newAddress.Designation" required  
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
-            </div>      
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-              <input type="text" v-model="newAddress.Remarks"    
-                class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm" />
-            </div>
-            <div class="md:col-span-2 flex justify-end gap-3 mt-4">
-              <button type="button" @click="showAddressModal = false"
-                class="px-4 py-2 rounded-md border border-slate-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Cancel
-              </button>
-              <button type="submit"
-                class="px-4 py-2 rounded-md bg-[#2f5fb6] text-sm font-medium text-white hover:bg-[#274f97]">
-                Save Address
-              </button>   
-            </div>
+          </div>
+
+          <!-- Contact Person -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Contact Person</label>
+            <input v-model.trim="form.Contact_Person_Name" :class="inputCls" type="text" />
+          </div>
+
+          <!-- Telephone -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Telephone</label>
+            <input v-model.trim="form.Telephone" :class="inputCls" type="text" />
+          </div>
+
+          <!-- Designation -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Designation</label>
+            <select v-model="form.Designation" :class="selectCls">
+
+            <option value="">-- Select Designation --</option>
+                <option value="Mr">Mr</option>
+                <option value="Ms">Ms</option>
+                <option value="Mrs">Mrs</option>
+                <option value="Dr">Dr</option>
+                <option value="Prof">Prof</option>
+                
+                <option value="Sir">Sir</option>
+                <option value="Eng">Eng</option>
+                </select>
+
+          </div>
+
+          <!-- Email -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input v-model.trim="form.Email" :class="inputCls" type="email" />
+          </div>
+
+          <!-- Remarks -->
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
+            <textarea v-model.trim="form.Remarks" :class="textareaCls" rows="3"></textarea>
+          </div>
+
+          <!-- Footer -->
+          <div class="md:col-span-2 flex justify-end gap-3 pt-2">
+            <button type="button" @click="closeModal" class="px-4 py-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-cyan-500 to-teal-600 hover:opacity-90 flex items-center gap-2 disabled:opacity-60"
+              :disabled="submitting"
+            >
+              <span v-if="submitting" class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+              {{ isEdit ? 'Save Changes' : 'Save' }}
+            </button>
+          </div>
           </form>
         </div>
       </Transition>

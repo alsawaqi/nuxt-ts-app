@@ -201,7 +201,7 @@ const getSlugId = async () => {
     subsubdepartment.value = res.data?.data ?? null
 
     // tolerate API casing: View_Options vs view_options
-    view_option.value = !!(res.data?.data?.view_options ?? res.data?.data?.View_Options)
+    view_option.value =  res.data?.data?.View_Options;
 
     const apiFilters = res.data.filters as any[]
 
@@ -486,8 +486,10 @@ onMounted(async () => {
      
       <!-- Table -->
      <div class="overflow-hidden rounded-xl border border-gray-200 shadow-sm">
-
-       <div v-if="view_option" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+       
+   
+    
+       <div v-if="subsubdepartment?.view_options == true" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         <article
           v-for="row in rows"
           :key="row.id"

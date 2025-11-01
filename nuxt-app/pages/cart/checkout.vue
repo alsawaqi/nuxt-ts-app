@@ -395,8 +395,7 @@ const submitOrder = async () => {
 
 
 onMounted(() => {
-
-    console.log('this is:', saved.value?.totals)
+   
 })
 
 </script>
@@ -862,8 +861,6 @@ onMounted(() => {
     </div>
   </section>
 </template>
-
-
 <style>
 .isc-perspective { perspective: 1000px; }
 .isc-3d { transform-style: preserve-3d; position: relative; }  /* ensures the back overlays the front */
