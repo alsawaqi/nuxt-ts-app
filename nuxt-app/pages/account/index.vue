@@ -13,6 +13,8 @@ import AccountFavorites from '~/components/account/AccountFavorites.vue'
 import AccountLoyalty from '~/components/account/AccountLoyalty.vue'
 
 
+type OrdersFilter = { from?: string; to?: string; status?: string; q?: string }
+
 interface LoyaltyTx {
   id: number
   Loyalty_Transaction_Code: string
@@ -29,6 +31,13 @@ interface LoyaltyTx {
 
 const { user, isAuthenticated } = useAuth()
 const { $axios } = useNuxtApp()
+
+const loyaltyPage = ref(1)
+const loyaltyPerPage = ref(10)
+const loyaltyPagination = ref<any>(null)
+const totalLoyaltyPoints = ref(0)
+
+
 interface Order {
   id: number;
   Transaction_Number: number;
@@ -49,11 +58,25 @@ interface OrderDetail {
 
 
 const orders = ref<Order[]>([]);
+const ordersLoading = ref<boolean>(true)
 const loading = ref<boolean>(true);
 const selectedOrderDetails = ref<OrderDetail[]>([])
 const showDetailsModal = ref(false)
 const loadingDetails = ref(false)
 const points = ref<any>('')
+
+  const ordersFilter = ref<OrdersFilter>({})
+const ordersPage = ref(1)
+const ordersPerPage = ref(10)
+
+const ordersPagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: 10,
+  total: 0,
+  from: 0 as number | null,
+  to: 0 as number | null,
+})
 
 
 const activeOrderId = ref<number | null>(null)
@@ -73,23 +96,24 @@ const loyaltyLoaded = ref(false)
 const loyaltyTx = ref<LoyaltyTx[]>([])
 
 const fetchLoyalty = async () => {
-  if (loyaltyLoaded.value) return
   loyaltyLoading.value = true
   try {
-    // Your endpoint. If your Axios base has /api already, keep as '/loyalty/points'
-    const { data } = await $axios.get('/api/loyalty/points', { withCredentials: true })
+    const { data } = await $axios.get('/api/loyalty/points', {
+      withCredentials: true,
+      params: { page: loyaltyPage.value, per_page: loyaltyPerPage.value },
+    })
 
-    // Be defensive about shape: accept array or {transactions:[...]}
-    const arr = Array.isArray(data) ? data : (data?.transactions ?? data?.items ?? [])
-    loyaltyTx.value = (arr || []) as LoyaltyTx[]
+    loyaltyTx.value = data?.data ?? []
+    loyaltyPagination.value = data?.pagination ?? null
+    totalLoyaltyPoints.value = data?.total_points ?? 0
     loyaltyLoaded.value = true
-  } catch (e) {
-    console.error('Failed to fetch loyalty points', e)
   } finally {
     loyaltyLoading.value = false
   }
 }
 
+const onLoyaltyPageChange = async (p: number) => { loyaltyPage.value = p; await fetchLoyalty() }
+const onLoyaltyPerPageChange = async (pp: number) => { loyaltyPerPage.value = pp; loyaltyPage.value = 1; await fetchLoyalty() }
 // Lazy-load when tab is opened
 watch(activeTab, (t) => { if (t === 'loyalty') fetchLoyalty() })
 
@@ -142,13 +166,29 @@ const getloyalitypoints = async () => {
 }
 
 const getOrders = async () => {
-  loading.value = true
+  ordersLoading.value = true
   try {
-    const { data } = await $axios.get('/api/orders', { withCredentials: true })
-    orders.value = data
+    const { data } = await $axios.get('/api/orders', {
+      withCredentials: true,
+      params: {
+        ...ordersFilter.value,
+        page: ordersPage.value,
+        per_page: ordersPerPage.value,
+      },
+    })
+
+    orders.value = data?.data ?? []
+    if (data?.pagination) ordersPagination.value = data.pagination
   } finally {
-    loading.value = false
+    ordersLoading.value = false
   }
+}
+
+
+const onOrdersFilterChange = async (filters: OrdersFilter) => {
+  ordersFilter.value = filters
+  ordersPage.value = 1
+  await getOrders()
 }
 
 
@@ -168,10 +208,17 @@ const onShowOrderDetails = async (orderId: number) => {
   }
 }
 
+const onOrdersPageChange = async (page: number) => {
+  ordersPage.value = page
+  await getOrders()
+}
 
 
-
-
+const onOrdersPerPageChange = async (pp: number) => {
+  ordersPerPage.value = pp
+  ordersPage.value = 1
+  await getOrders()
+}
 
 
 onMounted(async (): Promise<void> => {
@@ -313,8 +360,16 @@ onMounted(async (): Promise<void> => {
       <main class="md:col-span-3 space-y-4">
 
 
-        <AccountOrders v-if="activeTab === 'orders'" :orders="orders" :loading="loading"
-          @show-details="fetchOrderDetails" />
+      <AccountOrders
+  v-if="activeTab === 'orders'"
+  :orders="orders"
+  :loading="ordersLoading"
+  :pagination="ordersPagination"
+  @show-details="fetchOrderDetails"
+  @filter-change="onOrdersFilterChange"
+  @page-change="onOrdersPageChange"
+  @per-page-change="onOrdersPerPageChange"
+/>
 
 
         <AccountProfile v-show="activeTab === 'profile'" :loading="loading" />
@@ -323,9 +378,15 @@ onMounted(async (): Promise<void> => {
         <AccountAddresses v-show="activeTab === 'addresses'" :loading="loading" />
 
 
-        <AccountLoyalty v-show="activeTab === 'loyalty'" :loading="loyaltyLoading" :transactions="loyaltyTx" />
-
-
+        <AccountLoyalty
+  v-show="activeTab === 'loyalty'"
+  :loading="loyaltyLoading"
+  :transactions="loyaltyTx"
+  :pagination="loyaltyPagination"
+  :total-points="totalLoyaltyPoints"
+  @page-change="onLoyaltyPageChange"
+  @per-page-change="onLoyaltyPerPageChange"
+/>
         <AccountFavorites v-show="activeTab === 'favorites'" />
 
 

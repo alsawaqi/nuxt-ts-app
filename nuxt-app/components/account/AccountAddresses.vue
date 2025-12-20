@@ -25,7 +25,7 @@ type Address = {
 const { $axios } = useNuxtApp()
 const { isAuthenticated } = useAuth()
 const toast = useToast()
-
+const toId = (v: any) => (v === null || v === undefined || v === '' ? '' : Number(v))
 
 const selectCls =
   'w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2 pr-9 text-sm shadow-sm ' +
@@ -47,7 +47,7 @@ const selectedId = ref<number | null>(null)
 const countries = ref<Option[]>([])
 const regions   = ref<Option[]>([])
 const districts = ref<Option[]>([])
-const states    = ref<Option[]>([]) // kept for parity if you later need state-level
+ 
 const cities    = ref<Option[]>([])
 
 const modalOpen = ref(false)
@@ -71,6 +71,82 @@ const form = reactive({
   Type: 'shipping', // optional if your API expects it
 })
 
+const loadCountries = async () => {
+  try {
+    const res = await $axios.get('/api/countries')
+    countries.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+const loadRegionsByCountry = async (countryId: number | string) => {
+  regions.value = []
+  if (!countryId) return
+  try {
+    const res = await $axios.get(`/api/regions/by-country/${countryId}`)
+    regions.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+const loadDistrictsByRegion = async (regionId: number | string) => {
+  districts.value = []
+  if (!regionId) return
+  try {
+    const res = await $axios.get(`/api/districts/by-region/${regionId}`)
+    districts.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+const loadCitiesByDistrict = async (districtId: number | string) => {
+  cities.value = []
+  if (!districtId) return
+  try {
+    const res = await $axios.get(`/api/cities/by-district/${districtId}`)
+    cities.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+// reset helpers
+const resetBelowCountry = () => {
+  form.Region_Id = ''
+  form.District_Id = ''
+  form.City_Id = ''
+  regions.value = []
+  districts.value = []
+  cities.value = []
+}
+
+const resetBelowRegion = () => {
+  form.District_Id = ''
+  form.City_Id = ''
+  districts.value = []
+  cities.value = []
+}
+
+const resetBelowDistrict = () => {
+  form.City_Id = ''
+  cities.value = []
+}
+
+// change handlers
+const onCountryChange = async () => {
+  resetBelowCountry()
+  if (!form.Country_Id) return
+  await loadRegionsByCountry(form.Country_Id)
+}
+
+const onRegionChange = async () => {
+  resetBelowRegion()
+  if (!form.Region_Id) return
+  await loadDistrictsByRegion(form.Region_Id)
+}
+
+const onDistrictChange = async () => {
+  resetBelowDistrict()
+  if (!form.District_Id) return
+  await loadCitiesByDistrict(form.District_Id)
+}
+
+
 // ------------ fetchers ------------
 const fetchAddresses = async () => {
   if (!isAuthenticated.value) return
@@ -89,43 +165,7 @@ const fetchAddresses = async () => {
   }
 }
 
-const loadCountries = async () => {
-  try {
-    const res = await $axios.get('/api/countries')
-    countries.value = res.data
-  } catch (e) { console.error(e) }
-}
-const loadRegions = async () => {
-  try {
-    const res = await $axios.get('/api/region')
-    regions.value = res.data.data
-  } catch (e) { console.error(e) }
-}
-const loadDistricts = async () => {
-  try {
-    const res = await $axios.get('/api/district')
-    districts.value = res.data.data
-  } catch (e) { console.error(e) }
-}
-// states by country (if you have)
-const loadStates = async (countryId: number | string) => {
-  states.value = []
-  cities.value = []
-  if (!countryId) return
-  try {
-    const res = await $axios.get(`/api/contacts/by-country/${countryId}`)
-    states.value = res.data
-  } catch (e) { console.error(e) }
-}
-// cities by (your API calls it "by-state" but you pass District_Id in your example)
-const loadCities = async (districtId: number | string) => {
-  cities.value = []
-  if (!districtId) return
-  try {
-    const res = await $axios.get(`/api/contacts/by-state/${districtId}`)
-    cities.value = res.data
-  } catch (e) { console.error(e) }
-}
+ 
 
 // ------------ helpers ------------
 const resetForm = () => {
@@ -140,10 +180,11 @@ const resetForm = () => {
   form.Remarks = ''
   form.Email = ''
   form.Type = 'shipping'
-  states.value = []
+
+  regions.value = []
+  districts.value = []
   cities.value = []
 }
-
 const openAdd = async () => {
   isEdit.value = false
   resetForm()
@@ -155,44 +196,46 @@ const openEdit = async (addr: Address) => {
   isEdit.value = true
   resetForm()
   await ensureLookupsLoaded()
+
   form.id = addr.id
-  form.Country_Id = addr.Country_Id || ''
-  form.Region_Id = addr.Region_Id || ''
-  form.District_Id = addr.District_Id || ''
-  form.City_Id = addr.City_Id || ''
+
+  // ✅ set country first (as number)
+  form.Country_Id = toId(addr.Country_Id)
+  await onCountryChange() // loads regions + resets below
+
+  // ✅ then set region (as number)
+  form.Region_Id = toId(addr.Region_Id)
+  await onRegionChange() // loads districts + resets below
+
+  // ✅ then set district (as number)
+  form.District_Id = toId(addr.District_Id)
+  await onDistrictChange() // loads cities + resets below
+
+  // ✅ finally city
+  form.City_Id = toId(addr.City_Id)
+
   form.Contact_Person_Name = addr.Contact_Person_Name || ''
   form.Telephone = addr.Telephone || ''
   form.Designation = addr.Designation || ''
   form.Remarks = addr.Remarks || ''
   form.Email = addr.Email || ''
-  // hydrate dependent lists
-  await loadStates(form.Country_Id)
-  await loadCities(form.District_Id)
+
   modalOpen.value = true
 }
+
 
 const closeModal = () => {
   if (submitting.value) return
   modalOpen.value = false
 }
 
-const onCountryChange = async () => {
-  form.Region_Id = ''
-  form.District_Id = ''
-  form.City_Id = ''
-  await loadStates(form.Country_Id)
-  cities.value = []
-}
-const onDistrictChange = async () => {
-  form.City_Id = ''
-  await loadCities(form.District_Id)
-}
+ 
+ 
 
 const ensureLookupsLoaded = async () => {
   // load basic lists if empty
   if (!countries.value.length) await loadCountries()
-  if (!regions.value.length)   await loadRegions()
-  if (!districts.value.length) await loadDistricts()
+ 
 }
 
 // ------------ CRUD ------------
@@ -200,10 +243,10 @@ const submitAdd = async () => {
   submitting.value = true
   try {
     await $axios.post('/api/contacts', {
-      Country_Id: form.Country_Id || null,
-      Region_Id: form.Region_Id || null,
-      District_Id: form.District_Id || null,
-      City_Id: form.City_Id || null,
+    Country_Id: form.Country_Id ? Number(form.Country_Id) : null,
+Region_Id: form.Region_Id ? Number(form.Region_Id) : null,
+District_Id: form.District_Id ? Number(form.District_Id) : null,
+City_Id: form.City_Id ? Number(form.City_Id) : null,
       Contact_Person_Name: form.Contact_Person_Name || null,
       Telephone: form.Telephone || null,
       Designation: form.Designation || null,
@@ -227,10 +270,10 @@ const submitEdit = async () => {
   submitting.value = true
   try {
     await $axios.put(`/api/contacts/${form.id}`, {
-      Country_Id: form.Country_Id || null,
-      Region_Id: form.Region_Id || null,
-      District_Id: form.District_Id || null,
-      City_Id: form.City_Id || null,
+      Country_Id: form.Country_Id ? Number(form.Country_Id) : null,
+Region_Id: form.Region_Id ? Number(form.Region_Id) : null,
+District_Id: form.District_Id ? Number(form.District_Id) : null,
+City_Id: form.City_Id ? Number(form.City_Id) : null,
       Contact_Person_Name: form.Contact_Person_Name || null,
       Telephone: form.Telephone || null,
       Designation: form.Designation || null,
@@ -286,6 +329,9 @@ const selectAddress = (id: number) => {
   // If you want selecting radio to also set default automatically, call:
   // makeDefault(id)
 }
+
+
+ 
 
 // ------------ mount ------------
 onMounted(async () => {
@@ -508,7 +554,8 @@ onMounted(async () => {
           <div class="md:col-span-1">
             <label class="block text-sm font-medium text-slate-700 mb-1">Region</label>
             <div class="relative">
-              <select v-model="form.Region_Id" :class="selectCls">
+              <select v-model="form.Region_Id" @change="onRegionChange" :class="selectCls">
+
                 <option value="">-- Select Region --</option>
                 <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.Region_Name }}</option>
               </select>
@@ -520,7 +567,7 @@ onMounted(async () => {
           <div class="md:col-span-1">
             <label class="block text-sm font-medium text-slate-700 mb-1">District</label>
             <div class="relative">
-              <select v-model="form.District_Id" @change="onDistrictChange" :class="selectCls">
+             <select v-model="form.District_Id" @change="onDistrictChange" :class="selectCls">
                 <option value="">-- Select District --</option>
                 <option v-for="d in districts" :key="d.id" :value="d.id">{{ d.District_Name }}</option>
               </select>

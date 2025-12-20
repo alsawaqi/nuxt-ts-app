@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useCartStore } from '~/stores/cart'
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<Record<string, any> | null>(null)
+  const customer = ref<Record<string, any> | null>(null)
   const fetched = ref(false)
   const authloading = ref(false)
   const isAuthenticated = computed(() => !!user.value)
@@ -33,7 +35,9 @@ export const useUserStore = defineStore('user', () => {
       })
 
       user.value = res.data.user
+      customer.value = res.data.customer
       fetched.value = true
+ 
     } catch (error: any) {
       if (error?.response?.status === 401) clearUser()
       else console.error('[fetchUser] error:', error)
@@ -42,17 +46,24 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const logout = async () => {
-    try {
-      const { $axios } = useNuxtApp()
-      await $axios.post('/api/logout', {}, { withCredentials: true })
-    } catch (_) {}
-    clearUser()
-    await navigateTo('/login')
-  }
+ const logout = async () => {
+  try {
+    const { $axios } = useNuxtApp()
+    await $axios.post('/api/logout', {}, { withCredentials: true })
+  } catch (_) {}
+
+  clearUser()
+
+  // ✅ switch cart back to guest state
+  const cart = useCartStore()
+  await cart.loadCart()
+
+  await navigateTo('/login')
+}
 
   return {
     user,
+    customer,
     fetched,
     isAuthenticated,
     authloading,

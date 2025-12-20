@@ -1,4 +1,4 @@
- <script setup lang="ts">
+<script setup lang="ts">
 definePageMeta({
   layout: 'layouts',
   middleware: 'guest',
@@ -7,6 +7,7 @@ definePageMeta({
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '~/stores/user'
+import { useCartStore } from '~/stores/cart'
 
 const { $axios } = useNuxtApp()
 
@@ -58,6 +59,15 @@ const submitLogin = async () => {
     // success path
     if (response.data?.user) {
       userStore.setUser(response.data.user)
+
+      // ✅ sync guest cart -> DB, then load DB cart (your sync function already loads)
+      try {
+        const cartStore = useCartStore()
+        await cartStore.syncGuestCartToDb()
+      } catch (e) {
+        console.warn('Cart sync failed:', e)
+        // don’t block login if sync fails
+      }
 
       const redirectTo = route.query.redirect || '/'
       await router.push(redirectTo as string)
@@ -120,40 +130,30 @@ const resendVerification = async () => {
             <p class="text-sm text-slate-500 mt-1">Sign in to continue to your account</p>
           </div>
 
-      
-           <!-- Error banner -->
-            <!-- Error banner -->
-<div v-if="errorMsg" class="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
-  <div>{{ errorMsg }}</div>
 
-  <!-- Only show resend UI if this is an unverified account case -->
-  <div v-if="unverifiedEmail" class="mt-2 text-xs text-slate-700 flex items-center gap-2 flex-wrap">
+          <!-- Error banner -->
+          <!-- Error banner -->
+          <div v-if="errorMsg" class="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+            <div>{{ errorMsg }}</div>
 
-    <span>Didn’t get the email?</span>
+            <!-- Only show resend UI if this is an unverified account case -->
+            <div v-if="unverifiedEmail" class="mt-2 text-xs text-slate-700 flex items-center gap-2 flex-wrap">
 
-    <button
-      type="button"
-      class="text-cyan-700 font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
-      :disabled="isResending"
-      @click="resendVerification"
-    >
-      <svg
-        v-if="isResending"
-        class="animate-spin h-4 w-4 mr-1"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-      >
-        <circle class="opacity-25" cx="12" cy="12" r="10"
-                stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor"
-              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-      </svg>
-      <span>{{ isResending ? 'Sending…' : 'Resend verification link' }}</span>
-    </button>
-  </div>
-</div>
-  
+              <span>Didn’t get the email?</span>
+
+              <button type="button"
+                class="text-cyan-700 font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+                :disabled="isResending" @click="resendVerification">
+                <svg v-if="isResending" class="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24" fill="none">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+                <span>{{ isResending ? 'Sending…' : 'Resend verification link' }}</span>
+              </button>
+            </div>
+          </div>
+
 
 
 

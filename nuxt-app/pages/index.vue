@@ -436,11 +436,11 @@ onMounted(async () => {
                     focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 text-slate-700" aria-label="Open cart"
             title="Cart">
             <!-- count badge -->
-            <span v-if="cart.totalItems()" class="pointer-events-none absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
+            <span v-if="cart.totalItems" class="pointer-events-none absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
                       text-[10px] leading-[18px] text-white font-semibold grid place-items-center
                       rounded-full shadow-sm ring-1 ring-white
                       bg-gradient-to-br from-[#2F5FB6] to-[#07B6C6]">
-              {{ cart.totalItems() }}
+              {{ cart.totalItems }}
             </span>
 
             <!-- icon -->

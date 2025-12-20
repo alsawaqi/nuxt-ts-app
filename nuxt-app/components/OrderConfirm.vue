@@ -1,11 +1,18 @@
 <script setup lang="ts">
 const { $r2Url, $axios } = useNuxtApp()
+const { user, customer, isAuthenticated } = useAuth()
 import { ref, onMounted } from 'vue'
 
 
 type Party = {
   name: string
   lines: string[]   // address lines
+}
+
+type PickupLocation = {
+  id: number
+  name: string
+  nameAr?: string
 }
 type Contact = {
   label: string
@@ -40,17 +47,22 @@ type ShippingOption = {
 const delivery = ref<any>([])
 
 
-
+ 
 
 const props = defineProps<{
+  deliveryMethod: 'ship' | 'pickup'
+  pickupLocationId?: number | null
+  pickupLocation?: PickupLocation | null
+  shipping?: ShippingOption | null
+
   orderRef?: string
   invoiceDate?: string
   supplier: Party
-  shipping?: ShippingOption
-
   buyer: Party
+
   supplierContact?: Contact
   buyerContact?: Contact
+
   paymentTerms?: string
   currency?: string
   supplierTin?: string
@@ -58,6 +70,7 @@ const props = defineProps<{
   supplierDoRef?: string
   buyerPoRef?: string
   deliveryTerms?: string
+
   bank?: {
     accountName: string
     accountNumber: string
@@ -66,14 +79,12 @@ const props = defineProps<{
     bankName: string
     bankAddress: string
   } | null
+
   items: Item[]
-  totals: {
-    taxable: number
-    vat: number
-    grand: number
-  }
+  totals: { taxable: number; vat: number; grand: number }
   onConfirm?: () => void
 }>()
+
 
 const fmt = (n: any) => {
   const num = Number(n)
@@ -81,21 +92,40 @@ const fmt = (n: any) => {
 }
 
 
+const pickupLoc = ref<any>(null)
+
+const getPickupLocation = async () => {
+  if (props.deliveryMethod !== 'pickup') return
+  if (!props.pickupLocationId) return
+
+  const { data } = await $axios.get('/api/locations')
+  pickupLoc.value = (data || []).find((x: any) => x.id === props.pickupLocationId) || null
+}
+
+
+ 
 
 const getdeliveryinfo = async () => {
-  try {
-    const { data: res } = await $axios.get('/api/shipping/getshippers',{params:{shipping_id : props.shipping?.shipper_id}})
-    delivery.value = res.data;
-    console.log('Fetched shippers:', res.data);
+  if (props.deliveryMethod !== 'ship') return
+  if (!props.shipping?.shipper_id) return
 
+  try {
+    const { data: res } = await $axios.get('/api/shipping/getshippers', {
+      params: { shipping_id: props.shipping.shipper_id }
+    })
+
+    const d = res?.data
+    delivery.value = Array.isArray(d) ? (d[0] ?? null) : (d ?? null)
   } catch (error) {
     console.error('Error fetching shippers:', error)
   }
 }
 
 
+
 onMounted(async () => {
   await getdeliveryinfo();
+   await getPickupLocation()
 })
 </script>
 
@@ -133,7 +163,7 @@ onMounted(async () => {
           <h3 class="text-sm font-semibold tracking-wide text-slate-700">BUYER</h3>
         </div>
         <div class="px-4 py-3 text-sm">
-          <div class="font-semibold text-slate-900">{{ buyer.name }}</div>
+          <div class="font-semibold text-slate-900">{{ customer?.Customer_Full_Name }}</div>
           <div class="mt-1 text-slate-700 leading-relaxed">
             <div v-for="(l, i) in buyer.lines" :key="i">{{ l }}</div>
           </div>
@@ -141,81 +171,30 @@ onMounted(async () => {
       </div>
 
       <!-- Supplier Contact -->
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white" v-if="shipping?.deliverymethod != 'pickup'">
-        <div class="px-4 py-2 border-b border-slate-200">
-          <h3 class="text-sm font-semibold tracking-wide text-slate-700">DELIVERY INFORMATION</h3>
-        </div>
-        <div class="px-4 py-3 text-sm text-slate-700">
-            <div>Delivery Name : {{ delivery?.Shippers_Name }}</div>
-          
-        </div>
-      </div>
+    <div class="rounded-lg ring-1 ring-slate-200 bg-white">
+  <div class="px-4 py-2 border-b border-slate-200">
+    <h3 class="text-sm font-semibold tracking-wide text-slate-700">DELIVERY INFORMATION</h3>
+  </div>
 
-      <!-- Buyer Contact -->
-      <!-- <div class="rounded-lg ring-1 ring-slate-200 bg-white">
-        <div class="px-4 py-2 border-b border-slate-200">
-          <h3 class="text-sm font-semibold tracking-wide text-slate-700">BUYER CONTACT</h3>
-        </div>
-        <div class="px-4 py-3 text-sm text-slate-700">
-          <div class="font-medium">{{ buyerContact?.name }}</div>
-          <div v-if="buyerContact?.phone">Mob: {{ buyerContact?.phone }}</div>
-          <div v-if="buyerContact?.email">Email: {{ buyerContact?.email }}</div>
-        </div>
-      </div> -->
+  <div class="px-4 py-3 text-sm text-slate-700">
+    <template v-if="props.deliveryMethod === 'ship'">
+      <div>Delivery Type: Shipping</div>
+      <div>Delivery Name: {{ delivery?.Shippers_Name || props.shipping?.deliverymethod || '—' }}</div>
+      <div v-if="props.shipping?.basis">Basis: {{ props.shipping.basis }}</div>
+    </template>
+
+    <template v-else>
+      <div>Delivery Type: Local Pickup</div>
+      <div>Pickup Location: {{ pickupLoc?.Location_Name || props.pickupLocation?.name || '—' }}</div>
+
+      <!-- or pickupLoc?.Location_Name if you fetched -->
+    </template>
+  </div>
+</div>
+
+     
     </div>
 
-    <!-- Meta band -->
-    <!-- <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 mt-4">
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm">
-        <div class="text-slate-500">ACCEPTED TERMS OF PAYMENT</div>
-        <div class="font-semibold text-slate-800 mt-1">{{ paymentTerms || '—' }}</div>
-      </div>
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm">
-        <div class="text-slate-500">ACCEPTED INVOICE CURRENCY</div>
-        <div class="font-semibold text-slate-800 mt-1">{{ currency || 'OMR' }}</div>
-      </div>
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm">
-        <div class="grid grid-cols-2 gap-x-4">
-          <div>
-            <div class="text-slate-500">Supplier TIN</div>
-            <div class="font-semibold text-slate-800 mt-1">{{ supplierTin || '—' }}</div>
-          </div>
-          <div>
-            <div class="text-slate-500">Buyer VATIN</div>
-            <div class="font-semibold text-slate-800 mt-1">{{ buyerVatin || '—' }}</div>
-          </div>
-        </div>
-      </div>
-    </div> -->
-
-    <!-- Refs row -->
-    <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mt-4">
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm">
-        <div class="text-slate-500">Supplier DO Ref</div>
-        <div class="font-medium text-slate-800 mt-0.5">{{ supplierDoRef || '—' }}</div>
-      </div>
-      <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm">
-        <div class="text-slate-500">Buyer PO Ref</div>
-        <div class="font-medium text-slate-800 mt-0.5">{{ buyerPoRef || '—' }}</div>
-      </div>
-    </div> -->
-
-    <!-- Terms -->
-    <!-- <div class="rounded-lg ring-1 ring-slate-200 bg-white px-4 py-3 text-sm mt-4">
-      <div class="font-semibold text-slate-800 mb-1">Terms &amp; Conditions</div>
-      <ol class="list-decimal ml-5 space-y-1 text-slate-700">
-        <li v-if="deliveryTerms"><span class="font-medium">Delivery Terms:</span> {{ deliveryTerms }}</li>
-        <li v-if="bank" class="space-y-0.5">
-          <div class="font-medium">Bank Account Details for Payment:</div>
-          <div>Account Name: {{ bank.accountName }}</div>
-          <div>Account Number: {{ bank.accountNumber }}</div>
-          <div>Account Currency: {{ bank.currency }}</div>
-          <div>SWIFT Code: {{ bank.swift }}</div>
-          <div>Bank Name: {{ bank.bankName }}</div>
-          <div>Bank Address: {{ bank.bankAddress }}</div>
-        </li>
-      </ol>
-    </div> -->
 
     <!-- Items table -->
     <div class="mt-6 overflow-hidden rounded-lg ring-1 ring-slate-200 bg-white">
@@ -255,10 +234,14 @@ onMounted(async () => {
             <span class="font-medium text-slate-900">{{ fmt(totals.taxable) }} OMR</span>
           </div>
 
-          <div class="flex justify-between" v-if="shipping?.deliverymethod != 'pickup'">
-            <span class="text-slate-600">Delivery:</span>
-            <span class="font-medium text-slate-900">{{ fmt(shipping?.total_price) }} OMR</span>
-          </div>
+         <div class="flex justify-between">
+  <span class="text-slate-600">
+    {{ props.deliveryMethod === 'ship' ? 'Delivery:' : 'Pickup:' }}
+  </span>
+  <span class="font-medium text-slate-900">
+    {{ props.deliveryMethod === 'ship' ? fmt(props.shipping?.total_price) : '0.000' }} OMR
+  </span>
+</div>
           <div class="flex justify-between">
             <span class="text-slate-600">VAT Amount:</span>
             <span class="font-medium text-slate-900">{{ fmt(totals.vat) }} OMR</span>

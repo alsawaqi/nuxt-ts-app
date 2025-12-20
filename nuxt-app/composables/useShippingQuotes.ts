@@ -1,27 +1,51 @@
 import { ref } from 'vue'
+import { useNuxtApp } from '#imports'
+
+type QuoteItem = { product_id: number; qty: number }
+type QuotePayload = {
+  address_id: number
+  items: QuoteItem[]
+  include_heavy?: boolean
+}
 
 export function useShippingQuotes() {
-  const { $axios } = useNuxtApp()
+  const { $axios } = useNuxtApp() as any
+
   const options = ref<any[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const totals = ref<any | null>(null)
 
-  const fetchQuotes = async (payload:
-    | { address_id: number, totals: { weight_kg: number, volume_cbm: number }, include_heavy?: boolean }
-    | { destination: any, totals: { weight_kg: number, volume_cbm: number }, include_heavy?: boolean }
-  ) => {
+  const clear = () => {
+    options.value = []
+    totals.value = null
+    error.value = null
+  }
+
+  const fetchQuotes = async (payload: QuotePayload) => {
+    // basic guard (so we don’t call API with empty payload)
+    if (!payload?.address_id || !payload?.items?.length) {
+      clear()
+      return []
+    }
+
     loading.value = true
     error.value = null
+
     try {
       const { data } = await $axios.post('/api/v1/shipping/quotes', payload)
       options.value = data?.options ?? []
-    } catch (e:any) {
-      error.value = e?.response?.data?.message || e?.message || 'Failed to fetch quotes'
-      options.value = []
+      totals.value = data?.totals ?? null
+      return options.value
+    } catch (e: any) {
+      error.value =
+        e?.response?.data?.message || e?.message || 'Failed to fetch quotes'
+      clear()
+      return []
     } finally {
       loading.value = false
     }
   }
 
-  return { options, loading, error, fetchQuotes }
+  return { options, loading, error, totals, fetchQuotes, clear }
 }

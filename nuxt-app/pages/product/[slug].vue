@@ -74,7 +74,7 @@ interface Product {
   Product_Price: number;
   Inhouse_Barcode_Source: string;
   Product_Description: string;
-  Product_Stock: string;
+  Product_Stock: number;
   images: ProductImage[]; // updated to support multiple images
   Weight_Kg: number;
   Length_Cm: number;
@@ -231,27 +231,38 @@ const decrementQty = () => {
 }
 
 
-const addToCart = () => {
-  if (!product.value) return
+const addToCart = async () => {
+  if (!product.value) return;
 
-  cart.addToCart({
-    id: product.value.id,
-    slug: product.value.Slug,
-    name: product.value.Product_Name,
-    price: product.value.Product_Price,
-    quantity: quantity.value,
-    image: product.value.images?.[0]?.Image_Path || '',
-    weight: product.value.Weight_Kg,
-  
-      length: product.value.Length_Cm,
-      width: product.value.Width_Cm,
-      height: product.value.Height_Cm
- 
-  })
+  const stock = Number(product.value.Product_Stock ?? 0)
+  if (stock <= 0) {
+    toast.error('This product is out of stock.')
+    return
+  }
 
-  toast.success(`${product.value.Product_Name} added to cart`)
- 
-}
+  try {
+    await cart.addToCart(
+      {
+        id: product.value.id,
+        slug: product.value.Slug,
+        name: product.value.Product_Name,
+        price: product.value.Product_Price,
+        image: product.value.images?.[0]?.Image_Path || '',
+        weight: product.value.Weight_Kg,
+        length: product.value.Length_Cm,
+        width: product.value.Width_Cm,
+        height: product.value.Height_Cm,
+        Product_Stock: product.value.Product_Stock, // Pass the stock
+      },
+      quantity.value
+    );
+
+    toast.success(`${product.value.Product_Name} added to cart`);
+  } catch (e: any) {
+    toast.error(e?.response?.status === 401 ? "Please login to add to cart" : "Could not add to cart");
+  }
+};
+
 
 
 const getProducts = async (): Promise<void> => {
