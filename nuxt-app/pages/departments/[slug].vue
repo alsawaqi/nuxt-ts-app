@@ -339,7 +339,7 @@ onMounted(async () => {
                       <span class="text-sm font-semibold">{{ category.name }}</span>
                       <span v-if="(selectedFilters[category.id] ?? []).length"
                         class="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">
-                        {{ selectedFilters[category.id].length }}
+                        {{ selectedFilters[category.id]?.length }}
                       </span>
                     </div>
 
@@ -446,7 +446,7 @@ onMounted(async () => {
 
      
 
-          <div v-if="subsubdepartment?.view_options === 'true'"
+          <div v-if="subsubdepartment?.View_Options === true"
             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             <article v-for="row in rows" :key="row.id" @click="goProduct(row.slug)" @keydown.enter="goProduct(row.slug)"
               role="button" tabindex="0"

@@ -20,10 +20,19 @@ const { buildPdfUrl } = useOrderConfirmPdf()
 const pdfUrl = ref<string>('')
 const isOrderPlaced = ref(false)
 
+const onPrintPdf = () => {
+  if (!pdfUrl.value) return
+  if (!import.meta.client) return
+  const w = window.open(pdfUrl.value, '_blank')
+  w?.focus?.()
+  w?.print?.()
+}
+
 // ---------------------
 // Types
 // ---------------------
 type Basis = 'weight' | 'volume' | 'heavy'
+
 interface SavedShippingOption {
   shipper_id: number
   destination_id: number
@@ -49,6 +58,10 @@ interface SavedCheckoutPrefill {
   savedAt: string
 }
 
+interface Cod {
+    cod_supported : boolean
+}
+
 // ---------------------
 // State
 // ---------------------
@@ -58,16 +71,13 @@ const cart = useCartStore()
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
 const itemsOpen = ref(false)
+const codsupported = ref<Cod | null>(null)
 
 const selectedAddress = ref<any>(null)
 const saved = ref<SavedCheckoutPrefill | null>(null)
 
 
-const confirmOrder = () => {
-  step.value = 'payment'
-}
-
-
+ 
 const shippingAddressText = computed(() => {
   const a = selectedAddress.value
   return a
@@ -138,6 +148,7 @@ const onExpiryInput = (e: Event) => {
 
 
 const paymentMethod = ref<'card' | 'cod' | 'transfer'>('card')
+const deliveryMethods =  ref<any>('')
 const triedSubmit = ref(false)
 const card = ref({ number: '', name: '', expiry: '', cvc: '' })
 const focusedBack = ref(false)
@@ -420,7 +431,17 @@ const bounceIfEmpty = () => {
   }
 }
 
- onMounted(() => {
+
+const getshippingcod = async (id: number) : Promise<void> => {
+  try {
+    const res = await $axios.get('/api/shipping/cod',{ params: { 'shipper_id': id } })
+     codsupported.value = res.data
+  } catch (error) {
+    console.error('Failed to fetch shipping COD data:', error)
+  }
+}
+
+ onMounted(async() => {
   bounceIfEmpty()
 
   // Load VAT and other onMounted logic
@@ -431,7 +452,13 @@ const bounceIfEmpty = () => {
   const raw = localStorage.getItem('checkout_prefill')
   saved.value = raw ? JSON.parse(raw) : null
 
-  if (!saved.value) return navigateTo('/cart')
+   
+  deliveryMethods.value = saved.value?.deliveryMethod
+   
+   
+   await getshippingcod(saved.value?.shippingOption?.shipper_id || 0);
+
+    if (!saved.value) return navigateTo('/cart')
 })
 
 
@@ -452,7 +479,7 @@ const bounceIfEmpty = () => {
         class="inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50">
         Download PDF
       </a>
-      <button v-if="pdfUrl" type="button" @click="() => { const w = window.open(pdfUrl, '_blank'); w?.print?.() }"
+      <button v-if="pdfUrl" type="button" @click="onPrintPdf"
         class="inline-flex items-center rounded-md border px-3 py-2 text-sm hover:bg-slate-50">
         Print
       </button>
@@ -531,7 +558,7 @@ const bounceIfEmpty = () => {
   <section class="max-w-screen-xl mx-auto px-4 py-8 bg-white" v-else-if="step === 'payment'">
     <!-- Back link -->
     <div class="mb-4">
-      <NuxtLink to="/cart" class="text-[#00bfa5] hover:underline text-sm">← Back to Cart</NuxtLink>
+      <NuxtLink to="/cart" class="text-[#00bfa5] hover:underline text-sm">← Back to Cart </NuxtLink>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -684,7 +711,7 @@ const bounceIfEmpty = () => {
             </div>
 
             <!-- Cash on Delivery -->
-            <div class="border rounded-lg bg-white overflow-hidden">
+            <div class="border rounded-lg bg-white overflow-hidden" v-if="codsupported?.cod_supported || deliveryMethods==='pickup'">
               <button type="button" class="w-full flex items-center justify-between px-4 py-3 text-left"
                 @click="paymentMethod = 'cod'">
                 <div class="flex items-center gap-3">
@@ -749,7 +776,7 @@ const bounceIfEmpty = () => {
       <!-- Right Column: Order Summary -->
       <div class="bg-gray-50 border rounded-lg p-5 shadow-sm">
 
-        <h3 class="font-semibold text-gray-800 text-lg mb-1">📦 Shipping To</h3>
+        <h3 class="font-semibold text-gray-800 text-lg mb-1">📦 Shipping To </h3>
         <p class="text-sm text-gray-600" v-if="selectedAddress">
           {{ selectedAddress.Contact_Person_Name }}<br>
           {{ selectedAddress.Telephone }}<br>

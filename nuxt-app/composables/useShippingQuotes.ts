@@ -37,6 +37,7 @@ export function useShippingQuotes() {
       options.value = data?.options ?? []
       totals.value = data?.totals ?? null
       return options.value
+  
     } catch (e: any) {
       error.value =
         e?.response?.data?.message || e?.message || 'Failed to fetch quotes'

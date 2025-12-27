@@ -164,6 +164,10 @@ const form = reactive({
   Type: 'shipping', // optional if your API expects it
 })
 
+// Address modal state (used in template)
+const submitting = ref(false)
+const isEdit = computed(() => form.id !== null)
+
 
 const resetBelowCountry = () => {
   form.Region_Id = ''
@@ -282,7 +286,7 @@ const onDistrictChange = async () => {
 
 
 const submitAddress = async () => {
-
+  submitting.value = true
   try {
     await $axios.post('/api/contacts', {
       Country_Id: form.Country_Id || null,
@@ -303,8 +307,13 @@ const submitAddress = async () => {
     console.error('Failed to save address', e)
 
   } finally {
-
+    submitting.value = false
   }
+}
+
+// Modal helpers
+const closeModal = () => {
+  showAddressModal.value = false
 }
 
 const onClearCart = async () => {
@@ -612,12 +621,15 @@ if (locCandidate) cart.selectedLocationId = locCandidate
               <div v-if="!quotesLoading && shippingOptions.length === 0" class="text-xs text-gray-500">
                 No options for this address/cart.
               </div>
+
+          
               <div v-for="opt in shippingOptions" :key="optionKey(opt)"
                 class="mt-2 p-3 rounded-md border bg-white flex items-center justify-between text-sm"
                 :class="selectedOptionKey === optionKey(opt) ? 'border-teal-500' : 'border-slate-200'">
                 <label class="flex items-center gap-3 cursor-pointer">
                   <input type="radio" name="shipOpt" :value="optionKey(opt)" v-model="selectedOptionKey"
                     class="accent-[#00bfa5]" />
+                    <div><img :src="`${$r2Url}/${opt.shipper_image}`" alt="Shipper Image"  style="width: 40px; height: 40px;"/></div>
                   <div class="font-medium">{{ opt.shipper_name }}</div>
                 </label>
 
