@@ -7,7 +7,7 @@ import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 import { Squares2X2Icon, ListBulletIcon, ChartPieIcon, ShoppingBagIcon, CreditCardIcon } from '@heroicons/vue/24/solid'
 import { useUserStore } from '~/stores/user'
 import { useCartStore } from '~/stores/cart'
-
+import HomeSlider from '~/components/HomeSlider.vue'
 const cart = useCartStore()
 
 
@@ -566,13 +566,7 @@ onMounted(async () => {
   <!-- Industrial Hero Banner -->
   <section v-if="!hideBanner" class="relative isolate overflow-hidden bg-slate-900">
     <!-- Background image -->
-    <picture>
-      <source type="image/webp" sizes="(min-width: 1024px) 1200px, 100vw" />
-      <source type="image/jpeg" sizes="(min-width: 1024px) 1200px, 100vw" />
-      <img src="https://www.aabtools.com/banner/HomePageBanner/Desktop/Megger_Desktop.webp"
-        alt="Industrial supply aisle with power tools, fasteners, and safety gear"
-        class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover hero-img" loading="eager" decoding="async" />
-    </picture>
+    <HomeSlider v-if="!hideBanner" />
 
     <!-- Readability overlay -->
     <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-900/85 via-slate-900/45 to-transparent">
