@@ -86,6 +86,10 @@ const isloadingCategories = ref<boolean>(false);
 
 
 
+  
+
+
+
 
 function setSectionFromQuery() {
   const sec = (route.query.section as string) || 'categories'
@@ -168,20 +172,34 @@ const onSliceClick = (it: any) => {
   if (it.Slug) router.push(`/departments/${it.Slug}`)
 }
 
+ 
+
+
+
 /** Donut math */
 const hovered = ref<number | null>(null)
-const palette = ['#10b981', '#3b82f6', '#a855f7', '#06b6d4', '#f59e0b', '#ef4444', '#14b8a6', '#8b5cf6', '#22c55e', '#f97316']
+
+// Updated to include your brand colors (Blue and Emerald/Cyan) at the front
+const palette = [
+  '#07B6C6', '#2F5FB6', '#10b981', '#8b5cf6', '#f59e0b', 
+  '#ef4444', '#14b8a6', '#06b6d4', '#6366f1', '#f97316'
+]
 
 const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
   const rad = (angle - 90) * Math.PI / 180
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
 }
+
 const arcPath = (cx: number, cy: number, rOuter: number, rInner: number, start: number, end: number) => {
+  // Fix the SVG 360-degree rendering bug if there's only 1 item
+  if (end - start === 360) end -= 0.01;
+  
   const largeArc = end - start <= 180 ? 0 : 1
   const sO = polarToCartesian(cx, cy, rOuter, start)
   const eO = polarToCartesian(cx, cy, rOuter, end)
   const sI = polarToCartesian(cx, cy, rInner, end)
   const eI = polarToCartesian(cx, cy, rInner, start)
+  
   return [
     `M ${sO.x} ${sO.y}`,
     `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${eO.x} ${eO.y}`,
@@ -195,7 +213,11 @@ const slices = computed(() => {
   const items = pieItems.value
   const n = Math.max(items.length, 1)
   const step = 360 / n
-  const cx = 100, cy = 100, rOuter = 92, rInner = 36
+  
+  // Expanded coordinates to give room for the hover pop-out effect
+  // cx, cy moved from 100 to 120. Radiuses adjusted for a thicker, modern donut.
+  const cx = 120, cy = 120, rOuter = 100, rInner = 55 
+  
   return items.map((it: any, i: number) => {
     const start = i * step
     const end = start + step
@@ -206,6 +228,11 @@ const slices = computed(() => {
     }
   })
 })
+
+
+
+
+
 
 /** Center label text */
 
@@ -635,32 +662,53 @@ onMounted(async () => {
         </div>
 
         <!-- Right: view mode (segmented control, compact) -->
-        <div class="inline-flex items-center rounded-xl ring-1 ring-slate-300 bg-white p-1 overflow-hidden">
-          <button @click="viewMode = 'grid'" :aria-pressed="viewMode === 'grid'" :class="[
-            'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
-            viewMode === 'grid'
-              ? 'bg-slate-900 text-white shadow'
-              : 'text-slate-600 hover:bg-slate-100'
-          ]">
-            <Squares2X2Icon class="w-4 h-4 md:w-5 md:h-5" />
+        <div
+          class="relative inline-flex items-center rounded-2xl bg-white/80 backdrop-blur ring-1 ring-slate-200 shadow-sm p-1 overflow-hidden">
+          <!-- Active pill (animated) -->
+          <span aria-hidden="true" class="pointer-events-none absolute left-1 top-1 z-0 h-8 w-8 md:h-10 md:w-10 rounded-xl
+            bg-slate-900 shadow-lg shadow-slate-900/20 ring-1 ring-slate-900/10 motion-reduce:transition-none
+            transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]" :style="{
+              transform:
+                viewMode === 'grid'
+                  ? 'translateX(0%)'
+                  : viewMode === 'list'
+                    ? 'translateX(100%)'
+                    : 'translateX(200%)'
+            }">
+            <span class="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-white/0 opacity-70"></span>
+          </span>
+
+          <button type="button" @click="viewMode = 'grid'" :aria-pressed="viewMode === 'grid'" aria-label="Grid view"
+            title="Grid view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+              text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
+              hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
+              focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'grid' ? 'text-white' : ''">
+            <Squares2X2Icon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
+              :class="viewMode === 'grid' ? 'scale-110' : 'scale-100'" />
+            <span class="sr-only">Grid view</span>
           </button>
 
-          <button @click="viewMode = 'list'" :aria-pressed="viewMode === 'list'" :class="[
-            'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
-            viewMode === 'list'
-              ? 'bg-slate-900 text-white shadow'
-              : 'text-slate-600 hover:bg-slate-100'
-          ]">
-            <ListBulletIcon class="w-4 h-4 md:w-5 md:h-5" />
+          <button type="button" @click="viewMode = 'list'" :aria-pressed="viewMode === 'list'" aria-label="List view"
+            title="List view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+              text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
+              hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
+              focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'list' ? 'text-white' : ''">
+            <ListBulletIcon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
+              :class="viewMode === 'list' ? 'scale-110' : 'scale-100'" />
+            <span class="sr-only">List view</span>
           </button>
 
-          <button @click="viewMode = 'pie'" :aria-pressed="viewMode === 'pie'" :class="[
-            'h-8 w-8 md:h-10 md:w-10 rounded-lg grid place-items-center transition',
-            viewMode === 'pie'
-              ? 'bg-slate-900 text-white shadow'
-              : 'text-slate-600 hover:bg-slate-100'
-          ]">
-            <ChartPieIcon class="w-4 h-4 md:w-5 md:h-5" />
+          <button type="button" @click="viewMode = 'pie'" :aria-pressed="viewMode === 'pie'" aria-label="Pie chart view"
+            title="Pie chart view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+              text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
+              hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
+              focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'pie' ? 'text-white' : ''">
+            <ChartPieIcon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
+              :class="viewMode === 'pie' ? 'scale-110' : 'scale-100'" />
+            <span class="sr-only">Pie chart view</span>
           </button>
         </div>
       </div>
@@ -688,26 +736,43 @@ onMounted(async () => {
 
 
 
-      <div v-if="viewMode === 'pie'" class="w-full">
-        <div class="flex flex-col md:flex-row items-center gap-6">
-          <div class="w-full md:w-auto">
-            <svg viewBox="0 0 200 200" class="w-full max-w-[420px] mx-auto">
-              <g v-for="(s, i) in slices" :key="i">
-                <path :d="s.d" :fill="s.color" class="transition duration-200"
-                  :opacity="hovered === null || hovered === i ? 1 : 0.6" @mouseenter="hovered = i"
-                  @mouseleave="hovered = null" @click="onSliceClick(s.item)" style="cursor:pointer" />
-                <path :d="s.d" fill="none" stroke="white" stroke-width="0.8" />
-              </g>
-              <circle cx="100" cy="100" r="34" fill="white" stroke="#e5e7eb" stroke-width="1" />
-              <text x="100" y="100" text-anchor="middle" dominant-baseline="middle" class="fill-slate-700"
-                style="font-size:12px;font-weight:600;">
-                {{ centerLabel }}
-              </text>
-            </svg>
-          </div>
-        </div>
-      </div>
+      <div v-if="viewMode === 'pie'" class="w-full py-6">
+  <div class="flex flex-col md:flex-row items-center justify-center gap-6">
+    <div class="relative w-full max-w-[340px] md:max-w-[420px] mx-auto">
+      
+      <svg viewBox="0 0 240 240" class="w-full h-auto overflow-visible drop-shadow-lg donut-entrance">
+        
+        <g v-for="(s, i) in slices" :key="i"
+           class="transition-all duration-300 ease-out cursor-pointer"
+           :class="[
+             hovered === i ? 'scale-[1.06] drop-shadow-xl z-10' : '',
+             hovered !== null && hovered !== i ? 'opacity-40 grayscale-[20%]' : 'opacity-100'
+           ]"
+           @mouseenter="hovered = i"
+           @mouseleave="hovered = null"
+           @click="onSliceClick(s.item)"
+           style="transform-origin: 120px 120px;" 
+        >
+          <path :d="s.d" :fill="s.color" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" />
+        </g>
 
+        <circle cx="120" cy="120" r="50" fill="white" />
+
+        <foreignObject x="45" y="65" width="150" height="110">
+          <div class="w-full h-full flex flex-col items-center justify-center text-center px-2 pointer-events-none">
+            <span class="text-slate-400 text-[10px] uppercase tracking-wider font-bold mb-0.5">
+              {{ hovered !== null ? 'Viewing' : 'Select' }}
+            </span>
+            <span class="text-slate-800 text-[13px] font-bold leading-snug line-clamp-3">
+              {{ centerLabel }}
+            </span>
+          </div>
+        </foreignObject>
+      </svg>
+
+    </div>
+  </div>
+</div>
 
       <!-- Category View -->
       <div v-else-if="!selectedDepartment">
@@ -994,6 +1059,24 @@ onMounted(async () => {
   transform: translateY(6px) scale(.98);
 }
 
+
+
+/* Premium Donut Chart Entrance Animation */
+.donut-entrance {
+  animation: donutPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes donutPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) rotate(-15deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
 
