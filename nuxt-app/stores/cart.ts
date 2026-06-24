@@ -8,7 +8,17 @@ export interface CartItem {
   id: number;
   slug: string;
   name: string;
+  name_ar?: string;
+  Product_Name?: string;
+  Product_Name_Ar?: string;
+  description?: string;
   price: number;
+  originalPrice?: number;
+  finalPrice?: number;
+  discountAmount?: number;
+  lineDiscountAmount?: number;
+  hasDiscount?: boolean;
+  activeDiscount?: any | null;
   quantity: number;
   image?: string;
   weight: number;
@@ -58,11 +68,25 @@ export const useCartStore = defineStore("cart", () => {
   // ---------- API mapping ----------
   const mapApiToCartItem = (row: any): CartItem => {
     const p = row.product || {};
+    const originalPrice = Number(p.Original_Price ?? p.Product_Price ?? 0);
+    const finalPrice = Number(p.Product_Final_Price ?? p.Discounted_Price ?? p.Product_Price ?? 0);
+    const discountAmount = Number(p.Discount_Amount ?? Math.max(originalPrice - finalPrice, 0));
+
     return {
       id: Number(row.Products_Id ?? p.id),
       slug: p.Slug ?? p.Product_Slug ?? "",
       name: p.Product_Name ?? "",
-      price: Number(p.Product_Price ?? 0),
+      name_ar: p.Product_Name_Ar ?? "",
+      Product_Name: p.Product_Name ?? "",
+      Product_Name_Ar: p.Product_Name_Ar ?? "",
+      description: p.Product_Description ?? "",
+      price: finalPrice,
+      originalPrice,
+      finalPrice,
+      discountAmount,
+      lineDiscountAmount: discountAmount * Number(row.Quantity ?? 0),
+      hasDiscount: Boolean(p.Has_Discount ?? discountAmount > 0),
+      activeDiscount: p.Active_Discount ?? null,
       quantity: Number(row.Quantity ?? 0),
 
       // image: depends on what you return from Products model
@@ -197,6 +221,19 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
     }, 0);
   };
 
+  const totalOriginalPrice = () => {
+    return cartItems.value.reduce((sum, i) => {
+      return sum + Number(i.originalPrice ?? i.price ?? 0) * Number(i.quantity || 0);
+    }, 0);
+  };
+
+  const totalDiscount = () => {
+    return cartItems.value.reduce((sum, i) => {
+      const unitDiscount = Number(i.discountAmount ?? Math.max(Number(i.originalPrice ?? i.price ?? 0) - Number(i.price ?? 0), 0));
+      return sum + unitDiscount * Number(i.quantity || 0);
+    }, 0);
+  };
+
   // ✅ set qty by product id (works for guest + logged-in)
   const updateQuantity = async (productId: number, quantity: number) => {
     const it = cartItems.value.find((i) => i.id === productId);
@@ -263,6 +300,8 @@ const decrementQty = async (productId: number) => {
     syncGuestCartToDb,
     
     totalPrice,
+    totalOriginalPrice,
+    totalDiscount,
     updateQuantity,
     incrementQty,
 

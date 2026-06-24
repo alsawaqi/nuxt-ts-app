@@ -9,6 +9,7 @@ import AccountProfile from '~/components/account/AccountProfile.vue'
 import AccountAddresses from '~/components/account/AccountAddresses.vue'
 import AccountTickets from '~/components/account/AccountTickets.vue'
 import AccountFavorites from '~/components/account/AccountFavorites.vue'
+import AccountNotifications from '~/components/account/AccountNotifications.vue'
 
 import AccountLoyalty from '~/components/account/AccountLoyalty.vue'
 
@@ -22,6 +23,7 @@ interface LoyaltyTx {
   Orders_Placed_Id?: number | null
   Points_Earned: number
   Points_Redeemed: number
+  Redeemed_Amount?: number | string | null
   created_at: string
   updated_at?: string
 }
@@ -29,13 +31,19 @@ interface LoyaltyTx {
 
 
 
-const { user, isAuthenticated } = useAuth()
-const { $axios } = useNuxtApp()
+const { user, customer, isAuthenticated } = useAuth()
+const { $axios, $r2Url } = useNuxtApp()
+const { t } = useStorefrontLocale()
+const route = useRoute()
+const router = useRouter()
 
 const loyaltyPage = ref(1)
 const loyaltyPerPage = ref(10)
 const loyaltyPagination = ref<any>(null)
 const totalLoyaltyPoints = ref(0)
+const totalLoyaltyEarned = ref(0)
+const totalLoyaltyRedeemed = ref(0)
+const totalLoyaltyRedeemedAmount = ref(0)
 
 
 interface Order {
@@ -47,11 +55,19 @@ interface Order {
 }
 
 
-interface OrderDetail {
-  id: number
-  Quantity: number
-  Price: number
-  product?: { Product_Name?: string }
+interface OrderDetailsPayload {
+  order?: {
+    id: number
+    order_code?: string | null
+    transaction_number?: string | null
+    status?: string | null
+    created_at?: string | null
+  }
+  items?: Array<Record<string, unknown>>
+  fulfillment?: Record<string, unknown>
+  payment?: Record<string, unknown>
+  transaction?: Record<string, unknown>
+  totals?: Record<string, unknown>
 }
 
 
@@ -60,8 +76,8 @@ interface OrderDetail {
 const orders = ref<Order[]>([]);
 const ordersLoading = ref<boolean>(true)
 const loading = ref<boolean>(true);
-const selectedOrderDetails = ref<OrderDetail[]>([])
-const showDetailsModal = ref(false)
+const selectedOrderDetails = ref<OrderDetailsPayload | null>(null)
+const showOrderDetails = ref(false)
 const loadingDetails = ref(false)
 const points = ref<any>('')
 
@@ -81,11 +97,48 @@ const ordersPagination = ref({
 
 const activeOrderId = ref<number | null>(null)
 
+const profileInitials = computed(() => {
+  const source = customer.value?.Customer_Full_Name || user.value?.User_Name || user.value?.email || 'U'
+  return String(source)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part.charAt(0).toUpperCase())
+    .join('') || 'U'
+})
+
+const profileImageUrl = computed(() => {
+  const path = customer.value?.Customer_Profile_Image_Path
+  if (!path) return ''
+  return `${String($r2Url || '').replace(/\/$/, '')}/${String(path).replace(/^\/+/, '')}`
+})
 
 
 
-type TabKey = 'orders' | 'profile' | 'addresses' | 'tickets' | 'favorites' | 'loyalty'
-const activeTab = ref<TabKey>('orders')
+
+type TabKey = 'orders' | 'profile' | 'addresses' | 'tickets' | 'favorites' | 'loyalty' | 'notifications'
+const validTabs: TabKey[] = ['orders', 'profile', 'addresses', 'tickets', 'favorites', 'loyalty', 'notifications']
+const queryTab = (value: unknown): TabKey => validTabs.includes(String(value) as TabKey) ? String(value) as TabKey : 'orders'
+const activeTab = ref<TabKey>(queryTab(route.query.tab))
+const notificationUnreadCount = ref(0)
+
+const fetchNotificationCount = async () => {
+  try {
+    const { data } = await $axios.get('/api/notifications/unread-count', { withCredentials: true })
+    notificationUnreadCount.value = Number(data?.unread_count ?? 0)
+  } catch (error) {
+    notificationUnreadCount.value = 0
+  }
+}
+
+watch(() => route.query.tab, (tab) => {
+  activeTab.value = queryTab(tab)
+})
+
+watch(activeTab, (tab) => {
+  if (route.query.tab === tab) return
+  router.replace({ query: { ...route.query, tab } })
+})
 
 
 
@@ -106,6 +159,9 @@ const fetchLoyalty = async () => {
     loyaltyTx.value = data?.data ?? []
     loyaltyPagination.value = data?.pagination ?? null
     totalLoyaltyPoints.value = data?.total_points ?? 0
+    totalLoyaltyEarned.value = data?.total_earned ?? 0
+    totalLoyaltyRedeemed.value = data?.total_redeemed ?? 0
+    totalLoyaltyRedeemedAmount.value = data?.total_redeemed_amount ?? 0
     loyaltyLoaded.value = true
   } finally {
     loyaltyLoading.value = false
@@ -136,14 +192,21 @@ const refreshTickets = async () => { /* GET list */ }
 
 
 
-const fetchOrderDetails = async (orderId: number) => {
+const closeOrderDetails = () => {
+  selectedOrderDetails.value = null
+  activeOrderId.value = null
+  showOrderDetails.value = false
+}
 
+const fetchOrderDetails = async (orderId: number) => {
+  activeOrderId.value = orderId
   loadingDetails.value = true
-  selectedOrderDetails.value = []
+  selectedOrderDetails.value = null
+  showOrderDetails.value = true
+
   try {
-    const res = await $axios.get(`/api/orders/${orderId}/details`)
-    selectedOrderDetails.value = res.data
-    showDetailsModal.value = true
+    const { data } = await $axios.get(`/api/orders/${orderId}/details`, { withCredentials: true })
+    selectedOrderDetails.value = data
   } catch (e) {
     console.error('Failed to fetch order details', e)
   } finally {
@@ -186,35 +249,21 @@ const getOrders = async () => {
 
 
 const onOrdersFilterChange = async (filters: OrdersFilter) => {
+  closeOrderDetails()
   ordersFilter.value = filters
   ordersPage.value = 1
   await getOrders()
 }
 
-
-const onShowOrderDetails = async (orderId: number) => {
-  activeOrderId.value = orderId
-  loadingDetails.value = true
-  selectedOrderDetails.value = []
-  showDetailsModal.value = true
-
-  try {
-    const { data } = await $axios.get(`/api/orders/${orderId}/details`, { withCredentials: true })
-    selectedOrderDetails.value = data   // expects array of details
-  } catch (e) {
-    console.error('Failed to fetch order details', e)
-  } finally {
-    loadingDetails.value = false
-  }
-}
-
 const onOrdersPageChange = async (page: number) => {
+  closeOrderDetails()
   ordersPage.value = page
   await getOrders()
 }
 
 
 const onOrdersPerPageChange = async (pp: number) => {
+  closeOrderDetails()
   ordersPerPage.value = pp
   ordersPage.value = 1
   await getOrders()
@@ -224,6 +273,7 @@ const onOrdersPerPageChange = async (pp: number) => {
 onMounted(async (): Promise<void> => {
   await getOrders();
   await getloyalitypoints();
+  await fetchNotificationCount();
 })
 
 
@@ -241,7 +291,7 @@ onMounted(async (): Promise<void> => {
     <div class="bg-white/90 border-b border-slate-200">
       <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         <img src="https://isc-depot.com/images/logonew1.jpg" alt="ISC" class="h-9" />
-        <span class="text-xs text-slate-500">My Account</span>
+        <span class="text-xs text-slate-500">{{ t('nav.account') }}</span>
       </div>
     </div>
 
@@ -254,16 +304,23 @@ onMounted(async (): Promise<void> => {
       </div>
 
       <!-- your actual content -->
-      <div class="relative z-10 max-w-7xl mx-auto px-4 pt-8 pb-24">
-        <h1 class="text-2xl md:text-3xl font-bold text-slate-900">Welcome back</h1>
-        <p class="text-sm text-slate-600">Manage your orders, profile and addresses</p>
+      <div class="relative max-w-7xl mx-auto px-4 pt-8 pb-24">
+        <h1 class="text-2xl md:text-3xl font-bold text-slate-900">{{ t('nav.welcome', { name: user?.User_Name || '' }) }}</h1>
+        <p class="text-sm text-slate-600">{{ t('account.manage') }}</p>
 
         <!-- Glass profile card -->
         <div class="mt-6 bg-white/80 backdrop-blur border border-slate-200 rounded-2xl p-5 shadow-lg">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div class="flex items-center gap-4">
-              <img src="https://i.pravatar.cc/100" alt="Profile"
-                class="w-16 h-16 rounded-full ring-2 ring-white shadow" />
+              <div class="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full bg-cyan-50 text-base font-bold text-cyan-700 ring-2 ring-white shadow">
+                <img
+                  v-if="profileImageUrl"
+                  :src="profileImageUrl"
+                  alt="Profile"
+                  class="h-full w-full object-cover"
+                />
+                <span v-else>{{ profileInitials }}</span>
+              </div>
               <div>
                 <p class="text-lg font-semibold text-slate-900">{{ user?.User_Name }}</p>
                 <p class="text-xs text-slate-500">Member since <span class="font-medium">{{ new
@@ -274,7 +331,7 @@ onMounted(async (): Promise<void> => {
             <div class="flex items-center gap-2">
               <span
                 class="inline-flex items-center gap-2 rounded-lg bg-amber-50 text-amber-700 px-3 py-1 ring-1 ring-amber-200">
-                <span>🎖</span><span class="text-sm font-medium">{{ points }} points </span>
+                <span></span><span class="text-sm font-medium">{{ t('nav.points', { count: points }) }}</span>
               </span>
 
             </div>
@@ -284,22 +341,31 @@ onMounted(async (): Promise<void> => {
     </section>
 
     <!-- Content -->
-    <div class="max-w-7xl mx-auto px-4 -mt-16 pb-12 grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div class="relative z-20 max-w-7xl mx-auto px-4 -mt-16 pb-12 grid grid-cols-1 md:grid-cols-4 gap-6">
 
       <!-- Sidebar -->
       <aside class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 md:sticky md:top-6 h-max">
-        <!-- avatar block unchanged -->
-
         <nav class="mt-6 space-y-1 text-sm font-medium" role="tablist" aria-orientation="vertical">
           <button role="tab" :aria-selected="activeTab === 'orders'" @click="activeTab = 'orders'"
             class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'orders'
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">🛒</span>
-            Order Placed
+            {{ t('account.orders') }}
             <span class="ml-auto text-xs rounded px-2 py-0.5"
               :class="activeTab === 'orders' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
 
+            </span>
+          </button>
+
+          <button role="tab" :aria-selected="activeTab === 'notifications'" @click="activeTab = 'notifications'"
+            class="w-full flex items-center px-3 py-2 rounded-md transition" :class="activeTab === 'notifications'
+              ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
+              : 'text-slate-700 hover:bg-slate-50'">
+            <span class="mr-2">!</span>
+            {{ t('account.notifications') }}
+            <span v-if="notificationUnreadCount > 0" class="ml-auto text-xs rounded px-2 py-0.5 bg-cyan-600 text-white">
+              {{ notificationUnreadCount }}
             </span>
           </button>
 
@@ -308,7 +374,7 @@ onMounted(async (): Promise<void> => {
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">👤</span>
-            Profile
+            {{ t('account.profile') }}
             <span class="ml-auto text-xs rounded px-2 py-0.5"
               :class="activeTab === 'profile' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
 
@@ -320,7 +386,7 @@ onMounted(async (): Promise<void> => {
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">🎖</span>
-            Loyalty
+            {{ t('account.loyalty') }}
           </button>
 
           <button role="tab" :aria-selected="activeTab === 'favorites'" @click="activeTab = 'favorites'"
@@ -328,7 +394,7 @@ onMounted(async (): Promise<void> => {
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">♡</span>
-            Favorites
+            {{ t('account.favorites') }}
           </button>
 
           <button role="tab" :aria-selected="activeTab === 'addresses'" @click="activeTab = 'addresses'"
@@ -336,7 +402,7 @@ onMounted(async (): Promise<void> => {
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">🏠</span>
-            Addresses
+            {{ t('account.addresses') }}
             <span class="ml-auto text-xs rounded px-2 py-0.5"
               :class="activeTab === 'addresses' ? 'bg-white text-cyan-700' : 'bg-slate-100 text-slate-600'">
 
@@ -349,10 +415,20 @@ onMounted(async (): Promise<void> => {
               ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200'
               : 'text-slate-700 hover:bg-slate-50'">
             <span class="mr-2">🎫</span>
-            Requests
+            {{ t('account.requests') }}
           </button>
 
         </nav>
+
+        <div class="mt-6 border-t border-slate-200 pt-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ t('footer.orderSupport') }}</p>
+          <div class="mt-2 grid gap-1 text-xs">
+            <NuxtLink to="/policies/shipping" class="text-slate-600 hover:text-cyan-700">{{ t('nav.shipping') }}</NuxtLink>
+            <NuxtLink to="/policies/returns" class="text-slate-600 hover:text-cyan-700">{{ t('footer.returns') }}</NuxtLink>
+            <NuxtLink to="/policies/warranty" class="text-slate-600 hover:text-cyan-700">{{ t('footer.warranty') }}</NuxtLink>
+            <NuxtLink to="/policies/privacy" class="text-slate-600 hover:text-cyan-700">{{ t('footer.privacy') }}</NuxtLink>
+          </div>
+        </div>
       </aside>
 
 
@@ -364,12 +440,22 @@ onMounted(async (): Promise<void> => {
   v-if="activeTab === 'orders'"
   :orders="orders"
   :loading="ordersLoading"
+  :details-loading="loadingDetails"
+  :show-details="showOrderDetails"
+  :selected-details="selectedOrderDetails"
+  :active-order-id="activeOrderId"
   :pagination="ordersPagination"
   @show-details="fetchOrderDetails"
+  @close-details="closeOrderDetails"
   @filter-change="onOrdersFilterChange"
   @page-change="onOrdersPageChange"
   @per-page-change="onOrdersPerPageChange"
 />
+
+        <AccountNotifications
+          v-show="activeTab === 'notifications'"
+          @changed="fetchNotificationCount"
+        />
 
 
         <AccountProfile v-show="activeTab === 'profile'" :loading="loading" />
@@ -384,6 +470,9 @@ onMounted(async (): Promise<void> => {
   :transactions="loyaltyTx"
   :pagination="loyaltyPagination"
   :total-points="totalLoyaltyPoints"
+  :total-earned="totalLoyaltyEarned"
+  :total-redeemed="totalLoyaltyRedeemed"
+  :total-redeemed-amount="totalLoyaltyRedeemedAmount"
   @page-change="onLoyaltyPageChange"
   @per-page-change="onLoyaltyPerPageChange"
 />
@@ -394,51 +483,6 @@ onMounted(async (): Promise<void> => {
           :creating="creatingTicket" :active-ticket="activeTicket" :messages="ticketMessages"
           :messages-loading="ticketMsgsLoading" @close-ticket="closeTicket" @reply="replyTicket"
           @refresh="refreshTickets" />
-
-
-
-        <transition name="fade">
-          <div v-if="showDetailsModal" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-            @click.self="showDetailsModal = false">
-            <div class="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-xl">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold">
-                  Order #{{ activeOrderId ?? '' }} &middot; Details
-                </h2>
-                <button class="px-3 py-1.5 rounded ring-1 ring-slate-200 hover:bg-slate-50"
-                  @click="showDetailsModal = false">
-                  Close
-                </button>
-              </div>
-
-              <div v-if="loadingDetails" class="text-center py-10">Loading...</div>
-
-              <template v-else>
-                <table v-if="selectedOrderDetails.length"
-                  class="min-w-full text-sm text-left border rounded overflow-hidden">
-                  <thead class="bg-slate-50">
-                    <tr>
-                      <th class="px-4 py-2">Product</th>
-                      <th class="px-4 py-2">Quantity</th>
-                      <th class="px-4 py-2">Price</th>
-                      <th class="px-4 py-2">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y">
-                    <tr v-for="d in selectedOrderDetails" :key="d.id">
-                      <td class="px-4 py-2">{{ d.product?.Product_Name ?? 'N/A' }}</td>
-                      <td class="px-4 py-2">{{ d.Quantity }}</td>
-                      <td class="px-4 py-2">OMR {{ d.Price }}</td>
-                      <td class="px-4 py-2">OMR {{ (d.Price * d.Quantity).toFixed(2) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div v-else class="text-slate-500 text-sm">No details found for this order.</div>
-              </template>
-            </div>
-          </div>
-        </transition>
 
 
 

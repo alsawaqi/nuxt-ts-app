@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useUserStore } from '~/stores/user'
 
 import { useCartStore } from '~/stores/cart'
+import { useLoyaltyStore } from '~/stores/loyalty'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 import { ShoppingBagIcon, CreditCardIcon } from '@heroicons/vue/24/solid'
 
 const cart = useCartStore()
+const loyalty = useLoyaltyStore()
 const router = useRouter()
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
-const points = ref<any>('')
-const { $axios } = useNuxtApp();
+const points = computed(() => loyalty.points)
+const { t, isArabic } = useStorefrontLocale()
 
 
 const logout = async () => {
@@ -21,52 +23,28 @@ const logout = async () => {
 
 
 function gotoProduct(item: any) {
-  // Prefer slug route if you have it
+  if (item.Result_Type === 'category' && item.Slug) {
+    router.push({
+      path: `/departments/${item.Slug}`,
+      query: item.Route_Query ?? {
+        deptId: item.Product_Department_Id ?? undefined,
+        subId: item.Product_Sub_Department_Id ?? undefined,
+        subSubId: item.id ?? undefined,
+      },
+    })
+    return
+  }
+
   if (item.Slug) {
     router.push(`/product/${item.Slug}`)
-  } else {
-    // fallback by id
-    router.push(`/product/id/${item.id}`)
+    return
   }
-}
 
-
-const getloyalitypoints = async () => {
-
-  try {
-    const response = await $axios.get('/api/loyalty', { withCredentials: true })
-
-    points.value = response.data
-  } catch (e) {
-
-  } finally {
-
-  }
+  router.push(`/product/id/${item.id}`)
 }
 
 
 const mobileMenuOpen = ref(false);
-
-watch(
-  isAuthenticated,
-  async (authed) => {
-    await cart.loadCart() // ✅ fills cartItems (API when authed, guest otherwise)
-
-    if (authed) {
-      await getloyalitypoints()
-    } else {
-      points.value = ''
-    }
-  },
-  { immediate: true }
-)
-
-
-onMounted(async () => {
-  if (isAuthenticated.value) {
-    await getloyalitypoints()
-  }
-})
 </script>
 <template>
 
@@ -78,22 +56,25 @@ onMounted(async () => {
       <div class="max-w-screen-2xl mx-auto h-9 sm:h-10 px-3 sm:px-5 flex items-center justify-between">
         <div class="flex items-center gap-4 sm:gap-6">
           <div class="flex items-center gap-2 sm:gap-3">
-            <span class="font-medium text-slate-700 hidden md:inline">Payments</span>
+            <span class="font-medium text-slate-700 hidden md:inline">{{ t('nav.payments') }}</span>
             <img src="/images/visa.png" class="h-3.5 sm:h-4" alt="Visa" loading="lazy" decoding="async" />
             <img src="/images/mastercard.png" class="h-3.5 sm:h-4" alt="Mastercard" loading="lazy" decoding="async" />
             <img src="/images/cash.png" class="h-3.5 sm:h-4" alt="Cash" loading="lazy" decoding="async" />
           </div>
           <div class="hidden sm:flex items-center gap-2 sm:gap-3">
-            <span class="font-medium text-slate-700 hidden md:inline">Shipping</span>
+            <span class="font-medium text-slate-700 hidden md:inline">{{ t('nav.shipping') }}</span>
             <img src="/images/dhl.png" class="h-3.5 sm:h-4" alt="DHL" loading="lazy" decoding="async" />
             <img src="/images/fedex.png" class="h-3.5 sm:h-4" alt="FedEx" loading="lazy" decoding="async" />
           </div>
         </div>
 
-        <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
-          Welcome, {{ user?.User_Name }} <span v-if="isAuthenticated">🎖</span><span class="text-sm font-medium">{{
-            points }} points </span>
-        </span>
+        <div class="flex items-center gap-3">
+          <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
+            {{ t('nav.welcome', { name: user?.User_Name || '' }) }}
+            <span class="text-sm font-medium">{{ t('nav.points', { count: points }) }}</span>
+          </span>
+          <LanguageSwitcher />
+        </div>
       </div>
     </div>
 
@@ -119,25 +100,25 @@ onMounted(async () => {
             class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[17px] font-semibold text-slate-700">
             <NuxtLink to="/" class="pb-1 border-b-2"
               :class="$route.path === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Home
+              {{ t('nav.home') }}
             </NuxtLink>
             <NuxtLink :to="{ path: '/', query: { section: 'categories' } }" class="pb-1 border-b-2" :class="($route.path === '/' && (($route.query.section as string) ?? 'categories') === 'categories')
               ? 'border-emerald-600 text-slate-900'
               : 'border-transparent hover:text-slate-900'">
-              Shops
+              {{ t('nav.shops') }}
             </NuxtLink>
             <NuxtLink :to="{ path: '/', query: { section: 'brand' } }" class="pb-1 border-b-2" :class="($route.path === '/' && $route.query.section === 'brand')
               ? 'border-emerald-600 text-slate-900'
               : 'border-transparent hover:text-slate-900'">
-              Brands
+              {{ t('nav.brands') }}
             </NuxtLink>
             <NuxtLink to="#" class="pb-1 border-b-2"
               :class="$route.path.startsWith('/dealerships') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Dealerships
+              {{ t('nav.dealerships') }}
             </NuxtLink>
             <NuxtLink to="/contact" class="pb-1 border-b-2"
               :class="$route.path.startsWith('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Contact
+              {{ t('nav.contact') }}
             </NuxtLink>
           </nav>
         </div>
@@ -188,7 +169,7 @@ onMounted(async () => {
          bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">
             <CreditCardIcon class="inline-block w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />
-            <span class="inline-block">Checkout</span>
+            <span class="inline-block">{{ t('nav.checkout') }}</span>
           </NuxtLink>
           <!-- Account / Auth (HIDE at md to save width, show at lg) -->
           <div class="hidden lg:flex items-center gap-3 text-[15px]">
@@ -201,17 +182,17 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M12 11c2.21 0 4-1.79 4-4s-1.79-4-4-4S8 4.79 8 7s1.79 4 4 4zM4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2" />
               </svg>
-              <span class="flex-none">My Account</span>
+              <span class="flex-none">{{ t('nav.account') }}</span>
             </NuxtLink>
             <button v-if="isAuthenticated" @click="logout" class="px-3 py-1.5 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6] shadow-sm
              focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">
-              Logout
+              {{ t('nav.logout') }}
             </button>
             <template v-if="!isAuthenticated">
               <NuxtLink to="/login" class="px-3 py-1.5 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
-             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">Login</NuxtLink>
+             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">{{ t('nav.login') }}</NuxtLink>
               <NuxtLink to="/register" class="px-3 py-1.5 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6] shadow-sm
-             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">Register</NuxtLink>
+             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">{{ t('nav.register') }}</NuxtLink>
             </template>
           </div>
         </div>
@@ -224,7 +205,7 @@ onMounted(async () => {
     <!-- Search bar -->
     <div class="bg-white">
       <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-        <SearchAutocomplete :min-chars="2" :limit="10" placeholder="Search by keyword, item, model or part #"
+        <SearchAutocomplete :min-chars="2" :limit="10" :placeholder="t('nav.searchPlaceholder')"
           @select="gotoProduct" />
       </div>
     </div>
@@ -234,45 +215,51 @@ onMounted(async () => {
     <!-- Mobile overlay & drawer -->
     <div v-if="mobileMenuOpen" @click="mobileMenuOpen = false" class="fixed inset-0 bg-black/40 z-40 md:hidden"></div>
     <div
-      class="fixed top-0 left-0 w-[84%] max-w-80 h-full bg-white z-50 shadow-2xl transform transition-transform duration-300 md:hidden"
-      :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'">
+      class="fixed top-0 w-[84%] max-w-80 h-full bg-white z-50 shadow-2xl transform transition-transform duration-300 md:hidden"
+      :class="[
+        isArabic ? 'right-0' : 'left-0',
+        mobileMenuOpen ? 'translate-x-0' : (isArabic ? 'translate-x-full' : '-translate-x-full')
+      ]">
       <div class="p-3 sm:p-4 flex justify-between items-center border-b">
         <NuxtLink to="/" class="flex items-center gap-2" @click="mobileMenuOpen = false">
           <img src="/logonew1.jpg" alt="ISC" class="h-7 sm:h-8 w-auto rounded ring-1 ring-black/10" />
           <span class="font-semibold">ISC</span>
         </NuxtLink>
-        <button @click="mobileMenuOpen = false" class="px-2 py-1 rounded border hover:bg-slate-50">Close</button>
+        <button @click="mobileMenuOpen = false" class="px-2 py-1 rounded border hover:bg-slate-50">{{ t('common.close') }}</button>
       </div>
 
       <nav class="flex flex-col p-3 sm:p-4 text-slate-800 text-base font-medium space-y-1">
-        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Home</NuxtLink>
+        <div class="px-3 py-2">
+          <LanguageSwitcher />
+        </div>
+        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
         <NuxtLink :to="{ path: '/', query: { section: 'categories' } }" @click="mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">
-          Shops
+          {{ t('nav.shops') }}
         </NuxtLink>
 
         <NuxtLink :to="{ path: '/', query: { section: 'brand' } }" @click="mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">
-          Brands
+          {{ t('nav.brands') }}
         </NuxtLink>
 
-        <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Dealerships
+        <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.dealerships') }}
         </NuxtLink>
-        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Contact
+        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
         </NuxtLink>
         <div class="h-px my-2 bg-slate-200"></div>
         <template v-if="!isAuthenticated">
           <NuxtLink to="/login" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95]
-           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">Login</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">{{ t('nav.login') }}</NuxtLink>
           <NuxtLink to="/register" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6]
-           focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">Register</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">{{ t('nav.register') }}</NuxtLink>
         </template>
         <template v-else>
           <NuxtLink to="/account" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95]
-           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">My Account</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">{{ t('nav.account') }}</NuxtLink>
           <button v-if="isAuthenticated" @click="logout" mobileMenuOpen="false" class="text-left px-3 py-2 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6]
            focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">
-            Logout
+            {{ t('nav.logout') }}
           </button>
         </template>
       </nav>

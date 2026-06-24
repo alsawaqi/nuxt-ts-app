@@ -2,10 +2,13 @@
 definePageMeta({
     layout: 'layouts',
   })
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, reactive, watch } from 'vue'
 import VueEasyLightbox from 'vue-easy-lightbox'
 import { useCartStore } from '~/stores/cart'
-import { useToast } from 'vue-toastification'
+import * as Toastification from 'vue-toastification'
+import { formatRatingSummary, starStates } from '~/utils/productEngagement.js'
+import { filterAndSortProducts, readRecentlyViewed, updateRecentlyViewed, writeRecentlyViewed } from '~/utils/discovery.js'
+import { breadcrumbJsonLd, canonicalUrl, productJsonLd, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
 
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
@@ -15,11 +18,15 @@ const router = useRouter()
 
 
 const { $axios, $r2Url } = useNuxtApp()
+const config = useRuntimeConfig()
+const route = useRoute()
 
 const slug = useParam('slug');
 
 const cart = useCartStore()
-const toast = useToast()
+const toast = Toastification.useToast()
+const { isAuthenticated } = useAuth()
+const { t, field, productName, productText, categoryName } = useStorefrontLocale()
 const quantity = ref<number>(1);
 
 const visible = ref<boolean>(false);
@@ -34,6 +41,8 @@ const activeIndex = ref(0)
 // --- Favorites (UI + API) ---
 const isFavorited = ref(false)
 const favBusy = ref(false)
+const backInStockBusy = ref(false)
+const backInStockMessage = ref('')
 
 
 const onSwiper = (sw: any) => (swiperRef.value = sw)
@@ -70,8 +79,14 @@ interface RelSubSubDepartment {
 interface Product {
   id: number;
   Product_Name: string;
+  Product_Name_Ar?: string;
   Slug: string;
   Product_Price: number;
+  Original_Price?: number;
+  Product_Final_Price?: number;
+  Discount_Amount?: number;
+  Has_Discount?: boolean;
+  Active_Discount?: any | null;
   Inhouse_Barcode_Source: string;
   Product_Description: string;
   Product_Stock: number;
@@ -96,6 +111,36 @@ interface SpecificationGroup {
 interface ProductDetailsResponse {
   product: Product;
   specifications: SpecificationGroup[];
+  review_summary?: ReviewSummary;
+}
+
+interface ReviewSummary {
+  average_rating: string;
+  review_count: number;
+  distribution?: Record<number, number>;
+}
+
+interface ProductReview {
+  id: number;
+  Rating: number;
+  Title?: string | null;
+  Body: string;
+  Verified_Purchase?: boolean;
+  Helpful_Count?: number;
+  Report_Count?: number;
+  created_at?: string;
+  customer?: { Customer_Full_Name?: string | null } | null;
+  replies?: Array<{ id: number; Reply_Type: string; Body: string; created_at?: string }>;
+}
+
+interface ProductQuestion {
+  id: number;
+  Question: string;
+  Helpful_Count?: number;
+  Report_Count?: number;
+  created_at?: string;
+  customer?: { Customer_Full_Name?: string | null } | null;
+  answers?: Array<{ id: number; Answer_Type: string; Body: string; created_at?: string }>;
 }
 
 
@@ -104,9 +149,14 @@ const dept    = computed(() => product.value?.department ?? null)
 const sub     = computed(() => product.value?.subdepartment ?? null)
 const subSub  = computed(() => product.value?.sub_sub_department ?? null)
 
-const deptName   = computed(() => dept.value?.Product_Department_Name ?? '')
-const subName    = computed(() => sub.value?.Sub_Department_Name ?? '')
-const subSubName = computed(() => subSub.value?.Product_Sub_Sub_Department_Name ?? '')
+const deptName   = computed(() => categoryName(dept.value))
+const subName    = computed(() => categoryName(sub.value))
+const subSubName = computed(() => categoryName(subSub.value))
+const productOriginalPrice = computed(() => Number(product.value?.Original_Price ?? product.value?.Product_Price ?? 0))
+const productFinalPrice = computed(() => Number(product.value?.Product_Final_Price ?? product.value?.Product_Price ?? 0))
+const productUnitDiscount = computed(() => Number(product.value?.Discount_Amount ?? Math.max(productOriginalPrice.value - productFinalPrice.value, 0)))
+const productHasDiscount = computed(() => Boolean(product.value?.Has_Discount ?? productUnitDiscount.value > 0))
+const isOutOfStock = computed(() => Number(product.value?.Product_Stock ?? 0) <= 0)
 
 // --- Breadcrumb navigation helpers ---
 const goDept = () => {
@@ -141,6 +191,66 @@ const goSubSub = () => {
 
 const product = ref<Product | null>(null)
 const specifications = ref<SpecificationGroup[]>([])
+const reviewSummary = ref<ReviewSummary>({ average_rating: '0.00', review_count: 0, distribution: {} })
+const reviews = ref<ProductReview[]>([])
+const questions = ref<ProductQuestion[]>([])
+const engagementLoading = ref(false)
+const reviewBusy = ref(false)
+const questionBusy = ref(false)
+const reviewMessage = ref('')
+const questionMessage = ref('')
+const reviewForm = reactive({ rating: 5, title: '', body: '' })
+const questionForm = reactive({ question: '' })
+const ratingDisplay = computed(() => formatRatingSummary(reviewSummary.value))
+const ratingStars = computed(() => starStates(reviewSummary.value.average_rating))
+const relatedProducts = ref<any[]>([])
+const recentlyViewedProducts = ref<any[]>([])
+const siteUrl = computed(() => String(config.public.siteUrl || ''))
+const productPath = computed(() => `/product/${product.value?.Slug || slug}`)
+const seoBreadcrumbs = computed(() => [
+  { name: t('common.home'), path: '/' },
+  ...(deptName.value && dept.value?.id ? [{ name: deptName.value, path: `/?deptId=${dept.value.id}` }] : []),
+  ...(subName.value && sub.value?.id ? [{ name: subName.value, path: `/?deptId=${dept.value?.id ?? ''}&subId=${sub.value.id}` }] : []),
+  ...(subSubName.value && subSub.value?.Slug ? [{ name: subSubName.value, path: `/departments/${subSub.value.Slug}` }] : []),
+  ...(productName(product.value) ? [{ name: productName(product.value), path: productPath.value }] : []),
+])
+
+useHead(() => {
+  const name = productName(product.value) || t('common.products')
+  const description = seoDescription(productText(product.value), `${name} from ISC Depot.`)
+  const canonical = canonicalUrl(siteUrl.value, route.path || productPath.value)
+  const scripts = product.value ? [
+    {
+      key: 'product-jsonld',
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(productJsonLd({
+        product: product.value,
+        reviewSummary: reviewSummary.value,
+        siteUrl: siteUrl.value,
+        r2Url: String($r2Url || ''),
+      })),
+    },
+    {
+      key: 'product-breadcrumb-jsonld',
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify(breadcrumbJsonLd(seoBreadcrumbs.value, siteUrl.value)),
+    },
+  ] : []
+
+  return {
+    title: seoTitle(name),
+    meta: [
+      { name: 'description', content: description },
+      { property: 'og:title', content: seoTitle(name) },
+      { property: 'og:description', content: description },
+      { property: 'og:type', content: 'product' },
+      { property: 'og:url', content: canonical },
+      { name: 'twitter:card', content: 'summary_large_image' },
+    ],
+    link: [{ rel: 'canonical', href: canonical }],
+    script: scripts,
+  }
+})
 
 
 const getProductFeatures = async (): Promise<void> => {
@@ -169,7 +279,7 @@ const normalizedIsActive = computed(() =>
     .filter(Boolean)
     .map((x: any) => ({
       label: x?.description?.Product_Specification_Description_Name ?? '',
-      value: x?.spec_value?.value ?? '',
+      value: field(x?.spec_value, 'value'),
     }))
 )
 
@@ -209,12 +319,12 @@ const toggleFavorite = async () => {
       isFavorited.value = data.favorited
       setLocalFav(isFavorited.value)
     }
-    toast.success(isFavorited.value ? 'Added to favorites' : 'Removed from favorites')
+    toast.success(isFavorited.value ? t('product.addedToFavorites') : t('product.removedFromFavorites'))
   } catch (e: any) {
     // revert on error
     isFavorited.value = prev
     setLocalFav(prev)
-    toast.error(e?.response?.status === 401 ? 'Please log in to use favorites' : 'Couldn’t update favorite')
+    toast.error(e?.response?.status === 401 ? t('product.loginForFavorites') : t('product.favoriteError'))
   } finally {
     favBusy.value = false
   }
@@ -236,7 +346,7 @@ const addToCart = async () => {
 
   const stock = Number(product.value.Product_Stock ?? 0)
   if (stock <= 0) {
-    toast.error('This product is out of stock.')
+    toast.error(t('product.outOfStockError'))
     return
   }
 
@@ -245,8 +355,17 @@ const addToCart = async () => {
       {
         id: product.value.id,
         slug: product.value.Slug,
-        name: product.value.Product_Name,
-        price: product.value.Product_Price,
+        name: productName(product.value),
+        name_ar: product.value.Product_Name_Ar,
+        Product_Name: product.value.Product_Name,
+        Product_Name_Ar: product.value.Product_Name_Ar,
+        description: productText(product.value),
+        price: productFinalPrice.value,
+        originalPrice: productOriginalPrice.value,
+        finalPrice: productFinalPrice.value,
+        discountAmount: productUnitDiscount.value,
+        hasDiscount: productHasDiscount.value,
+        activeDiscount: product.value.Active_Discount ?? null,
         image: product.value.images?.[0]?.Image_Path || '',
         weight: product.value.Weight_Kg,
         length: product.value.Length_Cm,
@@ -257,11 +376,84 @@ const addToCart = async () => {
       quantity.value
     );
 
-    toast.success(`${product.value.Product_Name} added to cart`);
+    toast.success(t('product.addedToCart', { name: productName(product.value) }));
   } catch (e: any) {
-    toast.error(e?.response?.status === 401 ? "Please login to add to cart" : "Could not add to cart");
+    toast.error(e?.response?.status === 401 ? t('product.loginToAddCart') : t('product.cartError'));
   }
 };
+
+const requestBackInStockAlert = async () => {
+  if (!product.value || backInStockBusy.value) return
+
+  if (!isAuthenticated.value) {
+    toast.error(t('product.loginForStockAlert'))
+    return
+  }
+
+  backInStockBusy.value = true
+  backInStockMessage.value = ''
+
+  try {
+    const { data } = await $axios.post(`/api/products/${product.value.id}/back-in-stock-alert`, {}, { withCredentials: true })
+    backInStockMessage.value = data?.message || t('product.stockAlertSaved')
+    toast.success(backInStockMessage.value)
+  } catch (error: any) {
+    backInStockMessage.value = error?.response?.data?.message || t('product.stockAlertError')
+    toast.error(backInStockMessage.value)
+  } finally {
+    backInStockBusy.value = false
+  }
+}
+
+const productCardImage = (item: any) => item?.image?.Image_Path || item?.image || item?.images?.[0]?.Image_Path || ''
+const productCardPrice = (item: any) => Number(item?.final_price ?? item?.price ?? item?.Product_Final_Price ?? item?.Product_Price ?? 0)
+const productCardSlug = (item: any) => item?.slug || item?.Slug
+
+const openProductCard = (item: any) => {
+  const nextSlug = productCardSlug(item)
+  if (!nextSlug) return
+  router.push(`/product/${nextSlug}`)
+}
+
+const loadRecentlyViewedProducts = () => {
+  if (!import.meta.client || !product.value) return
+
+  recentlyViewedProducts.value = readRecentlyViewed(window.localStorage)
+    .filter((item: any) => productCardSlug(item) !== product.value?.Slug)
+    .slice(0, 4)
+}
+
+const rememberRecentlyViewedProduct = () => {
+  if (!import.meta.client || !product.value) return
+
+  const current = {
+    id: product.value.id,
+    slug: product.value.Slug,
+    name: product.value.Product_Name,
+    name_ar: product.value.Product_Name_Ar,
+    image: product.value.images?.[0]?.Image_Path,
+    price: productFinalPrice.value,
+  }
+  const next = updateRecentlyViewed(readRecentlyViewed(window.localStorage), current, 8)
+  writeRecentlyViewed(window.localStorage, next)
+  loadRecentlyViewedProducts()
+}
+
+const fetchRelatedProducts = async () => {
+  if (!subSub.value?.Slug || !product.value) {
+    relatedProducts.value = []
+    return
+  }
+
+  try {
+    const { data } = await $axios.get(`/api/products/${subSub.value.Slug}`)
+    relatedProducts.value = filterAndSortProducts(data?.products || [], { sort: 'rating_desc' })
+      .filter((item: any) => Number(item.id) !== Number(product.value?.id))
+      .slice(0, 4)
+  } catch (error) {
+    relatedProducts.value = []
+  }
+}
 
 
 
@@ -274,6 +466,8 @@ const getProducts = async (): Promise<void> => {
                         price: parseFloat(response.data.product.price)
                        };
       specifications.value = response.data.specifications;
+      reviewSummary.value = response.data.review_summary || reviewSummary.value
+      await fetchRelatedProducts()
 
       console.log('Fetched product:', product.value);
  
@@ -282,10 +476,111 @@ const getProducts = async (): Promise<void> => {
   }
 }
 
+const fetchProductEngagement = async () => {
+  engagementLoading.value = true
+  try {
+    const [reviewResponse, questionResponse] = await Promise.all([
+      $axios.get(`/api/products/details/${slug}/reviews`),
+      $axios.get(`/api/products/details/${slug}/questions`),
+    ])
+
+    reviewSummary.value = reviewResponse.data?.summary || reviewSummary.value
+    reviews.value = reviewResponse.data?.data || []
+    questions.value = questionResponse.data?.data || []
+  } catch (error) {
+    console.error('Error fetching product engagement:', error)
+  } finally {
+    engagementLoading.value = false
+  }
+}
+
+const submitReview = async () => {
+  if (!isAuthenticated.value) {
+    toast.error(t('product.loginForReviews'))
+    return
+  }
+
+  reviewBusy.value = true
+  reviewMessage.value = ''
+  try {
+    const { data } = await $axios.post(`/api/products/details/${slug}/reviews`, {
+      rating: reviewForm.rating,
+      title: reviewForm.title,
+      body: reviewForm.body,
+    }, { withCredentials: true })
+
+    reviewForm.rating = 5
+    reviewForm.title = ''
+    reviewForm.body = ''
+    reviewMessage.value = data?.message || t('product.reviewSubmitted')
+    toast.success(reviewMessage.value)
+    await fetchProductEngagement()
+  } catch (error: any) {
+    reviewMessage.value = error?.response?.data?.message || t('product.reviewError')
+    toast.error(reviewMessage.value)
+  } finally {
+    reviewBusy.value = false
+  }
+}
+
+const submitQuestion = async () => {
+  if (!isAuthenticated.value) {
+    toast.error(t('product.loginForReviews'))
+    return
+  }
+
+  questionBusy.value = true
+  questionMessage.value = ''
+  try {
+    const { data } = await $axios.post(`/api/products/details/${slug}/questions`, {
+      question: questionForm.question,
+    }, { withCredentials: true })
+
+    questionForm.question = ''
+    questionMessage.value = data?.message || t('product.questionSubmitted')
+    toast.success(questionMessage.value)
+    await fetchProductEngagement()
+  } catch (error: any) {
+    questionMessage.value = error?.response?.data?.message || t('product.questionError')
+    toast.error(questionMessage.value)
+  } finally {
+    questionBusy.value = false
+  }
+}
+
+const markReviewHelpful = async (review: ProductReview) => {
+  if (!isAuthenticated.value) return toast.error(t('product.loginForReviews'))
+  await $axios.post(`/api/reviews/${review.id}/helpful`, {}, { withCredentials: true })
+  review.Helpful_Count = Number(review.Helpful_Count || 0) + 1
+}
+
+const reportReview = async (review: ProductReview) => {
+  if (!isAuthenticated.value) return toast.error(t('product.loginForReviews'))
+  await $axios.post(`/api/reviews/${review.id}/report`, {}, { withCredentials: true })
+  reviews.value = reviews.value.filter(item => item.id !== review.id)
+}
+
+const markQuestionHelpful = async (question: ProductQuestion) => {
+  if (!isAuthenticated.value) return toast.error(t('product.loginForReviews'))
+  await $axios.post(`/api/questions/${question.id}/helpful`, {}, { withCredentials: true })
+  question.Helpful_Count = Number(question.Helpful_Count || 0) + 1
+}
+
+const reportQuestion = async (question: ProductQuestion) => {
+  if (!isAuthenticated.value) return toast.error(t('product.loginForReviews'))
+  await $axios.post(`/api/questions/${question.id}/report`, {}, { withCredentials: true })
+  questions.value = questions.value.filter(item => item.id !== question.id)
+}
+
+if (import.meta.server) {
+  await getProducts()
+}
 
 onMounted(async(): Promise<void> => {
-     await getProducts();
+     if (!product.value) await getProducts();
       await getProductFeatures();
+      await fetchProductEngagement();
+      rememberRecentlyViewedProduct();
 })
 
 
@@ -312,7 +607,7 @@ onMounted(async(): Promise<void> => {
 <nav aria-label="Breadcrumb" class="mb-3">
   <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-600">
     <li>
-      <NuxtLink to="/" class="hover:text-[#07B6C6]">Home</NuxtLink>
+      <NuxtLink to="/" class="hover:text-[#07B6C6]">{{ t('common.home') }}</NuxtLink>
     </li>
 
     <li class="opacity-60">/</li>
@@ -326,7 +621,7 @@ onMounted(async(): Promise<void> => {
       >
         {{ deptName }}
       </button>
-      <span v-else class="text-slate-400">Department</span>
+      <span v-else class="text-slate-400">{{ t('common.department') }}</span>
     </li>
 
     <template v-if="subName">
@@ -350,7 +645,7 @@ onMounted(async(): Promise<void> => {
           @click="goSubSub"
           class="text-slate-900 font-semibold hover:text-[#07B6C6]"
         >
-          {{ subSubName }}s
+          {{ subSubName }}
         </button>
       </li>
     </template>
@@ -374,7 +669,7 @@ onMounted(async(): Promise<void> => {
         <div class="aspect-[4/3] md:aspect-[5/4] flex items-center justify-center bg-slate-50">
           <img
             :src="`${$r2Url}/${img.Image_Path}`"
-            :alt="product?.Product_Name || 'Product image'"
+            :alt="productName(product) || 'Product image'"
             class="block max-h-[420px] w-auto object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"
             loading="lazy"
              
@@ -453,23 +748,33 @@ onMounted(async(): Promise<void> => {
         <div class="md:col-span-4 space-y-3">
           <div class="inline-flex items-center gap-2 text-xs text-slate-500">
             <span class="inline-flex items-center gap-1 rounded-md ring-1 ring-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5">
-              Industrial Supply
+              {{ t('product.industrialSupply') }}
             </span>
-            <span>Code: <span class="font-medium text-slate-700">{{ product?.Inhouse_Barcode_Source }}</span></span>
+            <span>{{ t('product.code') }}: <span class="font-medium text-slate-700">{{ product?.Inhouse_Barcode_Source }}</span></span>
           </div>
 
           <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 leading-snug">
-            {{ product?.Product_Name }}
+            {{ productName(product) }}
           </h1>
 
           <!-- Meta (ratings/availability placeholders) -->
           <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <div class="flex items-center gap-1 text-amber-500">
-              
+            <div class="flex items-center gap-2" :aria-label="ratingDisplay.label">
+              <div class="flex items-center text-amber-500" aria-hidden="true">
+                <span
+                  v-for="(state, starIndex) in ratingStars"
+                  :key="`rating-star-${starIndex}`"
+                  :class="state === 'empty' ? 'text-slate-300' : 'text-amber-500'"
+                >
+                  ★
+                </span>
+              </div>
+              <span class="font-medium text-slate-700">{{ t('product.ratingSummary', { average: ratingDisplay.average }) }}</span>
+              <span class="text-slate-500">{{ t('product.reviewsCount', { count: ratingDisplay.count }) }}</span>
             </div>
              
-            <div class="text-emerald-600 font-medium" v-if="Number(product?.Product_Stock ?? 0) > 0">{{ product?.Product_Stock }} units available</div>
-            <div class="text-rose-600 font-medium" v-else>Out of stock</div>
+            <div class="text-emerald-600 font-medium" v-if="Number(product?.Product_Stock ?? 0) > 0">{{ t('product.unitsAvailable', { count: product?.Product_Stock ?? 0 }) }}</div>
+            <div class="text-rose-600 font-medium" v-else>{{ t('product.outOfStock') }}</div>
           </div>
 
           <!-- Small feature bullets (optional) -->
@@ -501,7 +806,7 @@ onMounted(async(): Promise<void> => {
                 v-if="(!normalizedIsActive || !normalizedIsActive.length)"
                 class="col-span-full text-sm text-slate-500"
               >
-                No feature information available.
+                {{ t('product.noFeatureInfo') }}
               </div>
             </div>
 
@@ -514,10 +819,16 @@ onMounted(async(): Promise<void> => {
           <div class="w-full md:sticky md:top-6 rounded-2xl border border-slate-200 bg-white shadow-sm p-5">
             <!-- Desktop price -->
             <div class="hidden md:block">
-              <div class="text-xs font-medium text-slate-500 mb-1">Web Price</div>
+              <div class="text-xs font-medium text-slate-500 mb-1">{{ t('product.webPrice') }}</div>
               <div class="text-[28px] leading-8 font-bold text-emerald-600">
-                OMR {{ product?.Product_Price ?? '0.00' }}
-                <span class="text-sm font-normal text-slate-500">/ each</span>
+                {{ t('common.omr') }} {{ productFinalPrice.toFixed(3) }}
+                <span class="text-sm font-normal text-slate-500">/ {{ t('product.each') }}</span>
+              </div>
+              <div v-if="productHasDiscount" class="mt-1 flex flex-wrap items-center gap-2">
+                <span class="text-sm text-slate-400 line-through">{{ t('common.omr') }} {{ productOriginalPrice.toFixed(3) }}</span>
+                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                  {{ t('listing.saveAmount', { amount: productUnitDiscount.toFixed(3) }) }}
+                </span>
               </div>
             </div>
 
@@ -525,16 +836,19 @@ onMounted(async(): Promise<void> => {
             <div class="md:hidden">
               <div class="flex items-center justify-between text-sm">
                 <div>
-                  <div class="text-slate-500">Price</div>
+                  <div class="text-slate-500">{{ t('product.price') }}</div>
                   <div class="text-emerald-600 font-semibold">
-                    OMR {{ product?.Product_Price ?? '0.00' }}
-                    <span class="text-xs text-slate-500 font-normal">/ each</span>
+                    {{ t('common.omr') }} {{ productFinalPrice.toFixed(3) }}
+                    <span class="text-xs text-slate-500 font-normal">/ {{ t('product.each') }}</span>
+                  </div>
+                  <div v-if="productHasDiscount" class="text-xs text-slate-400 line-through">
+                    {{ t('common.omr') }} {{ productOriginalPrice.toFixed(3) }}
                   </div>
                 </div>
                 <div>
-                  <div class="text-slate-500">Sub Total</div>
+                  <div class="text-slate-500">{{ t('product.subTotal') }}</div>
                   <div class="font-semibold">
-                    {{ ((product?.Product_Price ?? 0) * (quantity || 1)).toFixed(2) }}
+                    {{ (productFinalPrice * (quantity || 1)).toFixed(3) }}
                   </div>
                 </div>
               </div>
@@ -542,7 +856,7 @@ onMounted(async(): Promise<void> => {
 
             <!-- Qty -->
             <div class="mt-4">
-              <label class="text-sm font-semibold block mb-1 text-slate-700">Quantity</label>
+              <label class="text-sm font-semibold block mb-1 text-slate-700">{{ t('product.quantity') }}</label>
               <div class="flex items-center gap-2">
                 <button
                   @click="decrementQty()"
@@ -592,28 +906,40 @@ onMounted(async(): Promise<void> => {
                   <span v-if="favBusy" class="absolute inset-0 rounded-full animate-ping bg-rose-400/40"></span>
                 </span>
 
-                <span>{{ isFavorited ? 'Favorited' : 'Add to Favorites' }}</span>
+                <span>{{ isFavorited ? t('product.favorited') : t('product.addToFavorites') }}</span>
               </button>
 
 
             <!-- Add to cart -->
             <button
+              v-if="!isOutOfStock"
               @click="addToCart"
               class="mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#00e676] hover:from-[#00a388] hover:to-[#00c853]
                      text-white text-sm font-semibold py-2.5 rounded-xl shadow transition"
             >
-              Add to Cart
+              {{ t('product.addToCart') }}
             </button>
+
+            <button
+              v-else
+              type="button"
+              :disabled="backInStockBusy"
+              @click="requestBackInStockAlert"
+              class="mt-4 w-full rounded-xl bg-cyan-700 px-3 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-cyan-800 disabled:opacity-60"
+            >
+              {{ backInStockBusy ? t('product.savingAlert') : t('product.notifyWhenAvailable') }}
+            </button>
+            <p v-if="backInStockMessage" class="mt-2 text-xs text-slate-600">{{ backInStockMessage }}</p>
 
             <!-- Trust signals -->
             <div class="mt-4 space-y-2 text-xs text-slate-600">
               <div class="flex items-center gap-2">
                 <svg class="h-4 w-4 text-emerald-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1l9 4v6c0 5-3.8 9.7-9 11-5.2-1.3-9-6-9-11V5l9-4z"/></svg>
-                Secure checkout • SSL encrypted
+                {{ t('product.secureCheckout') }}
               </div>
               <div class="flex items-center gap-2">
                 <svg class="h-4 w-4 text-cyan-600" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h12v2H3v-2z"/></svg>
-                Fast dispatch from ISC warehouse
+                {{ t('product.fastDispatch') }}
               </div>
               <!-- <div class="flex items-center gap-2">
                 <svg class="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7a5 5 0 015 5v4h3v2H4v-2h3v-4a5 5 0 015-5z"/></svg>
@@ -627,23 +953,208 @@ onMounted(async(): Promise<void> => {
       <!-- Features -->
       <div class="md:col-span-12 mt-8">
         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 class="text-lg md:text-xl font-semibold text-slate-900">Product Specifications</h2>
+          <h2 class="text-lg md:text-xl font-semibold text-slate-900">{{ t('product.specifications') }}</h2>
           <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
             <div
               v-for="(feature, i) in (features || [])"
               :key="i"
               class="rounded-lg bg-slate-50/60 ring-1 ring-slate-200 px-3 py-2"
             >
-              <div class="text-slate-600 text-xs uppercase tracking-wide mb-1">{{ feature.description?.Product_Specification_Description_Name }}</div>
+              <div class="text-slate-600 text-xs uppercase tracking-wide mb-1">{{ field(feature.description, 'Product_Specification_Description_Name') }}</div>
               <div class="font-medium">
-                {{ feature.spec_value?.value }} 
+                {{ field(feature.spec_value, 'value') }}
               </div>
             </div>
             <div v-if="!features || features.length === 0" class="text-slate-500">
-              No feature information available.
+              {{ t('product.noFeatureInfo') }}
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-if="relatedProducts.length || recentlyViewedProducts.length" class="md:col-span-12 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section v-if="relatedProducts.length" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-lg md:text-xl font-semibold text-slate-900">{{ t('product.relatedProducts') }}</h2>
+            <NuxtLink v-if="subSub?.Slug" :to="`/departments/${subSub.Slug}`" class="text-sm font-semibold text-cyan-700 hover:text-cyan-900">
+              {{ t('common.viewAll') }}
+            </NuxtLink>
+          </div>
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="item in relatedProducts"
+              :key="`related-${item.id}`"
+              type="button"
+              class="group flex gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:border-cyan-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+              :aria-label="t('listing.viewProduct', { name: productName(item) })"
+              @click="openProductCard(item)"
+            >
+              <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+                <img
+                  v-if="productCardImage(item)"
+                  :src="`${$r2Url}/${productCardImage(item)}`"
+                  :alt="productName(item)"
+                  class="h-full w-full object-contain"
+                  loading="lazy"
+                />
+              </div>
+              <div class="min-w-0">
+                <div class="line-clamp-2 text-sm font-semibold text-slate-900 group-hover:text-cyan-800">{{ productName(item) }}</div>
+                <div class="mt-1 text-sm font-semibold text-emerald-600">{{ productCardPrice(item).toFixed(3) }} {{ t('common.omr') }}</div>
+                <div class="mt-1 text-xs text-slate-500" :aria-label="formatRatingSummary(item.review_summary).label">
+                  ★ {{ formatRatingSummary(item.review_summary).average }} ({{ formatRatingSummary(item.review_summary).count }})
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section v-if="recentlyViewedProducts.length" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 class="text-lg md:text-xl font-semibold text-slate-900">{{ t('product.recentlyViewed') }}</h2>
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              v-for="item in recentlyViewedProducts"
+              :key="`recent-${item.slug || item.id}`"
+              type="button"
+              class="group flex gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-left transition hover:border-cyan-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+              :aria-label="t('listing.viewProduct', { name: productName(item) })"
+              @click="openProductCard(item)"
+            >
+              <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+                <img
+                  v-if="productCardImage(item)"
+                  :src="`${$r2Url}/${productCardImage(item)}`"
+                  :alt="productName(item)"
+                  class="h-full w-full object-contain"
+                  loading="lazy"
+                />
+              </div>
+              <div class="min-w-0">
+                <div class="line-clamp-2 text-sm font-semibold text-slate-900 group-hover:text-cyan-800">{{ productName(item) }}</div>
+                <div class="mt-1 text-sm font-semibold text-emerald-600">{{ productCardPrice(item).toFixed(3) }} {{ t('common.omr') }}</div>
+              </div>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div class="md:col-span-12 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h2 class="text-lg md:text-xl font-semibold text-slate-900">{{ t('product.reviews') }}</h2>
+              <p class="mt-1 text-sm text-slate-600">{{ ratingDisplay.label }}</p>
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-bold text-amber-600">{{ ratingDisplay.average }}</div>
+              <div class="flex text-amber-500" aria-hidden="true">
+                <span v-for="(state, starIndex) in ratingStars" :key="`summary-star-${starIndex}`" :class="state === 'empty' ? 'text-slate-300' : 'text-amber-500'">★</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="engagementLoading" role="status" class="mt-5 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {{ t('common.loading') }}
+          </div>
+
+          <div v-else class="mt-5 space-y-4">
+            <article v-for="review in reviews" :key="review.id" class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 class="font-semibold text-slate-900">{{ review.Title || t('product.reviews') }}</h3>
+                  <p class="text-xs text-slate-500">{{ review.customer?.Customer_Full_Name || 'Customer' }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span v-if="review.Verified_Purchase" class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{{ t('product.verifiedPurchase') }}</span>
+                  <span class="text-sm font-semibold text-amber-600">{{ review.Rating }}/5</span>
+                </div>
+              </div>
+              <p class="mt-3 text-sm leading-6 text-slate-700">{{ review.Body }}</p>
+              <div v-if="review.replies?.length" class="mt-3 space-y-2">
+                <div v-for="reply in review.replies" :key="reply.id" class="rounded-lg bg-white px-3 py-2 text-sm text-slate-700">
+                  <div class="mb-1 text-xs font-semibold uppercase text-slate-500">{{ t('product.replyFrom', { type: reply.Reply_Type }) }}</div>
+                  {{ reply.Body }}
+                </div>
+              </div>
+              <div class="mt-3 flex items-center gap-3 text-xs">
+                <button type="button" class="font-medium text-cyan-700 hover:text-cyan-900" @click="markReviewHelpful(review)">
+                  {{ t('product.helpful') }} ({{ review.Helpful_Count || 0 }})
+                </button>
+                <button type="button" class="font-medium text-rose-700 hover:text-rose-900" @click="reportReview(review)">
+                  {{ t('product.report') }}
+                </button>
+              </div>
+            </article>
+            <div v-if="!reviews.length" role="status" class="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              {{ t('product.noReviews') }}
+            </div>
+          </div>
+
+          <form class="mt-5 rounded-xl border border-slate-200 bg-white p-4" @submit.prevent="submitReview">
+            <h3 class="font-semibold text-slate-900">{{ t('product.writeReview') }}</h3>
+            <p v-if="!isAuthenticated" class="mt-2 text-sm text-slate-500">{{ t('product.loginForReviews') }}</p>
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-3">
+              <label class="text-sm font-medium text-slate-700">
+                {{ t('product.rating') }}
+                <select v-model.number="reviewForm.rating" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                  <option v-for="rating in [5,4,3,2,1]" :key="rating" :value="rating">{{ rating }}</option>
+                </select>
+              </label>
+              <label class="text-sm font-medium text-slate-700">
+                {{ t('product.reviewTitle') }}
+                <input v-model.trim="reviewForm.title" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" maxlength="160" />
+              </label>
+            </div>
+            <label class="mt-3 block text-sm font-medium text-slate-700">
+              {{ t('product.reviewBody') }}
+              <textarea v-model.trim="reviewForm.body" class="mt-1 min-h-28 w-full rounded-lg border border-slate-300 px-3 py-2" required minlength="5"></textarea>
+            </label>
+            <button type="submit" :disabled="reviewBusy || !isAuthenticated" class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60">
+              {{ reviewBusy ? t('common.loading') : t('product.submitReview') }}
+            </button>
+            <p v-if="reviewMessage" class="mt-2 text-sm text-slate-600">{{ reviewMessage }}</p>
+          </form>
+        </section>
+
+        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 class="text-lg md:text-xl font-semibold text-slate-900">{{ t('product.questions') }}</h2>
+          <div class="mt-5 space-y-4">
+            <article v-for="question in questions" :key="question.id" class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <p class="font-semibold text-slate-900">{{ question.Question }}</p>
+              <p class="mt-1 text-xs text-slate-500">{{ question.customer?.Customer_Full_Name || 'Customer' }}</p>
+              <div v-if="question.answers?.length" class="mt-3 space-y-2">
+                <div v-for="answer in question.answers" :key="answer.id" class="rounded-lg bg-white px-3 py-2 text-sm text-slate-700">
+                  <div class="mb-1 text-xs font-semibold uppercase text-slate-500">{{ t('product.replyFrom', { type: answer.Answer_Type }) }}</div>
+                  {{ answer.Body }}
+                </div>
+              </div>
+              <div class="mt-3 flex items-center gap-3 text-xs">
+                <button type="button" class="font-medium text-cyan-700 hover:text-cyan-900" @click="markQuestionHelpful(question)">
+                  {{ t('product.helpful') }} ({{ question.Helpful_Count || 0 }})
+                </button>
+                <button type="button" class="font-medium text-rose-700 hover:text-rose-900" @click="reportQuestion(question)">
+                  {{ t('product.report') }}
+                </button>
+              </div>
+            </article>
+            <div v-if="!questions.length" role="status" class="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              {{ t('product.noQuestions') }}
+            </div>
+          </div>
+
+          <form class="mt-5 rounded-xl border border-slate-200 bg-white p-4" @submit.prevent="submitQuestion">
+            <h3 class="font-semibold text-slate-900">{{ t('product.askQuestion') }}</h3>
+            <p v-if="!isAuthenticated" class="mt-2 text-sm text-slate-500">{{ t('product.loginForReviews') }}</p>
+            <label class="mt-3 block text-sm font-medium text-slate-700">
+              {{ t('product.questionBody') }}
+              <textarea v-model.trim="questionForm.question" class="mt-1 min-h-28 w-full rounded-lg border border-slate-300 px-3 py-2" required minlength="5"></textarea>
+            </label>
+            <button type="submit" :disabled="questionBusy || !isAuthenticated" class="mt-3 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800 disabled:opacity-60">
+              {{ questionBusy ? t('common.loading') : t('product.submitQuestion') }}
+            </button>
+            <p v-if="questionMessage" class="mt-2 text-sm text-slate-600">{{ questionMessage }}</p>
+          </form>
+        </section>
       </div>
 
     
@@ -654,5 +1165,3 @@ onMounted(async(): Promise<void> => {
 
  
 </template>
-
-

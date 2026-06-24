@@ -4,6 +4,7 @@ definePageMeta({ layout: 'layouts' })
 // Imports
 import { useCartStore } from '~/stores/cart'
 import { useShippingQuotes } from '@/composables/useShippingQuotes'
+import { buttonLabel, quantityButtonLabel } from '~/utils/accessibility.js'
 
 
 interface Loactions {
@@ -16,11 +17,59 @@ interface Loactions {
 const { $r2Url, $axios } = useNuxtApp()
 const cart = useCartStore()
 const { user, isAuthenticated } = useAuth()
+const { phoneCountryCodes, digitsOnly, formatPhone } = usePhoneCountryCodes()
+const { t, field, productName, locale } = useStorefrontLocale()
 
 // Shipping quotes composable
 const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShippingQuotes()
 
 const isClient = import.meta.client
+const CHECKOUT_IDEMPOTENCY_KEY = 'checkout_idempotency_key'
+const CHECKOUT_IDEMPOTENCY_SIGNATURE = 'checkout_idempotency_signature'
+const SHIPPING_QUOTE_TTL_MS = 15 * 60 * 1000
+
+const makeCheckoutIdempotencyKey = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+
+  return `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+}
+
+const checkoutSignature = () => JSON.stringify({
+  deliveryMethod: cart.deliveryMethod,
+  addressId: cart.selectedAddressId ?? null,
+  locationId: cart.selectedLocationId ?? null,
+  shippingOption: selectedOption.value ? {
+    shipper_id: selectedOption.value.shipper_id,
+    destination_id: selectedOption.value.destination_id,
+    basis: selectedOption.value.basis,
+    total_price: Number(selectedOption.value.total_price),
+  } : null,
+  items: cart.cartItems.map(i => ({
+    id: i.id,
+    quantity: i.quantity,
+    price: i.price,
+  })),
+})
+
+const ensureCheckoutIdempotencyKey = () => {
+  if (!import.meta.client) return ''
+
+  const signature = checkoutSignature()
+  const storedKey = localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY)
+  const storedSignature = localStorage.getItem(CHECKOUT_IDEMPOTENCY_SIGNATURE)
+
+  if (storedKey && storedSignature === signature) {
+    return storedKey
+  }
+
+  const nextKey = makeCheckoutIdempotencyKey()
+  localStorage.setItem(CHECKOUT_IDEMPOTENCY_KEY, nextKey)
+  localStorage.setItem(CHECKOUT_IDEMPOTENCY_SIGNATURE, signature)
+
+  return nextKey
+}
 
 
 const locations = ref<Loactions[]>([])
@@ -48,7 +97,7 @@ const textareaCls = inputCls + ' resize-y';
 const totalsForQuotes = computed(() => {
   const weight = cart.cartItems.reduce((s, i) => s + ((i.weight || 0) * i.quantity), 0)
   const volume = cart.cartItems.reduce((s, i) => {
-    const cbm = ((i.length || 0) * (i.width || 0) * (i.height || 0)) / 1_000_000
+    const cbm = (i.length || 0) * (i.width || 0) * (i.height || 0)
     return s + (cbm * i.quantity)
   }, 0)
   return { weight_kg: +weight.toFixed(3), volume_cbm: +volume.toFixed(4) }
@@ -157,6 +206,7 @@ const form = reactive({
   District_Id: '' as number | string,
   City_Id: '' as number | string,
   Contact_Person_Name: '',
+  Telephone_Country_Code: '+968',
   Telephone: '',
   Designation: '',
   Remarks: '',
@@ -194,8 +244,10 @@ const resetBelowDistrict = () => {
 const newAddress = reactive({
   Country_Id: '', State_Id: '', City_Id: '',
   Region_Id: '', District_Id: '', Contact_Person_Name: '',
-  Telephone: '', Designation: '', Remarks: '',
+  Telephone_Country_Code: '+968', Telephone: '', Designation: '', Remarks: '',
 })
+
+const isDefaultAddress = (address: any) => Boolean(address?.is_default || address?.Is_Default)
 
 const fetchAddresses = async () => {
   if (!isAuthenticated.value) return
@@ -204,15 +256,20 @@ const fetchAddresses = async () => {
     const res = await $axios.get('/api/contacts')
     addresses.value = res.data
     const stored = import.meta.client ? localStorage.getItem('selected_address_id') : null
-
-    const candidate = stored ? Number(stored) : addresses.value[0]?.id
-    if (candidate) cart.selectedAddressId = candidate
+    const defaultAddress = addresses.value.find(isDefaultAddress)
+    const storedAddress = stored
+      ? addresses.value.find(address => Number(address.id) === Number(stored))
+      : null
+    const candidate = defaultAddress?.id ?? storedAddress?.id ?? addresses.value[0]?.id
+    cart.selectedAddressId = candidate ? Number(candidate) : null
   } catch (e) {
     console.error('Failed to fetch addresses', e)
   }
 }
 
 // Totals (+5% VAT)
+const originalSubtotal = computed(() => + cart.totalOriginalPrice().toFixed(3))
+const productDiscount = computed(() => + cart.totalDiscount().toFixed(3))
 const subtotal = computed(() => + cart.totalPrice().toFixed(3))
 const shippingCost = computed(() =>
   cart.deliveryMethod === 'ship' && selectedOption.value
@@ -294,7 +351,8 @@ const submitAddress = async () => {
       District_Id: form.District_Id || null,
       City_Id: form.City_Id || null,
       Contact_Person_Name: form.Contact_Person_Name || null,
-      Telephone: form.Telephone || null,
+      Telephone_Country_Code: form.Telephone_Country_Code || null,
+      Telephone: digitsOnly(form.Telephone) || null,
       Designation: form.Designation || null,
       Remarks: form.Remarks || null,
       Email: form.Email || null,
@@ -309,6 +367,10 @@ const submitAddress = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const cleanTelephone = () => {
+  form.Telephone = digitsOnly(form.Telephone)
 }
 
 // Modal helpers
@@ -349,8 +411,11 @@ const persistCheckout = () => {
 
   const isShip = cart.deliveryMethod === 'ship'
   const isPickup = cart.deliveryMethod === 'pickup'
+  const quotedAt = new Date()
+  const expiresAt = new Date(quotedAt.getTime() + SHIPPING_QUOTE_TTL_MS)
 
   const payload = {
+    idempotencyKey: ensureCheckoutIdempotencyKey(),
     deliveryMethod: cart.deliveryMethod,  // ship | pickup
 
     // ✅ Only one of these should be set based on deliveryMethod
@@ -366,10 +431,14 @@ const persistCheckout = () => {
       total_price: Number(selectedOption.value.total_price),
       breakdown: selectedOption.value.breakdown ?? null,
       shipper_name: selectedOption.value.shipper_name ?? null, // helpful for summary
+      quoted_at: quotedAt.toISOString(),
+      expires_at: expiresAt.toISOString(),
     } : null,
 
     totals: {
       currency: 'OMR',
+      original_subtotal: +originalSubtotal.value.toFixed(3),
+      product_discount: +productDiscount.value.toFixed(3),
       subtotal: +subtotal.value.toFixed(3),
       shipping: +shippingCost.value.toFixed(3),
       vat: +vat.value.toFixed(3),
@@ -377,7 +446,13 @@ const persistCheckout = () => {
     },
 
     items: cart.cartItems.map(i => ({
-      id: i.id, slug: i.slug, qty: i.quantity, price: i.price,
+      id: i.id,
+      slug: i.slug,
+      qty: i.quantity,
+      price: i.price,
+      original_price: i.originalPrice ?? i.price,
+      discount_amount: i.discountAmount ?? 0,
+      active_discount: i.activeDiscount ?? null,
     })),
 
     savedAt: new Date().toISOString(),
@@ -454,10 +529,10 @@ if (locCandidate) cart.selectedLocationId = locCandidate
       <div class="lg:col-span-2">
         <!-- Header lives in the left column to align the right card with it -->
         <header class="mb-4 sm:mb-6">
-          <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Your Cart</h1>
+          <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{{ t('cart.yourCart') }}</h1>
           <div class="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
-            You have {{ cart.cartItems.length }} items in your cart.
-            <NuxtLink to="/" class="ml-2 text-[#2f5fb6] hover:underline">Continue shopping</NuxtLink>
+            {{ t('cart.itemsCount', { count: cart.cartItems.length }) }}
+            <NuxtLink to="/" class="mx-2 text-[#2f5fb6] hover:underline">{{ t('cart.continueShopping') }}</NuxtLink>
           </div>
         </header>
 
@@ -465,55 +540,76 @@ if (locCandidate) cart.selectedLocationId = locCandidate
         <div class="rounded-xl ring-1 ring-gray-200/80 shadow-sm overflow-hidden">
           <!-- Top bar -->
           <div class="flex items-center justify-between px-3 sm:px-5 py-3 bg-gray-50/80 border-b">
-            <h2 class="text-sm sm:text-base font-semibold text-gray-800">Items in Cart</h2>
-            <button @click="onClearCart"
+            <h2 class="text-sm sm:text-base font-semibold text-gray-800">{{ t('cart.itemsInCart') }}</h2>
+            <button
+              type="button"
+              @click="onClearCart"
+              :aria-label="buttonLabel(t('cart.clearLabel'), t(cart.cartItems.length === 1 ? 'common.item' : 'common.items', { count: cart.cartItems.length }))"
               class="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-xs sm:text-sm transition">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Clear
+              {{ t('cart.clear') }}
             </button>
           </div>
 
 
 
           <!-- Line items -->
+          <div v-if="!cart.cartItems.length" role="status" class="px-5 py-10 text-center text-gray-600">
+            {{ t('cart.empty') }}
+          </div>
           <div v-for="item in cart.cartItems" :key="item.id"
             class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90">
             <div class="grid grid-cols-[64px,1fr,auto] sm:grid-cols-[84px,1fr,auto] gap-3 sm:gap-4 items-start">
               <!-- image -->
-              <NuxtLink :to="`/product/${item.slug}`" class="block rounded-lg overflow-hidden ring-1 ring-gray-200">
-                <img :src="`${$r2Url}/${item.image}`" alt="" class="w-16 h-16 sm:w-20 sm:h-20 object-cover" />
+              <NuxtLink :to="`/product/${item.slug}`" class="block rounded-lg overflow-hidden ring-1 ring-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" :aria-label="t('listing.viewProduct', { name: productName(item) })">
+                <img :src="`${$r2Url}/${item.image}`" :alt="productName(item)" class="w-16 h-16 sm:w-20 sm:h-20 object-cover" />
               </NuxtLink>
 
               <!-- info -->
               <div class="min-w-0">
-                <h3 class="text-sm sm:text-base font-medium text-gray-900 truncate">{{ item.name }}</h3>
+                <h3 class="text-sm sm:text-base font-medium text-gray-900 truncate">{{ productName(item) }}</h3>
                 <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5">Item #{{ item.id }}</p>
-                <button @click.prevent="cart.removeFromCart(item.id)"
+                <button
+                  type="button"
+                  @click.prevent="cart.removeFromCart(item.id)"
+                  :aria-label="t('cart.removeItem', { name: productName(item) })"
                   class="mt-1.5 text-xs text-[#00bfa5] hover:underline">
-                  Remove
+                  {{ t('cart.remove') }}
                 </button>
               </div>
 
               <!-- qty + price -->
               <div class="text-right">
-                <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1">Qty</label>
-                <div class="flex items-center justify-end gap-1">
-                  <button @click="decrementQty(item.id)"
-                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
-                    aria-label="Decrease quantity">−</button>
-                  <input type="number" min="1" v-model.number="item.quantity"
+                <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1" :for="`cart-qty-${item.id}`">{{ t('cart.qty') }}</label>
+                <div class="flex items-center justify-end gap-1" role="group" :aria-label="t('cart.quantityFor', { name: productName(item) })">
+	                  <button
+	                    type="button"
+	                    @click="decrementQty(item.id)"
+	                    :disabled="Number(item.quantity || 1) <= 1"
+	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
+	                    :aria-label="quantityButtonLabel('decrease', productName(item), Number(item.quantity || 1) - 1, locale)">−</button>
+                  <input :id="`cart-qty-${item.id}`" type="number" min="1" v-model.number="item.quantity"
                     @change="onQtyInputChange($event, item.id)" class="w-14 h-7 border rounded-md text-center text-sm"
                      :max="item.Product_Stock"
-                    disabled />
-                  <button @click="incrementQty(item.id)"
-                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
-                    aria-label="Increase quantity">+</button>
+                    readonly :aria-describedby="`cart-qty-${item.id}-hint`" />
+	                  <button
+	                    type="button"
+	                    @click="incrementQty(item.id)"
+	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+	                    :aria-label="quantityButtonLabel('increase', productName(item), Number(item.quantity || 1) + 1, locale)">+</button>
                 </div>
+                <p :id="`cart-qty-${item.id}-hint`" class="sr-only">{{ t('cart.quantityHint') }}</p>
                 <p class="text-xs sm:text-sm text-emerald-700 font-semibold mt-1.5">
-                  OMR {{ item.price }}
-                  <span class="text-[10px] sm:text-xs text-gray-500 font-normal">/ each</span>
+                  {{ t('common.omr') }} {{ Number(item.price || 0).toFixed(3) }}
+                  <span class="text-[10px] sm:text-xs text-gray-500 font-normal">/ {{ t('product.each') }}</span>
+                </p>
+                <p v-if="item.hasDiscount" class="text-[11px] text-gray-400 line-through">
+                  {{ t('common.omr') }} {{ Number(item.originalPrice || item.price || 0).toFixed(3) }}
+                </p>
+                <p v-if="item.hasDiscount" class="text-[11px] text-emerald-700">
+                  {{ t('listing.saveAmount', { amount: Number(item.discountAmount || 0).toFixed(3) }) }} / {{ t('product.each') }}
                 </p>
               </div>
             </div>
@@ -528,47 +624,47 @@ if (locCandidate) cart.selectedLocationId = locCandidate
           <!-- Delivery -->
           <details class="lg:open" open>
             <summary class="list-none cursor-pointer flex items-center justify-between">
-              <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery</h3>
-              <span class="lg:hidden text-xs text-gray-500">tap to expand</span>
+              <h3 class="text-sm sm:text-base font-bold text-gray-800">{{ t('cart.delivery') }}</h3>
+              <span class="lg:hidden text-xs text-gray-500">{{ t('cart.tapToExpand') }}</span>
             </summary>
             <div class="mt-2 space-y-2">
               <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm"
                 :class="cart.deliveryMethod === 'ship' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
                 <input type="radio" value="ship" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
-                Ship to Address
+                {{ t('cart.shipToAddress') }}
               </label>
               <label class="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer text-sm"
                 :class="cart.deliveryMethod === 'pickup' ? 'border-teal-500 bg-teal-50/40' : 'border-gray-200'">
                 <input type="radio" value="pickup" v-model="cart.deliveryMethod" class="accent-[#00bfa5]" />
-                Local Pickup
+                {{ t('cart.localPickup') }}
               </label>
             </div>
           </details>
 
           <details v-if="cart.deliveryMethod === 'pickup'" class="lg:open" open>
             <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
-              <h3 class="text-sm sm:text-base font-bold text-gray-800">Locations</h3>
+              <h3 class="text-sm sm:text-base font-bold text-gray-800">{{ t('cart.locations') }}</h3>
             </summary>
             <div class="mt-2">
               <div v-if="!isAuthenticated" class="text-sm text-gray-600">
-                Please <NuxtLink to="/login" class="text-teal-600 hover:underline">log in</NuxtLink> to select an
-                locations.
+                {{ t('cart.loginToSelectLocation') }}
               </div>
 
               <template v-else>
                 <div v-if="locations.length" class="space-y-2">
                   <select v-model="cart.selectedLocationId"
+                    :aria-label="t('cart.selectPickupLocation')"
                     class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
                     <option v-for="location in locations" :key="location.id" :value="location.id">
-                      {{ location.Location_Name }}
+                      {{ field(location, 'Location_Name') }}
                     </option>
                   </select>
 
                 </div>
                 <div v-else class="text-sm text-gray-600">
-                  No addresses yet.
-                  <button @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
-                    Add one
+                  {{ t('cart.noAddresses') }}
+	                  <button type="button" @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
+                    {{ t('cart.addOne') }}
                   </button>
                 </div>
               </template>
@@ -581,30 +677,30 @@ if (locCandidate) cart.selectedLocationId = locCandidate
           <!-- Address -->
           <details v-if="cart.deliveryMethod === 'ship'" class="lg:open" open>
             <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
-              <h3 class="text-sm sm:text-base font-bold text-gray-800">Shipping Address</h3>
+              <h3 class="text-sm sm:text-base font-bold text-gray-800">{{ t('cart.shippingAddress') }}</h3>
             </summary>
             <div class="mt-2">
               <div v-if="!isAuthenticated" class="text-sm text-gray-600">
-                Please <NuxtLink to="/login" class="text-teal-600 hover:underline">log in</NuxtLink> to select an
-                address.
+                {{ t('cart.loginToSelectAddress') }}
               </div>
 
               <template v-else>
                 <div v-if="addresses.length" class="space-y-2">
                   <select v-model="cart.selectedAddressId"
+                    :aria-label="t('cart.selectShippingAddress')"
                     class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
                     <option v-for="a in addresses" :key="a.id" :value="a.id">
-                      {{ a.Contact_Person_Name }} — {{ a.country?.Country_Name }}, {{ a.city?.City_Name }}
+                      {{ isDefaultAddress(a) ? `${t('cart.defaultAddress')} - ` : '' }}{{ a.Contact_Person_Name }} — {{ formatPhone(a.Telephone_Country_Code, a.Telephone) }} — {{ field(a.country, 'Country_Name') }}, {{ field(a.city, 'City_Name') }}
                     </option>
                   </select>
                   <button type="button" @click="showAddressModal = true" class="text-xs text-teal-700 hover:underline">
-                    Add new address
+                    {{ t('cart.addNewAddress') }}
                   </button>
                 </div>
                 <div v-else class="text-sm text-gray-600">
-                  No addresses yet.
-                  <button @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
-                    Add one
+                  {{ t('cart.noAddresses') }}
+	                  <button type="button" @click="showAddressModal = true" class="text-teal-700 hover:underline font-medium">
+                    {{ t('cart.addOne') }}
                   </button>
                 </div>
               </template>
@@ -614,12 +710,12 @@ if (locCandidate) cart.selectedLocationId = locCandidate
           <!-- Shipping options -->
           <details v-if="cart.deliveryMethod === 'ship' && cart.selectedAddressId" class="lg:open" open>
             <summary class="list-none cursor-pointer mt-1 flex items-center justify-between">
-              <h3 class="text-sm sm:text-base font-bold text-gray-800">Delivery Options</h3>
-              <span v-if="quotesLoading" class="text-[11px] text-gray-500">Calculating…</span>
+              <h3 class="text-sm sm:text-base font-bold text-gray-800">{{ t('cart.deliveryOptions') }}</h3>
+	              <span v-if="quotesLoading" role="status" class="text-[11px] text-gray-500">{{ t('cart.calculating') }}</span>
             </summary>
-            <div class="mt-2">
-              <div v-if="!quotesLoading && shippingOptions.length === 0" class="text-xs text-gray-500">
-                No options for this address/cart.
+            <div class="mt-2" role="radiogroup" :aria-label="t('cart.shippingOptionsGroup')">
+	              <div v-if="!quotesLoading && shippingOptions.length === 0" role="status" class="text-xs text-gray-500">
+                {{ t('cart.noDeliveryOptions') }}
               </div>
 
           
@@ -627,9 +723,9 @@ if (locCandidate) cart.selectedLocationId = locCandidate
                 class="mt-2 p-3 rounded-md border bg-white flex items-center justify-between text-sm"
                 :class="selectedOptionKey === optionKey(opt) ? 'border-teal-500' : 'border-slate-200'">
                 <label class="flex items-center gap-3 cursor-pointer">
-                  <input type="radio" name="shipOpt" :value="optionKey(opt)" v-model="selectedOptionKey"
-                    class="accent-[#00bfa5]" />
-                    <div><img :src="`${$r2Url}/${opt.shipper_image}`" alt="Shipper Image"  style="width: 40px; height: 40px;"/></div>
+	                  <input type="radio" name="shipOpt" :value="optionKey(opt)" v-model="selectedOptionKey"
+	                    class="accent-[#00bfa5] focus-visible:ring-2 focus-visible:ring-cyan-500" />
+                    <div><img :src="`${$r2Url}/${opt.shipper_image}`" :alt="opt.shipper_name"  style="width: 40px; height: 40px;"/></div>
                   <div class="font-medium">{{ opt.shipper_name }}</div>
                 </label>
 
@@ -643,25 +739,31 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
           <!-- Totals -->
           <div class="pt-2 border-t">
-            <h3 class="text-sm sm:text-base font-bold text-gray-800 mb-2">Order Summary</h3>
+            <h3 class="text-sm sm:text-base font-bold text-gray-800 mb-2">{{ t('cart.summary') }}</h3>
             <div class="space-y-1.5 text-sm">
-              <div class="flex justify-between"><span>Subtotal </span><span>OMR {{ subtotal.toFixed(3) }}</span></div>
-              <div class="flex justify-between"><span>Shipping</span><span>OMR {{ shippingCost.toFixed(3) }}</span>
+              <div v-if="productDiscount > 0" class="flex justify-between text-gray-500">
+                <span>{{ t('cart.itemsBeforeDiscount') }}</span><span>{{ t('common.omr') }} {{ originalSubtotal.toFixed(3) }}</span>
               </div>
-              <div class="flex justify-between"><span>VAT ({{ (cart.vat * 100).toFixed(1) }}%)</span><span>OMR {{
+              <div v-if="productDiscount > 0" class="flex justify-between text-emerald-700">
+                <span>{{ t('cart.productDiscount') }}</span><span>- {{ t('common.omr') }} {{ productDiscount.toFixed(3) }}</span>
+              </div>
+              <div class="flex justify-between"><span>{{ t('product.subTotal') }}</span><span>{{ t('common.omr') }} {{ subtotal.toFixed(3) }}</span></div>
+              <div class="flex justify-between"><span>{{ t('nav.shipping') }}</span><span>{{ t('common.omr') }} {{ shippingCost.toFixed(3) }}</span>
+              </div>
+              <div class="flex justify-between"><span>VAT ({{ (cart.vat * 100).toFixed(1) }}%)</span><span>{{ t('common.omr') }} {{
                 vat.toFixed(3)
                   }}</span></div>
             </div>
             <hr class="my-3" />
             <div class="flex justify-between font-semibold text-base sm:text-lg text-[#00bfa5]">
-              <span>Total</span>
-              <span>OMR {{ grandTotal.toFixed(3) }}</span>
+              <span>{{ t('cart.total') }}</span>
+              <span>{{ t('common.omr') }} {{ grandTotal.toFixed(3) }}</span>
             </div>
 
             <button type="button" @click="goCheckout" class="mt-3 sm:mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135]
                      text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
               :disabled="cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
-              Proceed to Checkout
+              {{ t('cart.proceedToCheckout') }}
             </button>
           </div>
         </div>
@@ -674,13 +776,13 @@ if (locCandidate) cart.selectedLocationId = locCandidate
       v-if="cart.cartItems.length">
       <div class="flex items-center justify-between">
         <div class="text-sm">
-          <div class="text-slate-500">Total</div>
-          <div class="font-semibold text-slate-900">OMR {{ grandTotal.toFixed(3) }}</div>
+          <div class="text-slate-500">{{ t('cart.total') }}</div>
+          <div class="font-semibold text-slate-900">{{ t('common.omr') }} {{ grandTotal.toFixed(3) }}</div>
         </div>
         <button type="button" @click="goCheckout" class="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white
                  bg-[#2f5fb6] hover:bg-[#274f97] transition disabled:bg-gray-300"
           :disabled="cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
-          Checkout
+          {{ t('cart.checkout') }}
         </button>
       </div>
       <div class="h-[env(safe-area-inset-bottom)]"></div>
@@ -705,10 +807,10 @@ if (locCandidate) cart.selectedLocationId = locCandidate
           aria-modal="true">
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-            <h3 class="text-lg font-semibold">Add New Address</h3>
-            <button @click="showAddressModal = false"
+            <h3 class="text-lg font-semibold">{{ t('cart.addNewAddress') }}</h3>
+	            <button type="button" @click="showAddressModal = false"
               class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-              aria-label="Close">
+              :aria-label="t('common.close')">
               ✕
             </button>
           </div>
@@ -717,11 +819,11 @@ if (locCandidate) cart.selectedLocationId = locCandidate
           <form @submit.prevent="submitAddress" class="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Country -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Country</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.country') }}</label>
               <div class="relative">
                 <select v-model="form.Country_Id" @change="onCountryChange" :class="selectCls">
-                  <option value="">-- Select Country --</option>
-                  <option v-for="c in countries" :key="c.id" :value="c.id">{{ c.Country_Name }}</option>
+                  <option value="">{{ t('addresses.selectCountry') }}</option>
+                  <option v-for="c in countries" :key="c.id" :value="c.id">{{ field(c, 'Country_Name') }}</option>
                 </select>
                 <ChevronDown />
               </div>
@@ -729,11 +831,11 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <!-- Region -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Region</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.region') }}</label>
               <div class="relative">
                 <select v-model="form.Region_Id" @change="onRegionChange" :class="selectCls">
-  <option value="">-- Select Region --</option>
-  <option v-for="r in regions" :key="r.id" :value="r.id">{{ r.Region_Name }}</option>
+  <option value="">{{ t('addresses.selectRegion') }}</option>
+  <option v-for="r in regions" :key="r.id" :value="r.id">{{ field(r, 'Region_Name') }}</option>
 </select>
                 <ChevronDown />
               </div>
@@ -741,11 +843,11 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <!-- District -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">District</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.district') }}</label>
               <div class="relative">
                 <select v-model="form.District_Id" @change="onDistrictChange" :class="selectCls">
-  <option value="">-- Select District --</option>
-  <option v-for="d in districts" :key="d.id" :value="d.id">{{ d.District_Name }}</option>
+  <option value="">{{ t('addresses.selectDistrict') }}</option>
+  <option v-for="d in districts" :key="d.id" :value="d.id">{{ field(d, 'District_Name') }}</option>
 </select>
                 <ChevronDown />
               </div>
@@ -753,11 +855,11 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <!-- City -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">City</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.city') }}</label>
               <div class="relative">
                 <select v-model="form.City_Id" :class="selectCls">
-  <option value="">-- Select City --</option>
-  <option v-for="ci in cities" :key="ci.id" :value="ci.id">{{ ci.City_Name }}</option>
+  <option value="">{{ t('addresses.selectCity') }}</option>
+  <option v-for="ci in cities" :key="ci.id" :value="ci.id">{{ field(ci, 'City_Name') }}</option>
 </select>
                 <ChevronDown />
               </div>
@@ -765,22 +867,40 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <!-- Contact Person -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Contact Person</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.contactPerson') }}</label>
               <input v-model.trim="form.Contact_Person_Name" :class="inputCls" type="text" />
             </div>
 
             <!-- Telephone -->
-            <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Telephone</label>
-              <input v-model.trim="form.Telephone" :class="inputCls" type="text" />
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.telephone') }}</label>
+              <div class="grid grid-cols-[120px,1fr] gap-2">
+                <div class="relative">
+                  <select v-model="form.Telephone_Country_Code" :class="selectCls">
+                    <option v-for="item in phoneCountryCodes" :key="item.code" :value="item.code">
+                      {{ item.code }}
+                    </option>
+                  </select>
+                  <ChevronDown />
+                </div>
+                <input
+                  v-model.trim="form.Telephone"
+                  :class="inputCls"
+                  type="tel"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="9XXXXXXX"
+                  @input="cleanTelephone"
+                />
+              </div>
             </div>
 
             <!-- Designation -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Designation</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.designation') }}</label>
               <select v-model="form.Designation" :class="selectCls">
 
-                <option value="">-- Select Designation --</option>
+                <option value="">{{ t('addresses.selectDesignation') }}</option>
                 <option value="Mr">Mr</option>
                 <option value="Ms">Ms</option>
                 <option value="Mrs">Mrs</option>
@@ -795,13 +915,13 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <!-- Email -->
             <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.email') }}</label>
               <input v-model.trim="form.Email" :class="inputCls" type="email" />
             </div>
 
             <!-- Remarks -->
             <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-slate-700 mb-1">Remarks</label>
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.remarks') }}</label>
               <textarea v-model.trim="form.Remarks" :class="textareaCls" rows="3"></textarea>
             </div>
 
@@ -809,14 +929,14 @@ if (locCandidate) cart.selectedLocationId = locCandidate
             <div class="md:col-span-2 flex justify-end gap-3 pt-2">
               <button type="button" @click="closeModal"
                 class="px-4 py-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50">
-                Cancel
+                {{ t('common.cancel') }}
               </button>
               <button type="submit"
                 class="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-cyan-500 to-teal-600 hover:opacity-90 flex items-center gap-2 disabled:opacity-60"
                 :disabled="submitting">
                 <span v-if="submitting"
                   class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-                {{ isEdit ? 'Save Changes' : 'Save' }}
+                {{ isEdit ? t('addresses.saveChanges') : t('common.save') }}
               </button>
             </div>
           </form>

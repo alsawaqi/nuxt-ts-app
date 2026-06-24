@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { $r2Url, $axios } = useNuxtApp()
 const { user, customer, isAuthenticated } = useAuth()
+const { t, field } = useStorefrontLocale()
 import { ref, onMounted } from 'vue'
 
 
@@ -81,7 +82,7 @@ const props = defineProps<{
   } | null
 
   items: Item[]
-  totals: { taxable: number; vat: number; grand: number }
+  totals: { taxable: number; vat: number; grand: number; originalSubtotal?: number; productDiscount?: number }
   onConfirm?: () => void
 }>()
 
@@ -134,9 +135,9 @@ onMounted(async () => {
     <!-- Header band -->
     <div class="flex flex-col gap-2 sm:gap-0 sm:flex-row sm:items-center sm:justify-between mb-4">
       <div>
-        <h2 class="text-2xl font-bold text-slate-800">Order Confirmation</h2>
+        <h2 class="text-2xl font-bold text-slate-800">{{ t('confirm.title') }}</h2>
         <div class="mt-0.5 text-sm text-slate-600">
-          Please review your order details before confirming.
+          {{ t('confirm.review') }}
         </div>
       </div>
      
@@ -147,7 +148,7 @@ onMounted(async () => {
       <!-- Supplier -->
       <div class="rounded-lg ring-1 ring-slate-200 bg-white">
         <div class="px-4 py-2 border-b border-slate-200">
-          <h3 class="text-sm font-semibold tracking-wide text-slate-700">SUPPLIER</h3>
+          <h3 class="text-sm font-semibold tracking-wide text-slate-700">{{ t('confirm.supplier') }}</h3>
         </div>
         <div class="px-4 py-3 text-sm">
           <div class="font-semibold text-slate-900">{{ supplier.name }}</div>
@@ -160,7 +161,7 @@ onMounted(async () => {
       <!-- Buyer -->
       <div class="rounded-lg ring-1 ring-slate-200 bg-white">
         <div class="px-4 py-2 border-b border-slate-200">
-          <h3 class="text-sm font-semibold tracking-wide text-slate-700">BUYER</h3>
+          <h3 class="text-sm font-semibold tracking-wide text-slate-700">{{ t('confirm.buyer') }}</h3>
         </div>
         <div class="px-4 py-3 text-sm">
           <div class="font-semibold text-slate-900">{{ customer?.Customer_Full_Name }}</div>
@@ -173,19 +174,19 @@ onMounted(async () => {
       <!-- Supplier Contact -->
     <div class="rounded-lg ring-1 ring-slate-200 bg-white">
   <div class="px-4 py-2 border-b border-slate-200">
-    <h3 class="text-sm font-semibold tracking-wide text-slate-700">DELIVERY INFORMATION</h3>
+    <h3 class="text-sm font-semibold tracking-wide text-slate-700">{{ t('confirm.deliveryInfo') }}</h3>
   </div>
 
   <div class="px-4 py-3 text-sm text-slate-700">
     <template v-if="props.deliveryMethod === 'ship'">
-      <div>Delivery Type: Shipping</div>
-      <div>Delivery Name: {{ delivery?.Shippers_Name || props.shipping?.deliverymethod || '—' }}</div>
-      <div v-if="props.shipping?.basis">Basis: {{ props.shipping.basis }}</div>
+      <div>{{ t('confirm.deliveryType') }}: {{ t('confirm.shipping') }}</div>
+      <div>{{ t('confirm.deliveryName') }}: {{ delivery?.Shippers_Name || props.shipping?.deliverymethod || '—' }}</div>
+      <div v-if="props.shipping?.basis">{{ t('confirm.basis') }}: {{ props.shipping.basis }}</div>
     </template>
 
     <template v-else>
-      <div>Delivery Type: Local Pickup</div>
-      <div>Pickup Location: {{ pickupLoc?.Location_Name || props.pickupLocation?.name || '—' }}</div>
+      <div>{{ t('confirm.deliveryType') }}: {{ t('cart.localPickup') }}</div>
+      <div>{{ t('confirm.pickupLocation') }}: {{ field(pickupLoc, 'Location_Name') || props.pickupLocation?.name || '—' }}</div>
 
       <!-- or pickupLoc?.Location_Name if you fetched -->
     </template>
@@ -202,12 +203,12 @@ onMounted(async () => {
         <table class="min-w-full text-sm">
           <thead class="bg-slate-50 text-slate-600">
             <tr class="[&>th]:px-3 [&>th]:py-2.5 [&>th]:text-left [&>th]:font-semibold">
-              <th class="w-16">SL No</th>
-              <th>Description</th>
-              <th class="w-24">QTY</th>
-              <th class="w-28 text-right">Unit Price</th>
+              <th class="w-16">{{ t('confirm.slNo') }}</th>
+              <th>{{ t('confirm.description') }}</th>
+              <th class="w-24">{{ t('cart.qty') }}</th>
+              <th class="w-28 text-right">{{ t('confirm.unitPrice') }}</th>
 
-              <th class="w-36 text-right">Total incl VAT</th>
+              <th class="w-36 text-right">{{ t('confirm.totalInclVat') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200">
@@ -219,7 +220,7 @@ onMounted(async () => {
               <td class="text-slate-700">{{ row.qty }}</td>
               <td class="text-right tabular-nums">{{ fmt(row.unitPrice) }}</td>
 
-              <td class="text-right font-semibold text-slate-900 tabular-nums">{{ fmt(row.totalExcl) }}</td>
+              <td class="text-right font-semibold text-slate-900 tabular-nums">{{ fmt(row.totalIncl) }}</td>
             </tr>
           </tbody>
         </table>
@@ -229,26 +230,34 @@ onMounted(async () => {
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-200 p-4 text-sm">
         <div class="sm:col-span-2"></div>
         <div class="space-y-1">
+          <div v-if="Number(totals.productDiscount || 0) > 0" class="flex justify-between">
+            <span class="text-slate-600">{{ t('cart.itemsBeforeDiscount') }}:</span>
+            <span class="font-medium text-slate-900">{{ fmt(totals.originalSubtotal) }} {{ t('common.omr') }}</span>
+          </div>
+          <div v-if="Number(totals.productDiscount || 0) > 0" class="flex justify-between text-emerald-700">
+            <span>{{ t('cart.productDiscount') }}:</span>
+            <span class="font-medium">-{{ fmt(totals.productDiscount) }} {{ t('common.omr') }}</span>
+          </div>
           <div class="flex justify-between">
-            <span class="text-slate-600">Amount:</span>
-            <span class="font-medium text-slate-900">{{ fmt(totals.taxable) }} OMR</span>
+            <span class="text-slate-600">{{ t('confirm.amount') }}:</span>
+            <span class="font-medium text-slate-900">{{ fmt(totals.taxable) }} {{ t('common.omr') }}</span>
           </div>
 
          <div class="flex justify-between">
   <span class="text-slate-600">
-    {{ props.deliveryMethod === 'ship' ? 'Delivery:' : 'Pickup:' }}
+    {{ props.deliveryMethod === 'ship' ? t('cart.delivery') : t('confirm.pickup') }}:
   </span>
   <span class="font-medium text-slate-900">
-    {{ props.deliveryMethod === 'ship' ? fmt(props.shipping?.total_price) : '0.000' }} OMR
+    {{ props.deliveryMethod === 'ship' ? fmt(props.shipping?.total_price) : '0.000' }} {{ t('common.omr') }}
   </span>
 </div>
           <div class="flex justify-between">
-            <span class="text-slate-600">VAT Amount:</span>
-            <span class="font-medium text-slate-900">{{ fmt(totals.vat) }} OMR</span>
+            <span class="text-slate-600">{{ t('confirm.vatAmount') }}:</span>
+            <span class="font-medium text-slate-900">{{ fmt(totals.vat) }} {{ t('common.omr') }}</span>
           </div>
           <div class="flex justify-between border-t pt-2 mt-1">
-            <span class="font-semibold text-slate-800">Total Net Amount (Incl. VAT):</span>
-            <span class="font-bold text-emerald-700">{{ fmt(totals.grand) }} OMR</span>
+            <span class="font-semibold text-slate-800">{{ t('confirm.totalNet') }}:</span>
+            <span class="font-bold text-emerald-700">{{ fmt(totals.grand) }} {{ t('common.omr') }}</span>
           </div>
         </div>
       </div>
@@ -257,11 +266,11 @@ onMounted(async () => {
     <!-- Action row -->
     <div class="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
       <div class="text-xs text-slate-500">
-        Industrial Supplies Center LLC — Customer Confirmation
+        {{ t('confirm.customerConfirmation') }}
       </div>
       <button @click="onConfirm?.()" class="inline-flex items-center justify-center rounded-lg px-5 py-2.5 text-sm font-semibold text-white
                bg-[#2f5fb6] hover:bg-[#274f97] transition">
-        Confirm & Continue to Payment
+        {{ t('confirm.continuePayment') }}
       </button>
     </div>
   </section>

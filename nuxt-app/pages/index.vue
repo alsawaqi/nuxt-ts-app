@@ -1,21 +1,24 @@
 <script setup lang="ts">
-definePageMeta({
-  layout: 'layout',
-})
+  definePageMeta({
+    layout: 'layout',
+  })
 import { ref, watch, onMounted, computed } from 'vue'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 import { Squares2X2Icon, ListBulletIcon, ChartPieIcon, ShoppingBagIcon, CreditCardIcon } from '@heroicons/vue/24/solid'
 import { useUserStore } from '~/stores/user'
 import { useCartStore } from '~/stores/cart'
+import { useLoyaltyStore } from '~/stores/loyalty'
 import HomeSlider from '~/components/HomeSlider.vue'
 const cart = useCartStore()
+const loyalty = useLoyaltyStore()
 
 
 const router = useRouter()
 const route = useRoute()
-const points = ref<any>('')
+const points = computed(() => loyalty.points)
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
+const { t, isArabic, categoryName } = useStorefrontLocale()
 
 const { $axios, $r2Url } = useNuxtApp();
 
@@ -25,30 +28,25 @@ type Section = 'categories' | 'products' | 'brand'
 
 
 function gotoProduct(item: any) {
-  // Prefer slug route if you have it
+  if (item.Result_Type === 'category' && item.Slug) {
+    router.push({
+      path: `/departments/${item.Slug}`,
+      query: item.Route_Query ?? {
+        deptId: item.Product_Department_Id ?? undefined,
+        subId: item.Product_Sub_Department_Id ?? undefined,
+        subSubId: item.id ?? undefined,
+      },
+    })
+    return
+  }
+
   if (item.Slug) {
     router.push(`/product/${item.Slug}`)
-  } else {
-    // fallback by id
-    router.push(`/product/id/${item.id}`)
+    return
   }
+
+  router.push(`/product/id/${item.id}`)
 }
-
-
-const getloyalitypoints = async () => {
-
-  try {
-    const response = await $axios.get('/api/loyalty', { withCredentials: true })
-
-    points.value = response.data
-  } catch (e) {
-
-  } finally {
-
-  }
-}
-
-
 
 interface ProductDepartment {
   id: number;
@@ -136,48 +134,101 @@ async function restoreFromQuery() {
 }
 
 /** Pick the items to render based on where you are in the tree */
+type CategoryLevel = 'department' | 'subDepartment' | 'subSubDepartment'
+const hovered = ref<number | null>(null)
+
+const activePieLevel = computed<CategoryLevel>(() => {
+  if (!selectedDepartment.value) return 'department'
+  if (!selectedSubCategory.value) return 'subDepartment'
+  return 'subSubDepartment'
+})
+
+const activePieLevelLabel = computed(() => {
+  if (activePieLevel.value === 'department') return t('home.departments')
+  if (activePieLevel.value === 'subDepartment') return t('home.subDepartments')
+  return t('home.finalCategories')
+})
+
+const activePieTitle = computed(() => {
+  if (activePieLevel.value === 'department') return t('home.browseDepartments')
+  if (activePieLevel.value === 'subDepartment') return selectedDepartmentName.value || t('home.browseSubDepartments')
+  return selectedSubCategoryName.value || t('home.browseFinalCategories')
+})
+
+const activePieSubtitle = computed(() => {
+  if (activePieLevel.value === 'department') return t('home.departmentSubtitle')
+  if (activePieLevel.value === 'subDepartment') return t('home.subDepartmentSubtitle')
+  return t('home.finalCategorySubtitle')
+})
 
 const pieItems = computed(() => {
-  if (!selectedDepartment.value) return prodcutsDepartments.value ?? []
-  if (selectedDepartment.value && !selectedSubCategory.value) return subCategories.value ?? []
+  if (activePieLevel.value === 'department') return prodcutsDepartments.value ?? []
+  if (activePieLevel.value === 'subDepartment') return subCategories.value ?? []
   return subSubCategories.value ?? []
 })
 
 const getItemName = (it: any) => {
-  if (!selectedDepartment.value) return it.Product_Department_Name
-  if (selectedDepartment.value && !selectedSubCategory.value) return it.Sub_Department_Name
-  return it.Product_Sub_Sub_Department_Name
+  if (!it) return ''
+  return categoryName(it) || 'Untitled'
 }
+
 const getItemImage = (it: any) => {
-  if (!selectedDepartment) return it.Image_path
-  if (selectedDepartment && !selectedSubCategory) return it.Image_path
-  return it.Image_Path
+  if (!it) return ''
+  return activePieLevel.value === 'subSubDepartment'
+    ? (it.Image_Path || it.Image_path || '')
+    : (it.Image_path || it.Image_Path || '')
 }
 
-/** Click behavior by level */
+const imageSrc = (path?: string | null) => {
+  if (!path) return ''
+  const base = String($r2Url || '').replace(/\/$/, '')
+  const cleanPath = String(path).replace(/^\/+/, '')
+  return `${base}/${cleanPath}`
+}
 
-
-
-const centerLabel = computed(() => {
-  const i = hovered.value
-  if (i != null) return getItemName(pieItems.value[i])
-  if (!selectedDepartment.value) return 'Departments'
-  if (selectedDepartment.value && !selectedSubCategory.value) return 'Subcategories'
-  return 'Browse'
+const selectedPieItem = computed(() => {
+  if (hovered.value === null) return null
+  return pieItems.value[hovered.value] || null
 })
 
+const selectedPieImage = computed(() => imageSrc(getItemImage(selectedPieItem.value)))
+
+const centerLabel = computed(() => {
+  if (selectedPieItem.value) return getItemName(selectedPieItem.value)
+  return activePieLevelLabel.value
+})
+
+const selectedPieActionLabel = computed(() => (
+  activePieLevel.value === 'subSubDepartment' ? t('common.openProducts') : t('common.explore')
+))
+
+const pieEmptyMessage = computed(() => {
+  if (activePieLevel.value === 'department') return t('home.noDepartments')
+  if (activePieLevel.value === 'subDepartment') return t('home.noSubDepartments')
+  return t('home.noFinalCategories')
+})
+
+/** Click behavior by level */
 const onSliceClick = (it: any) => {
-  if (!selectedDepartment.value) return fetchSubCategories(it.id)
-  if (selectedDepartment.value && !selectedSubCategory.value) return fetchSubSubCategories(it.id)
-  if (it.Slug) router.push(`/departments/${it.Slug}`)
+  hovered.value = null
+
+  if (activePieLevel.value === 'department') return fetchSubCategories(it.id)
+  if (activePieLevel.value === 'subDepartment') return fetchSubSubCategories(it.id)
+
+  const slug = it.Slug || it.slug
+  if (!slug) return
+
+  return router.push({
+    path: `/departments/${slug}`,
+    query: {
+      deptId: selectedDepartment.value ? String(selectedDepartment.value) : undefined,
+      subId: selectedSubCategory.value ? String(selectedSubCategory.value) : undefined,
+      subSubId: it.id ? String(it.id) : undefined,
+    },
+  })
 }
 
- 
-
-
-
 /** Donut math */
-const hovered = ref<number | null>(null)
 
 // Updated to include your brand colors (Blue and Emerald/Cyan) at the front
 const palette = [
@@ -211,18 +262,23 @@ const arcPath = (cx: number, cy: number, rOuter: number, rInner: number, start: 
 
 const slices = computed(() => {
   const items = pieItems.value
-  const n = Math.max(items.length, 1)
+  const n = items.length
+  if (!n) return []
+
   const step = 360 / n
+  const gap = n > 1 && step > 4 ? 1.2 : 0
   
   // Expanded coordinates to give room for the hover pop-out effect
   // cx, cy moved from 100 to 120. Radiuses adjusted for a thicker, modern donut.
-  const cx = 120, cy = 120, rOuter = 100, rInner = 55 
+  const cx = 120, cy = 120, rOuter = 102, rInner = 58 
   
   return items.map((it: any, i: number) => {
-    const start = i * step
-    const end = start + step
+    const start = i * step + gap / 2
+    const end = (i + 1) * step - gap / 2
     return {
       item: it,
+      id: it?.id ?? `${activePieLevel.value}-${i}`,
+      label: getItemName(it),
       d: arcPath(cx, cy, rOuter, rInner, start, end),
       color: palette[i % palette.length],
     }
@@ -265,9 +321,12 @@ const fetchSubCategories = async (departmentId: number) => {
   try {
 
     selectedDepartment.value = departmentId
+    selectedSubCategory.value = null
+    hovered.value = null
+    subCategories.value = []
+    subSubCategories.value = []
     const response = await $axios.get(`/api/categories/${departmentId}/subcategories`)
     subCategories.value = response.data
-    subSubCategories.value = [] // Reset
   } catch (error) {
     console.error('Error fetching subcategories:', error)
   } finally {
@@ -283,6 +342,8 @@ const fetchSubSubCategories = async (subCategoryId: number) => {
   try {
 
     selectedSubCategory.value = subCategoryId
+    hovered.value = null
+    subSubCategories.value = []
     const response = await $axios.get(`/api/subcategories/${subCategoryId}/subsubcategories`)
     subSubCategories.value = response.data
 
@@ -297,22 +358,56 @@ const fetchSubSubCategories = async (subCategoryId: number) => {
 
 
 const selectedDepartmentName = computed(() => {
-  return prodcutsDepartments.value.find(d => d.id === selectedDepartment.value)?.Product_Department_Name || ''
+  return categoryName(prodcutsDepartments.value.find(d => d.id === selectedDepartment.value)) || ''
 })
 
 const selectedSubCategoryName = computed(() => {
-  return subCategories.value.find(s => s.id === selectedSubCategory.value)?.Sub_Department_Name || ''
+  return categoryName(subCategories.value.find(s => s.id === selectedSubCategory.value)) || ''
 })
 
 
 
 
 
+const pieCrumbs = computed(() => {
+  const crumbs = [
+    {
+      label: t('home.departments'),
+      active: activePieLevel.value === 'department',
+      action: () => resetToMainCategory(),
+    },
+  ]
+
+  if (selectedDepartmentName.value) {
+    crumbs.push({
+      label: selectedDepartmentName.value,
+      active: activePieLevel.value === 'subDepartment',
+      action: () => {
+        selectedSubCategory.value = null
+        subSubCategories.value = []
+        hovered.value = null
+      },
+    })
+  }
+
+  if (selectedSubCategoryName.value) {
+    crumbs.push({
+      label: selectedSubCategoryName.value,
+      active: activePieLevel.value === 'subSubDepartment',
+      action: () => {
+        hovered.value = null
+      },
+    })
+  }
+
+  return crumbs
+})
+
+
 const categoryPath = computed(() => {
-  let path = ''
-  if (selectedDepartmentName.value) path += ` ${selectedDepartmentName.value}`
-  if (selectedSubCategoryName.value) path += ` > ${selectedSubCategoryName.value}`
-  return path
+  return [selectedDepartmentName.value, selectedSubCategoryName.value]
+    .filter(Boolean)
+    .join(isArabic.value ? ' < ' : ' > ')
 })
 
 
@@ -352,10 +447,6 @@ onMounted(async () => {
   await getBrands();
   await restoreFromQuery()
 
-  if (isAuthenticated.value) {
-    await getloyalitypoints()
-  }
-
   if (typeof window !== 'undefined') {
     const storedTopbar = localStorage.getItem('hideTopbar')
     const storedBanner = localStorage.getItem('hideBanner')
@@ -379,22 +470,25 @@ onMounted(async () => {
       <div class="max-w-screen-2xl mx-auto h-9 sm:h-10 px-3 sm:px-5 flex items-center justify-between">
         <div class="flex items-center gap-4 sm:gap-6">
           <div class="flex items-center gap-2 sm:gap-3">
-            <span class="font-medium text-slate-700 hidden md:inline">Payments</span>
+            <span class="font-medium text-slate-700 hidden md:inline">{{ t('nav.payments') }}</span>
             <img src="/images/visa.png" class="h-3.5 sm:h-4" alt="Visa" loading="lazy" decoding="async" />
             <img src="/images/mastercard.png" class="h-3.5 sm:h-4" alt="Mastercard" loading="lazy" decoding="async" />
             <img src="/images/cash.png" class="h-3.5 sm:h-4" alt="Cash" loading="lazy" decoding="async" />
           </div>
           <div class="hidden sm:flex items-center gap-2 sm:gap-3">
-            <span class="font-medium text-slate-700 hidden md:inline">Shipping</span>
+            <span class="font-medium text-slate-700 hidden md:inline">{{ t('nav.shipping') }}</span>
             <img src="/images/dhl.png" class="h-3.5 sm:h-4" alt="DHL" loading="lazy" decoding="async" />
             <img src="/images/fedex.png" class="h-3.5 sm:h-4" alt="FedEx" loading="lazy" decoding="async" />
           </div>
         </div>
 
-        <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
-          Welcome, {{ user?.User_Name }} <span v-if="isAuthenticated">🎖</span><span class="text-sm font-medium">{{
-            points }} points </span>
-        </span>
+        <div class="flex items-center gap-3">
+          <span class="text-slate-500 truncate max-w-[50%] sm:max-w-none" v-if="isAuthenticated">
+            {{ t('nav.welcome', { name: user?.User_Name || '' }) }}
+            <span class="text-sm font-medium">{{ t('nav.points', { count: points }) }}</span>
+          </span>
+          <LanguageSwitcher />
+        </div>
 
 
       </div>
@@ -422,23 +516,23 @@ onMounted(async () => {
             class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[17px] font-semibold text-slate-700">
             <NuxtLink to="/" class="pb-1 border-b-2"
               :class="$route.path === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Home
+              {{ t('nav.home') }}
             </NuxtLink>
             <button @click="currentSection = 'categories'" class="pb-1 border-b-2"
               :class="currentSection === 'categories' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Shops
+              {{ t('nav.shops') }}
             </button>
             <button @click="currentSection = 'brand'" class="pb-1 border-b-2"
               :class="currentSection === 'brand' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Brands
+              {{ t('nav.brands') }}
             </button>
             <NuxtLink to="#" class="pb-1 border-b-2"
               :class="$route.path.startsWith('/dealerships') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Dealerships
+              {{ t('nav.dealerships') }}
             </NuxtLink>
             <NuxtLink to="/contact" class="pb-1 border-b-2"
               :class="$route.path.startsWith('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
-              Contact
+              {{ t('nav.contact') }}
             </NuxtLink>
           </nav>
         </div>
@@ -488,7 +582,7 @@ onMounted(async () => {
          bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">
             <CreditCardIcon class="inline-block w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />
-            <span class="inline-block">Checkout</span>
+            <span class="inline-block">{{ t('nav.checkout') }}</span>
           </NuxtLink>
 
 
@@ -508,19 +602,19 @@ onMounted(async () => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M12 11c2.21 0 4-1.79 4-4s-1.79-4-4-4S8 4.79 8 7s1.79 4 4 4zM4 21v-2a4 4 0 014-4h8a4 4 0 014 4v2" />
               </svg>
-              <span class="flex-none">My Account</span>
+              <span class="flex-none">{{ t('nav.account') }}</span>
             </NuxtLink>
 
 
             <button v-if="isAuthenticated" @click="logout" class="px-3 py-1.5 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6] shadow-sm
              focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">
-              Logout
+              {{ t('nav.logout') }}
             </button>
             <template v-if="!isAuthenticated">
               <NuxtLink to="/login" class="px-3 py-1.5 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
-             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">Login</NuxtLink>
+             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">{{ t('nav.login') }}</NuxtLink>
               <NuxtLink to="/register" class="px-3 py-1.5 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6] shadow-sm
-             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">Register</NuxtLink>
+             focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#2f5fb6]">{{ t('nav.register') }}</NuxtLink>
             </template>
           </div>
         </div>
@@ -533,7 +627,7 @@ onMounted(async () => {
     <!-- Search bar -->
     <div class="bg-white">
       <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-        <SearchAutocomplete :min-chars="2" :limit="10" placeholder="Search by keyword, item, model or part #"
+        <SearchAutocomplete :min-chars="2" :limit="10" :placeholder="t('nav.searchPlaceholder')"
           @select="gotoProduct" />
       </div>
     </div>
@@ -543,39 +637,45 @@ onMounted(async () => {
     <!-- Mobile overlay & drawer -->
     <div v-if="mobileMenuOpen" @click="mobileMenuOpen = false" class="fixed inset-0 bg-black/40 z-40 md:hidden"></div>
     <div
-      class="fixed top-0 left-0 w-[84%] max-w-80 h-full bg-white z-50 shadow-2xl transform transition-transform duration-300 md:hidden"
-      :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'">
+      class="fixed top-0 w-[84%] max-w-80 h-full bg-white z-50 shadow-2xl transform transition-transform duration-300 md:hidden"
+      :class="[
+        isArabic ? 'right-0' : 'left-0',
+        mobileMenuOpen ? 'translate-x-0' : (isArabic ? 'translate-x-full' : '-translate-x-full')
+      ]">
       <div class="p-3 sm:p-4 flex justify-between items-center border-b">
         <NuxtLink to="/" class="flex items-center gap-2" @click="mobileMenuOpen = false">
           <img src="/logonew1.jpg" alt="ISC" class="h-7 sm:h-8 w-auto rounded ring-1 ring-black/10" />
           <span class="font-semibold">ISC</span>
         </NuxtLink>
-        <button @click="mobileMenuOpen = false" class="px-2 py-1 rounded border hover:bg-slate-50">Close</button>
+        <button @click="mobileMenuOpen = false" class="px-2 py-1 rounded border hover:bg-slate-50">{{ t('common.close') }}</button>
       </div>
 
       <nav class="flex flex-col p-3 sm:p-4 text-slate-800 text-base font-medium space-y-1">
-        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Home</NuxtLink>
+        <div class="px-3 py-2">
+          <LanguageSwitcher />
+        </div>
+        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
         <button @click="currentSection = 'categories'; mobileMenuOpen = false"
-          class="text-left px-3 py-2 rounded hover:bg-slate-50">Shops</button>
+          class="text-left px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.shops') }}</button>
         <button @click="currentSection = 'brand'; mobileMenuOpen = false"
-          class="text-left px-3 py-2 rounded hover:bg-slate-50">Brands</button>
-        <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Dealerships
+          class="text-left px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.brands') }}</button>
+        <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.dealerships') }}
         </NuxtLink>
-        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">Contact
+        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
         </NuxtLink>
         <div class="h-px my-2 bg-slate-200"></div>
         <template v-if="!isAuthenticated">
           <NuxtLink to="/login" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95]
-           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">Login</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">{{ t('nav.login') }}</NuxtLink>
           <NuxtLink to="/register" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6]
-           focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">Register</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">{{ t('nav.register') }}</NuxtLink>
         </template>
         <template v-else>
           <NuxtLink to="/account" @click="mobileMenuOpen = false" class="px-3 py-2 rounded-md text-white bg-[#2f5fb6] hover:bg-[#264c95]
-           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">My Account</NuxtLink>
+           focus:outline-none focus:ring-2 focus:ring-[#07B6C6]">{{ t('nav.account') }}</NuxtLink>
           <button v-if="isAuthenticated" @click="logout" mobileMenuOpen="false" class="text-left px-3 py-2 rounded-md text-white bg-[#07B6C6] hover:bg-[#0693a6]
            focus:outline-none focus:ring-2 focus:ring-[#2f5fb6]">
-            Logout
+            {{ t('nav.logout') }}
           </button>
         </template>
       </nav>
@@ -589,45 +689,15 @@ onMounted(async () => {
 
 
 
-  <!-- Industrial Hero Banner -->
-  <!-- Industrial Hero Banner -->
-  <section v-if="!hideBanner" class="relative isolate overflow-hidden bg-slate-900">
-    <!-- Background image -->
-    <HomeSlider v-if="!hideBanner" />
-
-    <!-- Readability overlay -->
-    <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-900/85 via-slate-900/45 to-transparent">
-    </div>
-
-    <!-- Brand accent wash (subtle + gently drifting) -->
-    <div aria-hidden="true" class="absolute inset-0 hero-wash
-              [mask-image:radial-gradient(80%_60% at 20%_40%,black,transparent)]
-              bg-[linear-gradient(to_right,#c2ff4a33,#22d3ee33_35%,transparent_70%)]">
-    </div>
-
-    <!-- Content -->
-    <div class="absolute inset-0 flex items-center">
-      <div class="max-w-screen-xl mx-auto px-4">
-        <transition appear name="fade-up">
-          <h1 class="text-white text-2xl md:text-3xl font-bold" key="hero-title">
-            Industrial Supplies &amp; MRO
-          </h1>
-        </transition>
-        <transition appear name="fade-up">
-          <p class="text-white/85 mt-1 text-sm md:text-base" key="hero-sub" style="transition-delay:120ms">
-            Power tools, fasteners, abrasives, safety—trusted brands, fast shipping.
-          </p>
-        </transition>
-      </div>
-    </div>
-  </section>
+  <!-- Advertisement Slider -->
+  <HomeSlider v-if="!hideBanner" />
 
 
 
   <div class="flex items-center space-x-2 justify-start md:justify-end px-4 py-2">
     <input type="checkbox" id="hideBannerCheckbox" v-model="hideBanner" class="accent-blue-600">
     <label for="hideBannerCheckbox" class="text-sm text-gray-600 cursor-pointer">
-      {{ !hideBanner ? 'Hide AdvertisementBanner' : 'Show Advertisements'}}</label>
+      {{ !hideBanner ? t('home.hideBanner') : t('home.showBanner') }}</label>
   </div>
 
   <main class="container mx-auto p-6 flex-grow">
@@ -644,8 +714,8 @@ onMounted(async () => {
                     bg-white ring-1 ring-slate-200 hover:bg-slate-50 hover:shadow-sm
                     transition-all duration-150 active:scale-[0.98] focus:outline-none
                     focus-visible:ring-2 focus-visible:ring-sky-500" aria-label="Go back">
-            <span class="text-slate-600 leading-none">←</span>
-            <span class="text-slate-700 font-medium leading-none">Back</span>
+            <span class="text-slate-600 leading-none">{{ isArabic ? '→' : '←' }}</span>
+            <span class="text-slate-700 font-medium leading-none">{{ t('common.back') }}</span>
           </button>
 
           <!-- Breadcrumb -->
@@ -678,37 +748,37 @@ onMounted(async () => {
             <span class="absolute inset-0 rounded-xl bg-gradient-to-b from-white/20 to-white/0 opacity-70"></span>
           </span>
 
-          <button type="button" @click="viewMode = 'grid'" :aria-pressed="viewMode === 'grid'" aria-label="Grid view"
-            title="Grid view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+          <button type="button" @click="viewMode = 'grid'" :aria-pressed="viewMode === 'grid'" :aria-label="t('home.gridView')"
+            :title="t('home.gridView')" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
               text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
               hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
               focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'grid' ? 'text-white' : ''">
             <Squares2X2Icon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
               :class="viewMode === 'grid' ? 'scale-110' : 'scale-100'" />
-            <span class="sr-only">Grid view</span>
+            <span class="sr-only">{{ t('home.gridView') }}</span>
           </button>
 
-          <button type="button" @click="viewMode = 'list'" :aria-pressed="viewMode === 'list'" aria-label="List view"
-            title="List view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+          <button type="button" @click="viewMode = 'list'" :aria-pressed="viewMode === 'list'" :aria-label="t('home.listView')"
+            :title="t('home.listView')" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
               text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
               hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
               focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'list' ? 'text-white' : ''">
             <ListBulletIcon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
               :class="viewMode === 'list' ? 'scale-110' : 'scale-100'" />
-            <span class="sr-only">List view</span>
+            <span class="sr-only">{{ t('home.listView') }}</span>
           </button>
 
-          <button type="button" @click="viewMode = 'pie'" :aria-pressed="viewMode === 'pie'" aria-label="Pie chart view"
-            title="Pie chart view" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
+          <button type="button" @click="viewMode = 'pie'" :aria-pressed="viewMode === 'pie'" :aria-label="t('home.pieView')"
+            :title="t('home.pieView')" class="relative z-10 h-8 w-8 md:h-10 md:w-10 rounded-xl grid place-items-center
               text-slate-600 motion-reduce:transition-none transition-[color,transform] duration-200 ease-out
               hover:text-slate-900 hover:scale-[1.03] active:scale-[0.98]
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900/30
               focus-visible:ring-offset-2 focus-visible:ring-offset-white" :class="viewMode === 'pie' ? 'text-white' : ''">
             <ChartPieIcon class="w-4 h-4 md:w-5 md:h-5 motion-reduce:transition-none transition-transform duration-200"
               :class="viewMode === 'pie' ? 'scale-110' : 'scale-100'" />
-            <span class="sr-only">Pie chart view</span>
+            <span class="sr-only">{{ t('home.pieView') }}</span>
           </button>
         </div>
       </div>
@@ -736,182 +806,264 @@ onMounted(async () => {
 
 
 
-      <div v-if="viewMode === 'pie'" class="w-full py-6">
-  <div class="flex flex-col md:flex-row items-center justify-center gap-6">
-    <div class="relative w-full max-w-[340px] md:max-w-[420px] mx-auto">
-      
-      <svg viewBox="0 0 240 240" class="w-full h-auto overflow-visible drop-shadow-lg donut-entrance">
-        
-        <g v-for="(s, i) in slices" :key="i"
-           class="transition-all duration-300 ease-out cursor-pointer"
-           :class="[
-             hovered === i ? 'scale-[1.06] drop-shadow-xl z-10' : '',
-             hovered !== null && hovered !== i ? 'opacity-40 grayscale-[20%]' : 'opacity-100'
-           ]"
-           @mouseenter="hovered = i"
-           @mouseleave="hovered = null"
-           @click="onSliceClick(s.item)"
-           style="transform-origin: 120px 120px;" 
-        >
-          <path :d="s.d" :fill="s.color" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" />
-        </g>
+      <div v-if="viewMode === 'pie'" class="w-full py-5">
+        <div class="relative overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200">
+          <span class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#2F5FB6] via-[#07B6C6] to-emerald-500"></span>
 
-        <circle cx="120" cy="120" r="50" fill="white" />
-
-        <foreignObject x="45" y="65" width="150" height="110">
-          <div class="w-full h-full flex flex-col items-center justify-center text-center px-2 pointer-events-none">
-            <span class="text-slate-400 text-[10px] uppercase tracking-wider font-bold mb-0.5">
-              {{ hovered !== null ? 'Viewing' : 'Select' }}
-            </span>
-            <span class="text-slate-800 text-[13px] font-bold leading-snug line-clamp-3">
-              {{ centerLabel }}
-            </span>
-          </div>
-        </foreignObject>
-      </svg>
-
-    </div>
-  </div>
-</div>
-
-      <!-- Category View -->
-      <div v-else-if="!selectedDepartment">
-        <!-- Grid Mode: Premium card layout -->
-        <div v-if="viewMode === 'grid'">
-          <TransitionGroup name="cat" tag="div"
-            class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            <button v-for="department in prodcutsDepartments" :key="department.id"
-              @click="fetchSubCategories(department.id)" :aria-label="department.Product_Department_Name" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
-                                hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
-                                focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
-              <div class="p-4">
-                <!-- Image area -->
-                <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
-                                        ring-1 ring-slate-100 overflow-hidden">
-                  <img :src="`${$r2Url}/` + department.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                                      group-hover:scale-[1.03]" />
+          <div class="p-4 sm:p-5 lg:p-6">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
+                  <template v-for="(crumb, index) in pieCrumbs" :key="crumb.label">
+                    <button type="button" @click="crumb.action()" :disabled="crumb.active"
+                      class="rounded-full px-3 py-1 transition-colors"
+                      :class="crumb.active
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
+                      {{ crumb.label }}
+                    </button>
+                    <span v-if="index < pieCrumbs.length - 1" class="text-slate-300">/</span>
+                  </template>
                 </div>
 
-                <!-- Title -->
-                <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
-                  {{ department.Product_Department_Name }}
+                <h3 class="mt-3 text-xl sm:text-2xl font-bold text-slate-900">
+                  {{ activePieTitle }}
                 </h3>
+                <p class="mt-1 text-sm text-slate-500">
+                  {{ activePieSubtitle }}
+                </p>
               </div>
 
-              <!-- Hover underline accent -->
-              <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
-                                      from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
-                                      group-hover:opacity-100 transition-opacity"></span>
-            </button>
-          </TransitionGroup>
-        </div>
+              <div class="flex flex-wrap gap-2">
+                <button v-if="selectedDepartment" type="button" @click="goBack"
+                  class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                  {{ t('common.back') }}
+                </button>
+                <button v-if="selectedDepartment" type="button" @click="resetToMainCategory"
+                  class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                  {{ t('home.departments') }}
+                </button>
+              </div>
+            </div>
 
+            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(280px,420px),1fr] lg:items-center">
+              <div class="relative mx-auto w-full max-w-[420px]">
+                <div v-if="isloadingCategories"
+                  class="absolute inset-6 z-10 grid place-items-center rounded-full bg-white/80 backdrop-blur-sm">
+                  <svg class="h-8 w-8 animate-spin text-[#07B6C6]" xmlns="http://www.w3.org/2000/svg" fill="none"
+                    viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2.93 6.07A8.003 8.003 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3.93-1.868zM12 20a8.003 8.003 0 01-6.07-2.93l-3.93 1.868A11.95 11.95 0 0012 24v-4z">
+                    </path>
+                  </svg>
+                </div>
 
-        <!-- List Mode -->
-        <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-          <div v-for="department in prodcutsDepartments" :key="department.id" @click="fetchSubCategories(department.id)"
-            class="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50">
-            <img :src="`${$r2Url}/` + department.Image_path" alt="" class="h-16 w-16 object-contain" />
-            <span class="text-base font-medium text-gray-800">{{ department.Product_Department_Name }}</span>
+                <svg viewBox="0 0 240 240" class="donut-entrance w-full h-auto overflow-visible drop-shadow-sm">
+                  <g v-for="(s, i) in slices" :key="`${activePieLevel}-${s.id}`"
+                    class="cursor-pointer outline-none transition-all duration-300 ease-out"
+                    :class="[
+                      hovered === i ? 'scale-[1.055] drop-shadow-lg' : '',
+                      hovered !== null && hovered !== i ? 'opacity-35' : 'opacity-100'
+                    ]" tabindex="0" @mouseenter="hovered = i" @mouseleave="hovered = null"
+                    @focus="hovered = i" @blur="hovered = null" @click="onSliceClick(s.item)"
+                    @keyup.enter="onSliceClick(s.item)" style="transform-origin: 120px 120px;">
+                    <path :d="s.d" :fill="s.color" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" />
+                  </g>
+
+                  <circle cx="120" cy="120" r="55" fill="white" stroke="#e2e8f0" stroke-width="1" />
+
+                  <foreignObject x="48" y="55" width="144" height="130">
+                    <div class="flex h-full w-full flex-col items-center justify-center px-2 text-center pointer-events-none">
+                      <div class="mb-2 grid h-11 w-11 place-items-center overflow-hidden rounded-2xl bg-slate-50 ring-1 ring-slate-200">
+                        <img v-if="selectedPieImage" :src="selectedPieImage" alt="" class="h-full w-full object-contain p-1" />
+                        <ChartPieIcon v-else class="h-5 w-5 text-[#07B6C6]" />
+                      </div>
+                      <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                        {{ hovered !== null ? activePieLevelLabel : t('common.currentLevel') }}
+                      </span>
+                      <span class="mt-1 line-clamp-3 text-[13px] font-bold leading-snug text-slate-900">
+                        {{ centerLabel }}
+                      </span>
+                      <span class="mt-1 text-[11px] font-semibold text-slate-400">
+                        {{ t(pieItems.length === 1 ? 'common.item' : 'common.items', { count: pieItems.length }) }}
+                      </span>
+                    </div>
+                  </foreignObject>
+                </svg>
+              </div>
+
+              <div class="min-w-0">
+                <div v-if="!pieItems.length && !isloadingCategories"
+                  class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
+                  {{ pieEmptyMessage }}
+                </div>
+
+                <TransitionGroup v-else name="pie-list" tag="div" class="grid gap-2 sm:grid-cols-2">
+                  <button v-for="(s, i) in slices" :key="`list-${activePieLevel}-${s.id}`" type="button"
+                    @mouseenter="hovered = i" @mouseleave="hovered = null" @focus="hovered = i" @blur="hovered = null"
+                    @click="onSliceClick(s.item)" class="group flex min-h-[66px] items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all duration-200
+                      hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#07B6C6]/50"
+                    :class="hovered === i ? 'border-slate-300 shadow-md' : 'border-slate-200'">
+                    <span class="h-9 w-1.5 rounded-full shrink-0" :style="{ backgroundColor: s.color }"></span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-sm font-bold text-slate-900">
+                        {{ s.label }}
+                      </span>
+                      <span class="mt-0.5 block text-xs font-semibold text-slate-400">
+                        {{ activePieLevelLabel }}
+                      </span>
+                    </span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 transition
+                      group-hover:bg-slate-900 group-hover:text-white">
+                      {{ selectedPieActionLabel }}
+                    </span>
+                  </button>
+                </TransitionGroup>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Subcategory View -->
-      <div v-else-if="selectedDepartment && !selectedSubCategory">
+            <!-- Category View -->
+            <div v-else-if="!selectedDepartment">
+              <!-- Grid Mode: Premium card layout -->
+              <div v-if="viewMode === 'grid'">
+                <TransitionGroup name="cat" tag="div"
+                  class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  <button v-for="department in prodcutsDepartments" :key="department.id"
+                    @click="fetchSubCategories(department.id)" :aria-label="categoryName(department)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+                                      hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
+                                      focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
+                    <div class="p-4">
+                      <!-- Image area -->
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                                              ring-1 ring-slate-100 overflow-hidden">
+                        <img :src="`${$r2Url}/` + department.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                                            group-hover:scale-[1.03]" />
+                      </div>
 
-        <!-- GRID mode -->
-        <div v-if="viewMode === 'grid'" class="">
-          <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
-              :aria-label="sub.Sub_Department_Name" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
-             hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
-             focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
-              <div class="p-4">
-                <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
-                    ring-1 ring-slate-100 overflow-hidden">
-                  <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                   group-hover:scale-[1.03]" />
-                </div>
+                      <!-- Title -->
+                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                        {{ categoryName(department) }}
+                      </h3>
+                    </div>
 
-                <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
-                  {{ sub.Sub_Department_Name }}
-                </h3>
+                    <!-- Hover underline accent -->
+                    <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                                            from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                                            group-hover:opacity-100 transition-opacity"></span>
+                  </button>
+                </TransitionGroup>
               </div>
 
-              <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
-                   from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
-                   group-hover:opacity-100 transition-opacity"></span>
-            </button>
-          </div>
-        </div>
 
-
-        <!-- LIST mode -->
-        <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-          <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
-            class="flex items-center gap-4 p-4 text-left hover:bg-gray-50">
-            <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="h-16 w-16 object-contain" />
-            <span class="text-base font-medium text-gray-800">{{ sub.Sub_Department_Name }}</span>
-          </button>
-        </div>
-
-      </div>
-
-
-      <!-- Sub-subcategory View -->
-      <div v-else>
-
-        <!-- GRID mode -->
-        <div v-if="viewMode === 'grid'">
-          <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
-              path: `/departments/${subSub.Slug}`,
-              query: {
-                deptId: selectedDepartment ?? undefined,
-                subId: selectedSubCategory ?? undefined,
-                subSubId: subSub.id
-              }
-            }" :aria-label="subSub.Product_Sub_Sub_Department_Name" class="group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
-             hover:shadow-md hover:ring-slate-300 transition-all duration-200">
-              <div class="p-4">
-                <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
-                    ring-1 ring-slate-100 overflow-hidden">
-                  <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                   group-hover:scale-[1.03]" />
+              <!-- List Mode -->
+              <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
+                <div v-for="department in prodcutsDepartments" :key="department.id" @click="fetchSubCategories(department.id)"
+                  class="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50">
+                  <img :src="`${$r2Url}/` + department.Image_path" alt="" class="h-16 w-16 object-contain" />
+                  <span class="text-base font-medium text-gray-800">{{ categoryName(department) }}</span>
                 </div>
+              </div>
+            </div>
 
-                <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
-                  {{ subSub.Product_Sub_Sub_Department_Name }}
-                </h3>
+            <!-- Subcategory View -->
+            <div v-else-if="selectedDepartment && !selectedSubCategory">
+
+              <!-- GRID mode -->
+              <div v-if="viewMode === 'grid'" class="">
+                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
+                    :aria-label="categoryName(sub)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+                  hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
+                  focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
+                    <div class="p-4">
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                          ring-1 ring-slate-100 overflow-hidden">
+                        <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                        group-hover:scale-[1.03]" />
+                      </div>
+
+                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                        {{ categoryName(sub) }}
+                      </h3>
+                    </div>
+
+                    <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                        from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                        group-hover:opacity-100 transition-opacity"></span>
+                  </button>
+                </div>
               </div>
 
-              <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
-                   from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
-                   group-hover:opacity-100 transition-opacity"></span>
-            </NuxtLink>
-          </div>
-        </div>
+
+              <!-- LIST mode -->
+              <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
+                <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
+                  class="flex items-center gap-4 p-4 text-left hover:bg-gray-50">
+                  <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="h-16 w-16 object-contain" />
+                  <span class="text-base font-medium text-gray-800">{{ categoryName(sub) }}</span>
+                </button>
+              </div>
+
+            </div>
 
 
-        <!-- LIST mode -->
-        <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-          <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
-            path: `/departments/${subSub.Slug}`,
-            query: {
-              deptId: selectedDepartment ?? undefined,
-              subId: selectedSubCategory ?? undefined,
-              subSubId: subSub.id
-            }
-          }" class="flex items-center gap-4 p-4 hover:bg-gray-50">
-            <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="h-16 w-16 object-contain" />
-            <span class="text-base font-medium text-gray-800">
-              {{ subSub.Product_Sub_Sub_Department_Name }}
-            </span>
-          </NuxtLink>
-        </div>
+            <!-- Sub-subcategory View -->
+            <div v-else>
 
-      </div>
+              <!-- GRID mode -->
+              <div v-if="viewMode === 'grid'">
+                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
+                    path: `/departments/${subSub.Slug}`,
+                    query: {
+                      deptId: selectedDepartment ?? undefined,
+                      subId: selectedSubCategory ?? undefined,
+                      subSubId: subSub.id
+                    }
+                  }" :aria-label="categoryName(subSub)" class="group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+                  hover:shadow-md hover:ring-slate-300 transition-all duration-200">
+                    <div class="p-4">
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                          ring-1 ring-slate-100 overflow-hidden">
+                        <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
+                        group-hover:scale-[1.03]" />
+                      </div>
+
+                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                        {{ categoryName(subSub) }}
+                      </h3>
+                    </div>
+
+                    <span class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r
+                        from-[#2F5FB6] via-[#07B6C6] to-[#2F5FB6] opacity-0
+                        group-hover:opacity-100 transition-opacity"></span>
+                  </NuxtLink>
+                </div>
+              </div>
+
+
+              <!-- LIST mode -->
+              <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
+                <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
+                  path: `/departments/${subSub.Slug}`,
+                  query: {
+                    deptId: selectedDepartment ?? undefined,
+                    subId: selectedSubCategory ?? undefined,
+                    subSubId: subSub.id
+                  }
+                }" class="flex items-center gap-4 p-4 hover:bg-gray-50">
+                  <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="h-16 w-16 object-contain" />
+                  <span class="text-base font-medium text-gray-800">
+                    {{ categoryName(subSub) }}
+                  </span>
+                </NuxtLink>
+              </div>
+
+            </div>
 
 
 
@@ -925,7 +1077,7 @@ onMounted(async () => {
 
     <!-- Brands -->
     <section id="brand" v-if="currentSection === 'brand'">
-      <h2 class="text-3xl font-bold mb-6">Our Brands</h2>
+      <h2 class="text-3xl font-bold mb-6">{{ t('home.ourBrands') }}</h2>
 
 
       <div class="flex space-x-6 overflow-x-auto">
@@ -1059,6 +1211,17 @@ onMounted(async () => {
   transform: translateY(6px) scale(.98);
 }
 
+.pie-list-enter-active,
+.pie-list-leave-active {
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.pie-list-enter-from,
+.pie-list-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 
 
 /* Premium Donut Chart Entrance Animation */
@@ -1081,8 +1244,14 @@ onMounted(async () => {
 @media (prefers-reduced-motion: reduce) {
 
   .cat-enter-active,
-  .cat-leave-active {
+  .cat-leave-active,
+  .pie-list-enter-active,
+  .pie-list-leave-active {
     transition: none !important;
+  }
+
+  .donut-entrance {
+    animation: none !important;
   }
 }
 </style>

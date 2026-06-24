@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 const { $axios } = useNuxtApp()
+const { t, productName, categoryName, field } = useStorefrontLocale()
 
 // Props (tweak as needed)
 const props = withDefaults(defineProps<{
@@ -62,8 +63,7 @@ function onKeydown(e: KeyboardEvent) {
 function select(item: any) {
   open.value = false
   emit('select', item)
-  // Optional: fill the input with the selected name
-  q.value = item.Product_Name ?? ''
+  q.value = item.Result_Type === 'category' ? categoryName(item) : productName(item)
 }
 
 // Debounced fetch
@@ -99,10 +99,10 @@ watch(q, () => {
 
 // Simple highlight (no v-html to avoid XSS)
 function label(item: any) {
-  // Adjust fields as your API returns
-  const name = item.Product_Name ?? ''
-  const code = item.Product_Code ?? item.Product_Sku ?? ''
-  return { name, code }
+  const name = item.Result_Type === 'category' ? categoryName(item) : productName(item)
+  const code = field(item, ['Search_Subtitle', 'Product_Code', 'Product_Sku'])
+  const type = item.Result_Type === 'category' ? t('common.category') : t('common.products')
+  return { name, code, type }
 }
 </script>
 
@@ -124,7 +124,7 @@ function label(item: any) {
       />
       <button
         class="px-4 sm:px-5 bg-[#2F5FB6] text-white hover:brightness-95 rounded-r-full"
-        aria-label="Search"
+        :aria-label="t('common.search')"
         @click="runSearch"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -144,14 +144,14 @@ function label(item: any) {
         <!-- Loading row -->
         <div v-if="loading" class="px-4 py-3 text-sm text-slate-500 flex items-center gap-2">
           <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v2A6 6 0 004 12z"/></svg>
-          Searching…
+          {{ t('common.loading') }}
         </div>
 
         <!-- Results -->
         <ul v-else class="max-h-[56vh] overflow-auto py-1">
           <li
             v-for="(item,i) in results"
-            :key="item.id"
+            :key="`${item.Result_Type || 'product'}-${item.id}`"
             :aria-selected="i===highlightedIndex"
             role="option"
             @mouseenter="highlightedIndex = i"
@@ -163,7 +163,15 @@ function label(item: any) {
             <!-- Optional thumbnail if you have it
             <img :src=\"item.image\" class=\"h-8 w-8 rounded object-contain ring-1 ring-slate-200\" />
             -->
-            <div class="min-w-0">
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              :class="item.Result_Type === 'category'
+                ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100'
+                : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'"
+            >
+              {{ label(item).type }}
+            </span>
+            <div class="min-w-0 flex-1">
               <div class="font-medium text-slate-800 truncate">{{ label(item).name }}</div>
               <div class="text-[12px] text-slate-500 truncate" v-if="label(item).code">
                 {{ label(item).code }}
@@ -171,7 +179,7 @@ function label(item: any) {
             </div>
           </li>
 
-          <li v-if="!results.length" class="px-4 py-3 text-sm text-slate-500">No results</li>
+          <li v-if="!results.length" class="px-4 py-3 text-sm text-slate-500">{{ t('listing.noProducts') }}</li>
         </ul>
       </div>
     </transition>

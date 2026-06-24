@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 const { $axios } = useNuxtApp()
+const { t: tr } = useStorefrontLocale()
 
 type TicketType = 'feedback' | 'return' | 'support'
 type TicketStatus = 'open' | 'pending' | 'closed'
@@ -75,6 +76,13 @@ const statusDot = (s: TicketStatus) => ({
   closed: 'bg-slate-400',
 }[s])
 
+const statusLabel = (status: TicketStatus | string) => tr(`account.status.${status}`)
+const typeLabel = (type: TicketType | string) => ({
+  support: tr('tickets.generalSupport'),
+  feedback: tr('tickets.feedback'),
+  return: tr('tickets.returnRefund'),
+}[String(type)] ?? String(type))
+
 /* Reply box */
 const replyText = ref('')
 
@@ -144,8 +152,8 @@ onMounted(loadTickets)
     <!-- Header / toolbar -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
       <div>
-        <h2 class="text-xl font-semibold text-slate-900">Support Tickets</h2>
-        <p class="text-xs text-slate-500">Create a request or track existing tickets</p>
+        <h2 class="text-xl font-semibold text-slate-900">{{ tr('tickets.title') }}</h2>
+        <p class="text-xs text-slate-500">{{ tr('tickets.subtitle') }}</p>
       </div>
 
       <div class="flex items-center gap-2">
@@ -153,7 +161,7 @@ onMounted(loadTickets)
           <input
             v-model.trim="search"
             type="text"
-            placeholder="Search subject or ref…"
+            :placeholder="tr('tickets.searchPlaceholder')"
             class="rounded-lg border border-slate-300 bg-white px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
           <svg class="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
@@ -165,20 +173,20 @@ onMounted(loadTickets)
           v-model="filterStatus"
           class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
         >
-          <option value="all">All</option>
-          <option value="open">Open</option>
-          <option value="pending">Pending</option>
-          <option value="closed">Closed</option>
+          <option value="all">{{ tr('orders.all') }}</option>
+          <option value="open">{{ tr('account.status.open') }}</option>
+          <option value="pending">{{ tr('account.status.pending') }}</option>
+          <option value="closed">{{ tr('account.status.closed') }}</option>
         </select>
 
         <button
           type="button"
           @click="loadTickets"
           class="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50"
-          title="Refresh"
+          :title="tr('tickets.refresh')"
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 01-9.9 1h-2.02A7 7 0 0019 13c0-3.87-3.13-7-7-7z"/></svg>
-          Refresh
+          {{ tr('tickets.refresh') }}
         </button>
       </div>
     </div>
@@ -186,22 +194,29 @@ onMounted(loadTickets)
     <!-- New ticket -->
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-cyan-50 to-emerald-50">
-        <div class="text-sm font-medium text-slate-700">Submit a New Request</div>
+        <div class="text-sm font-medium text-slate-700">{{ tr('tickets.submitNew') }}</div>
       </div>
 
       <form @submit.prevent="submitForm" class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">{{ tr('tickets.type') }}</label>
           <select v-model="form.type"
                   class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500">
-            <option value="support">General Support</option>
-            <option value="feedback">Feedback</option>
-            <option value="return">Return / Refund</option>
+            <option value="support">{{ tr('tickets.generalSupport') }}</option>
+            <option value="feedback">{{ tr('tickets.feedback') }}</option>
+            <option value="return">{{ tr('tickets.returnRefund') }}</option>
           </select>
+          <p v-if="form.type === 'return'" class="mt-2 text-xs text-slate-500">
+            {{ tr('tickets.policyPrefix') }}
+            <NuxtLink to="/policies/returns" class="font-medium text-cyan-700 hover:text-cyan-900">{{ tr('tickets.returnsPolicy') }}</NuxtLink>
+            {{ tr('tickets.and') }}
+            <NuxtLink to="/policies/warranty" class="font-medium text-cyan-700 hover:text-cyan-900">{{ tr('tickets.warrantyPolicy') }}</NuxtLink>
+            {{ tr('tickets.policySuffix') }}
+          </p>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">Related Order (optional)</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">{{ tr('tickets.relatedOrder') }}</label>
           <input
             v-model="form.order_id"
             type="number"
@@ -212,25 +227,25 @@ onMounted(loadTickets)
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">{{ tr('tickets.subject') }}</label>
           <input
             v-model.trim="form.subject"
             type="text"
-            placeholder="Brief summary"
+            :placeholder="tr('tickets.subjectPlaceholder')"
             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             maxlength="120"
           />
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <label class="block text-sm font-medium text-slate-700 mb-1">{{ tr('tickets.description') }}</label>
           <textarea
             v-model.trim="form.description"
             rows="4"
-            placeholder="Describe the issue or request in detail…"
+            :placeholder="tr('tickets.descriptionPlaceholder')"
             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
-          <p class="mt-1 text-xs text-slate-500">Please avoid sharing sensitive information.</p>
+          <p class="mt-1 text-xs text-slate-500">{{ tr('tickets.sensitiveHint') }}</p>
         </div>
 
         <div class="md:col-span-2 flex items-center justify-end gap-2">
@@ -239,7 +254,7 @@ onMounted(loadTickets)
             class="rounded-lg bg-white px-3 py-2 text-sm font-medium ring-1 ring-slate-200 hover:bg-slate-50"
             @click="form.subject=''; form.description=''; form.order_id=''; form.type='support'"
           >
-            Clear
+            {{ tr('orders.clear') }}
           </button>
           <button
             type="submit"
@@ -250,7 +265,7 @@ onMounted(loadTickets)
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25"/>
               <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" class="opacity-75"/>
             </svg>
-            Submit Ticket
+            {{ tr('tickets.submit') }}
           </button>
         </div>
       </form>
@@ -259,26 +274,26 @@ onMounted(loadTickets)
     <!-- Tickets list -->
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-200 bg-slate-50/60 flex items-center justify-between">
-        <div class="text-sm font-medium text-slate-700">My Tickets</div>
-        <div class="text-xs text-slate-500">Showing {{ filtered.length }} of {{ tickets?.length || 0 }}</div>
+        <div class="text-sm font-medium text-slate-700">{{ tr('tickets.myTickets') }}</div>
+        <div class="text-xs text-slate-500">{{ tr('tickets.showing', { shown: filtered.length, total: tickets?.length || 0 }) }}</div>
       </div>
 
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead class="bg-slate-50">
             <tr class="text-slate-600">
-              <th class="px-4 py-3 text-left font-semibold">Ref</th>
-              <th class="px-4 py-3 text-left font-semibold">Subject</th>
-              <th class="px-4 py-3 text-left font-semibold">Type</th>
-              <th class="px-4 py-3 text-left font-semibold">Status</th>
-              <th class="px-4 py-3 text-left font-semibold">Created</th>
-              <th class="px-4 py-3 text-right font-semibold">Actions</th>
+              <th class="px-4 py-3 text-left font-semibold">{{ tr('tickets.ref') }}</th>
+              <th class="px-4 py-3 text-left font-semibold">{{ tr('tickets.subject') }}</th>
+              <th class="px-4 py-3 text-left font-semibold">{{ tr('tickets.type') }}</th>
+              <th class="px-4 py-3 text-left font-semibold">{{ tr('orders.status') }}</th>
+              <th class="px-4 py-3 text-left font-semibold">{{ tr('tickets.created') }}</th>
+              <th class="px-4 py-3 text-right font-semibold">{{ tr('orders.actions') }}</th>
             </tr>
           </thead>
 
           <tbody class="divide-y divide-slate-100">
             <tr v-if="loading">
-              <td colspan="6" class="px-4 py-6 text-center text-slate-500">Loading tickets…</td>
+              <td colspan="6" class="px-4 py-6 text-center text-slate-500">{{ tr('tickets.loading') }}</td>
             </tr>
 
             <tr
@@ -289,14 +304,14 @@ onMounted(loadTickets)
             >
               <td class="px-4 py-3 font-medium text-slate-900">{{ t.reference ?? ('#' + t.id) }}</td>
               <td class="px-4 py-3 text-slate-800">{{ t.subject }}</td>
-              <td class="px-4 py-3 capitalize text-slate-700">{{ t.type }}</td>
+              <td class="px-4 py-3 text-slate-700">{{ typeLabel(t.type) }}</td>
               <td class="px-4 py-3">
                 <span
                   class="inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md ring-1"
                   :class="statusChip(t.status)"
                 >
                   <span class="h-1.5 w-1.5 rounded-full" :class="statusDot(t.status)"></span>
-                  {{ t.status }}
+                  {{ statusLabel(t.status) }}
                 </span>
               </td>
               <td class="px-4 py-3 text-slate-700">{{ t.created_at }}</td>
@@ -305,20 +320,20 @@ onMounted(loadTickets)
                   class="inline-flex items-center gap-2 text-cyan-700 hover:text-cyan-900 font-medium"
                   @click.stop="openTicket(t.id)"
                 >
-                  View
+                  {{ tr('tickets.view') }}
                 </button>
                 <button
                   v-if="t.status !== 'closed'"
                   class="ml-3 inline-flex items-center gap-2 text-red-600 hover:text-red-700 font-medium"
                   @click.stop="closeTicket(t.id)"
                 >
-                  Close
+                  {{ tr('tickets.close') }}
                 </button>
               </td>
             </tr>
 
             <tr v-if="!loading && filtered.length === 0">
-              <td colspan="6" class="px-4 py-12 text-center text-slate-500">No tickets found.</td>
+              <td colspan="6" class="px-4 py-12 text-center text-slate-500">{{ tr('tickets.empty') }}</td>
             </tr>
           </tbody>
         </table>
@@ -331,18 +346,18 @@ onMounted(loadTickets)
       <div class="relative w-full md:w-[720px] max-h-[80vh] overflow-hidden rounded-t-2xl md:rounded-2xl bg-white shadow-xl">
         <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <div class="text-sm text-slate-500">Ticket {{ activeTicket.reference ?? ('#' + activeTicket.id) }}</div>
+            <div class="text-sm text-slate-500">{{ tr('tickets.ticket', { ref: activeTicket.reference ?? ('#' + activeTicket.id) }) }}</div>
             <div class="text-lg font-semibold text-slate-900">{{ activeTicket.subject }}</div>
           </div>
           <button class="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-200 hover:bg-slate-50" @click="activeTicket = null">
-            Close
+            {{ tr('tickets.close') }}
           </button>
         </div>
 
         <div class="grid grid-rows-[1fr_auto] max-h-[calc(80vh-56px)]">
           <!-- Messages -->
           <div class="overflow-y-auto p-5 space-y-4">
-            <div v-if="messagesLoading" class="text-center text-slate-500 py-8">Loading conversation…</div>
+            <div v-if="messagesLoading" class="text-center text-slate-500 py-8">{{ tr('tickets.loadingConversation') }}</div>
 
             <template v-else-if="messages && messages.length">
               <div
@@ -364,7 +379,7 @@ onMounted(loadTickets)
             </template>
 
             <div v-else class="text-slate-500 text-sm text-center py-8">
-              No messages yet. Start the conversation below.
+              {{ tr('tickets.noMessages') }}
             </div>
           </div>
 
@@ -373,7 +388,7 @@ onMounted(loadTickets)
             <input
               v-model.trim="replyText"
               type="text"
-              placeholder="Write a reply…"
+              :placeholder="tr('tickets.replyPlaceholder')"
               class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
               @keyup.enter="sendReply"
             />
@@ -382,7 +397,7 @@ onMounted(loadTickets)
               :disabled="!replyText.trim()"
               @click="sendReply"
             >
-              Send
+              {{ tr('tickets.send') }}
             </button>
           </div>
         </div>

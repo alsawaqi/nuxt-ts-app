@@ -1,5 +1,7 @@
- <script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue'
+
+const { t, locale } = useStorefrontLocale()
 
 interface LoyaltyTx {
   id: number
@@ -8,6 +10,7 @@ interface LoyaltyTx {
   Orders_Placed_Id?: number | null
   Points_Earned: number
   Points_Redeemed: number
+  Redeemed_Amount?: number | string | null
   Balance_After?: number | null   // ✅ from API
   created_at: string
   updated_at?: string
@@ -17,6 +20,9 @@ const props = defineProps<{
   loading?: boolean
   transactions?: LoyaltyTx[]
   totalPoints?: number
+  totalEarned?: number
+  totalRedeemed?: number
+  totalRedeemedAmount?: number
   pagination?: {
     current_page: number
     last_page: number
@@ -37,11 +43,13 @@ const rows = computed(() => {
   return list.map(tx => {
     const credit = Number(tx.Points_Earned || 0)
     const debit  = Number(tx.Points_Redeemed || 0)
+    const redeemedAmount = Number(tx.Redeemed_Amount || 0)
     const delta  = credit - debit
     return {
       ...tx,
       credit,
       debit,
+      redeemedAmount,
       delta,
       balanceAfter: Number(tx.Balance_After ?? 0), // ✅ accurate even with pagination
       kind: delta > 0 ? 'credit' : delta < 0 ? 'debit' : 'neutral'
@@ -56,19 +64,34 @@ const totalPointsComputed = computed(() =>
 )
 
 const fmtDate = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
+  new Intl.DateTimeFormat(locale.value === 'ar' ? 'ar-OM' : undefined, { year: 'numeric', month: 'short', day: '2-digit' })
     .format(new Date(iso))
+
+const fmtMoney = (value: number | string | null | undefined) => {
+  const num = Number(value || 0)
+  return `${t('common.omr')} ${Number.isFinite(num) ? num.toFixed(3) : '0.000'}`
+}
 </script>
 
 <template>
   <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-      <h2 class="text-lg font-semibold text-slate-900">Loyalty Transactions</h2>
+      <h2 class="text-lg font-semibold text-slate-900">{{ t('loyalty.title') }}</h2>
 
-      <div class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 text-emerald-700 px-3 py-1 ring-1 ring-emerald-200">
-        <span class="text-sm font-semibold">{{ totalPointsComputed }}</span>
-        <span class="text-xs">points</span>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 text-emerald-700 px-3 py-1 ring-1 ring-emerald-200">
+          <span class="text-sm font-semibold">{{ totalPointsComputed }}</span>
+          <span class="text-xs">{{ t('loyalty.availablePoints') }}</span>
+        </div>
+        <div class="inline-flex items-center gap-2 rounded-lg bg-blue-50 text-blue-700 px-3 py-1 ring-1 ring-blue-200">
+          <span class="text-sm font-semibold">{{ totalEarned || 0 }}</span>
+          <span class="text-xs">{{ t('loyalty.earned') }}</span>
+        </div>
+        <div class="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-700 px-3 py-1 ring-1 ring-red-200">
+          <span class="text-sm font-semibold">{{ totalRedeemed || 0 }}</span>
+          <span class="text-xs">{{ t('loyalty.redeemed') }}</span>
+        </div>
       </div>
     </div>
 
@@ -87,19 +110,20 @@ const fmtDate = (iso: string) =>
 
       <!-- Empty -->
       <div v-else-if="!rows.length" class="p-8 text-center text-slate-500 bg-white">
-        No loyalty activity yet.
+        {{ t('loyalty.empty') }}
       </div>
 
       <!-- Rows -->
       <table v-else class="min-w-full text-sm bg-white">
         <thead class="bg-slate-50 text-slate-600">
           <tr>
-            <th class="text-left px-4 py-3 font-medium">Date</th>
-            <th class="text-left px-4 py-3 font-medium">Reference</th>
-            <th class="text-left px-4 py-3 font-medium">Activity</th>
-            <th class="text-right px-4 py-3 font-medium">Earned</th>
-            <th class="text-right px-4 py-3 font-medium">Redeemed</th>
-            <th class="text-right px-4 py-3 font-medium">Balance</th>
+            <th class="text-left px-4 py-3 font-medium">{{ t('loyalty.date') }}</th>
+            <th class="text-left px-4 py-3 font-medium">{{ t('loyalty.reference') }}</th>
+            <th class="text-left px-4 py-3 font-medium">{{ t('loyalty.activity') }}</th>
+            <th class="text-right px-4 py-3 font-medium">{{ t('loyalty.earned') }}</th>
+            <th class="text-right px-4 py-3 font-medium">{{ t('loyalty.redeemed') }}</th>
+            <th class="text-right px-4 py-3 font-medium">{{ t('loyalty.amount') }}</th>
+            <th class="text-right px-4 py-3 font-medium">{{ t('loyalty.balance') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
@@ -111,7 +135,7 @@ const fmtDate = (iso: string) =>
             <td class="px-4 py-3">
               <div class="font-medium text-slate-900">{{ tx.Loyalty_Transaction_Code }}</div>
               <div v-if="tx.Orders_Placed_Id" class="text-xs text-slate-500">
-                Order #{{ tx.Orders_Placed_Id }}
+                {{ t('loyalty.orderNumber', { id: tx.Orders_Placed_Id }) }}
               </div>
             </td>
 
@@ -138,7 +162,7 @@ const fmtDate = (iso: string) =>
                 <span class="font-semibold"
                       :class="tx.kind==='credit' ? 'text-blue-700' :
                               tx.kind==='debit'  ? 'text-red-700'  : 'text-slate-600'">
-                  {{ tx.delta > 0 ? '+' + tx.delta : tx.delta }} pts
+                  {{ t('loyalty.points', { count: tx.delta > 0 ? '+' + tx.delta : tx.delta }) }}
                 </span>
               </div>
             </td>
@@ -152,6 +176,10 @@ const fmtDate = (iso: string) =>
             </td>
 
             <td class="px-4 py-3 text-right">
+              <span class="text-slate-900 font-medium">{{ tx.redeemedAmount ? fmtMoney(tx.redeemedAmount) : '—' }}</span>
+            </td>
+
+            <td class="px-4 py-3 text-right">
               <span class="font-semibold text-emerald-600">{{ tx.balanceAfter }}</span>
             </td>
           </tr>
@@ -162,10 +190,10 @@ const fmtDate = (iso: string) =>
       <div v-if="pagination" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-white">
         <div class="text-xs text-slate-600">
           <span v-if="pagination.from && pagination.to">
-            Showing <b>{{ pagination.from }}</b>–<b>{{ pagination.to }}</b> of <b>{{ pagination.total }}</b>
+            {{ t('orders.showingRange', { from: pagination.from, to: pagination.to, total: pagination.total }) }}
           </span>
           <span v-else>
-            Total: <b>{{ pagination.total }}</b>
+            {{ t('orders.totalRows', { total: pagination.total }) }}
           </span>
         </div>
 
@@ -176,37 +204,37 @@ const fmtDate = (iso: string) =>
             class="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm"
             :disabled="loading"
           >
-            <option :value="10">10 / page</option>
-            <option :value="20">20 / page</option>
-            <option :value="50">50 / page</option>
+            <option :value="10">{{ t('orders.perPage', { count: 10 }) }}</option>
+            <option :value="20">{{ t('orders.perPage', { count: 20 }) }}</option>
+            <option :value="50">{{ t('orders.perPage', { count: 50 }) }}</option>
           </select>
 
           <button class="px-3 py-1.5 text-xs rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
                   :disabled="loading || pagination.current_page <= 1"
                   @click="emit('page-change', 1)">
-            First
+            {{ t('orders.first') }}
           </button>
 
           <button class="px-3 py-1.5 text-xs rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
                   :disabled="loading || pagination.current_page <= 1"
                   @click="emit('page-change', pagination.current_page - 1)">
-            Prev
+            {{ t('orders.prev') }}
           </button>
 
           <span class="text-xs text-slate-600 px-2">
-            Page <b>{{ pagination.current_page }}</b> / {{ pagination.last_page }}
+            {{ t('orders.page', { page: pagination.current_page, last: pagination.last_page }) }}
           </span>
 
           <button class="px-3 py-1.5 text-xs rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
                   :disabled="loading || pagination.current_page >= pagination.last_page"
                   @click="emit('page-change', pagination.current_page + 1)">
-            Next
+            {{ t('orders.next') }}
           </button>
 
           <button class="px-3 py-1.5 text-xs rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
                   :disabled="loading || pagination.current_page >= pagination.last_page"
                   @click="emit('page-change', pagination.last_page)">
-            Last
+            {{ t('orders.last') }}
           </button>
         </div>
       </div>
@@ -218,13 +246,17 @@ const fmtDate = (iso: string) =>
         <svg class="h-3.5 w-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M4 17c3-6 7-9 12-9"/><path d="M13 6h5v5"/>
         </svg>
-        <span>Earned</span>
+        <span>{{ t('loyalty.earned') }}</span>
       </div>
       <div class="inline-flex items-center gap-1">
         <svg class="h-3.5 w-3.5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M4 7c3 6 7 9 12 9"/><path d="M13 18h5v-5"/>
         </svg>
-        <span>Redeemed</span>
+        <span>{{ t('loyalty.redeemed') }}</span>
+      </div>
+      <div v-if="totalRedeemedAmount" class="inline-flex items-center gap-1">
+        <span>{{ t('loyalty.totalDiscountUsed') }}</span>
+        <span class="font-semibold text-slate-700">{{ fmtMoney(totalRedeemedAmount) }}</span>
       </div>
     </div>
   </section>

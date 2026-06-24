@@ -6,4 +6,5 @@ nuxt-app/.nuxt/
 nuxt-app/node_modules/
 nuxt-app/.output/
 nuxt-app/.env
-*.log
+*.log.vs/
+*:Zone.Identifier

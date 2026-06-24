@@ -1,0 +1,32 @@
+:root[dir='rtl'] body {
+  direction: rtl;
+}
+
+:root[dir='rtl'] .rtl-swap-row {
+  flex-direction: row-reverse;
+}
+
+:root[dir='rtl'] .rtl-text-start {
+  text-align: right;
+}
+
+:root[dir='ltr'] .rtl-text-start {
+  text-align: left;
+}
+
+:root[dir='rtl'] .rtl-text-end {
+  text-align: left;
+}
+
+:root[dir='ltr'] .rtl-text-end {
+  text-align: right;
+}
+
+:root[dir='rtl'] .rtl-direction-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+:root[dir='rtl'] .rtl-flip-icon {
+  transform: scaleX(-1);
+}

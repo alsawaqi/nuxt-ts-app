@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useCartStore } from '~/stores/cart'
+import { useLoyaltyStore } from '~/stores/loyalty'
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<Record<string, any> | null>(null)
@@ -17,6 +18,7 @@ export const useUserStore = defineStore('user', () => {
   const clearUser = () => {
     user.value = null
     fetched.value = false
+    if (import.meta.client) useLoyaltyStore().clear()
   }
 
   const fetchUser = async (force = false) => {
@@ -53,6 +55,7 @@ export const useUserStore = defineStore('user', () => {
   } catch (_) {}
 
   clearUser()
+  useLoyaltyStore().clear()
 
   // ✅ switch cart back to guest state
   const cart = useCartStore()

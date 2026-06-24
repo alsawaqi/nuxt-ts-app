@@ -53,7 +53,7 @@ export default defineNuxtPlugin(() => {
           userStore.clearUser()
           const guestRoutes = ['/login', '/register', '/forgot-password']
           const path = router.currentRoute.value.path
-          if (!guestRoutes.includes(path)) {
+          if (import.meta.client && !guestRoutes.includes(path)) {
             // Don’t return navigateTo() into Axios flow; just redirect
             // and reject to unblock the awaiting call stack.
             navigateTo('/login')

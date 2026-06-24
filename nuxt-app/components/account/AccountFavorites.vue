@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useCartStore } from '~/stores/cart'
-import { useToast } from 'vue-toastification'
+import * as Toastification from 'vue-toastification'
 
 const { $axios, $r2Url } = useNuxtApp()
 const cart = useCartStore()
-const toast = useToast()
+const toast = Toastification.useToast()
+const { t, productName } = useStorefrontLocale()
 
 interface FavImg { Image_Path: string }
 interface FavProduct {
@@ -18,6 +19,7 @@ interface FavProduct {
   Length_Cm?: number
   Width_Cm?: number
   Height_Cm?: number
+  Product_Stock?: number
 }
 
 const loading = ref(true)
@@ -48,29 +50,31 @@ const toggleFavorite = async (p: FavProduct) => {
   try {
     await $axios.post(`/api/favorites/${p.Slug}/toggle`, {}, { withCredentials: true })
     favorites.value = favorites.value.filter(x => x.id !== p.id)
-    toast.success('Removed from favorites')
+    toast.success(t('favorites.removed'))
   } catch (e) {
     console.error('Failed to update favorite', e)
-    toast.error('Could not update favorite')
+    toast.error(t('product.favoriteError'))
   } finally {
     removingId.value = null
   }
 }
 
-const addToCart = (p: FavProduct) => {
-  cart.addToCart({
+const addToCart = async (p: FavProduct) => {
+  await cart.addToCart({
     id: p.id,
     slug: p.Slug,
-    name: p.Product_Name,
+    name: productName(p),
+    Product_Name: p.Product_Name,
+    Product_Name_Ar: (p as any).Product_Name_Ar,
     price: p.Product_Price,
-    quantity: 1,
     image: p.images?.[0]?.Image_Path || '',
     weight: p.Weight_Kg || 0,
     length: p.Length_Cm || 0,
     width: p.Width_Cm || 0,
     height: p.Height_Cm || 0,
-  })
-  toast.success('Added to cart')
+    Product_Stock: p.Product_Stock || 0,
+  }, 1)
+  toast.success(t('favorites.addedToCart'))
 }
 
 onMounted(fetchFavorites)
@@ -79,8 +83,8 @@ onMounted(fetchFavorites)
 <template>
   <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
     <div class="flex items-center justify-between mb-3">
-      <h2 class="text-lg font-semibold text-slate-900">Favorites</h2>
-      <span class="text-xs text-slate-500">{{ favorites.length }} item(s)</span>
+      <h2 class="text-lg font-semibold text-slate-900">{{ t('account.favorites') }}</h2>
+      <span class="text-xs text-slate-500">{{ t(favorites.length === 1 ? 'common.item' : 'common.items', { count: favorites.length }) }}</span>
     </div>
 
     <!-- Loading -->
@@ -95,8 +99,8 @@ onMounted(fetchFavorites)
     <!-- Empty -->
     <div v-else-if="!favorites.length" class="text-center py-12 text-slate-500">
       <div class="text-3xl mb-2">♡</div>
-      <p>No favorites yet.</p>
-      <p class="text-xs">Tap the heart on any product to save it here.</p>
+      <p>{{ t('favorites.empty') }}</p>
+      <p class="text-xs">{{ t('favorites.hint') }}</p>
     </div>
 
     <!-- Grid -->
@@ -110,7 +114,7 @@ onMounted(fetchFavorites)
           <div class="aspect-[4/3] bg-slate-50 grid place-items-center">
             <img
               :src="p.images?.[0]?.Image_Path ? `${$r2Url}/${p.images[0].Image_Path}` : ''"
-              :alt="p.Product_Name"
+              :alt="productName(p)"
               class="max-h-40 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.03]"
               loading="lazy"
             />
@@ -119,16 +123,16 @@ onMounted(fetchFavorites)
 
         <div class="p-3 space-y-2">
           <NuxtLink :to="`/product/${p.Slug}`" class="block text-sm font-medium text-slate-900 line-clamp-2">
-            {{ p.Product_Name }}
+            {{ productName(p) }}
           </NuxtLink>
-          <div class="text-emerald-600 font-semibold text-sm">OMR {{ p.Product_Price }}</div>
+          <div class="text-emerald-600 font-semibold text-sm">{{ t('common.omr') }} {{ p.Product_Price }}</div>
 
           <div class="flex items-center gap-2 pt-1">
             <button
               @click="addToCart(p)"
               class="flex-1 inline-flex items-center justify-center rounded-lg bg-slate-900 text-white text-xs font-medium py-2 hover:opacity-95"
             >
-              Add to Cart
+              {{ t('product.addToCart') }}
             </button>
 
             <button
@@ -136,7 +140,7 @@ onMounted(fetchFavorites)
               :disabled="removingId === p.id"
               class="h-9 w-9 inline-grid place-items-center rounded-lg ring-1 ring-slate-200 bg-white hover:bg-rose-50 disabled:opacity-60"
               :aria-pressed="true"
-              title="Remove favorite"
+              :title="t('favorites.removeTitle')"
             >
               <svg v-if="removingId !== p.id" class="h-5 w-5 text-rose-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M11.99 21s-6.72-4.35-9.54-7.17A6.37 6.37 0 0 1 3 3.88a5 5 0 0 1 7.07 0l1.92 1.93 1.93-1.93A5 5 0 0 1 21 3.88a6.37 6.37 0 0 1 .55 9.95C18.73 16.65 12 21 11.99 21z"/>
