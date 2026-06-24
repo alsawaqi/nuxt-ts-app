@@ -11,7 +11,7 @@ services:
       NITRO_PORT: 3000
       NUXT_PUBLIC_API_BASE: https://app.avinaq.com
     networks:
-      - npm_network
+      - proxy_network
    
 
   nginx:
@@ -22,8 +22,8 @@ services:
     depends_on:
       - nuxt-ui-app
     networks:
-      - npm_network
+      - proxy_network
 
 networks:
-  npm_network:
+  proxy_network:
     external: true
