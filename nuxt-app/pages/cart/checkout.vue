@@ -159,7 +159,7 @@ const linesForPdf = (items: any[] = cart.cartItems) =>
     qty: Number(i.quantity || i.qty || 0),
     unit: 'EA',
     unitPrice: Number(i.unit_price ?? i.price ?? 0),
-    vatPct: 5,
+    vatPct: +(cart.vat * 100).toFixed(2),
   }))
 
 // ---------------------
@@ -604,7 +604,7 @@ const getshippingcod = async (id: number) : Promise<void> => {
   bounceIfEmpty()
 
   // Load VAT and other onMounted logic
-  cart.getVat()
+  await cart.getVat()
   await fetchLoyaltySummary()
 
   if (!cart.cartItems.length) return navigateTo('/cart')
@@ -700,9 +700,9 @@ const getshippingcod = async (id: number) : Promise<void> => {
         unit: 'EA',
         unitPrice: Number(i.price),
         totalExcl: Number(i.price) * Number(i.quantity),
-        vatPct: 5,
+        vatPct: +(cart.vat * 100).toFixed(2),
         vatAmt: Number(i.price) * Number(i.quantity) * cart.vat,
-        totalIncl: Number(i.price) * Number(i.quantity) * 1.05
+        totalIncl: Number(i.price) * Number(i.quantity) * (1 + cart.vat)
       }))" :totals="{
         originalSubtotal: savedOriginalSubtotal,
         productDiscount: savedProductDiscount,
@@ -1101,7 +1101,7 @@ const getshippingcod = async (id: number) : Promise<void> => {
             <span>{{ t('common.omr') }} {{ savedShippingCost.toFixed(3) }}</span>
           </div>
           <div class="flex justify-between">
-            <span>VAT (5%)</span>
+            <span>VAT ({{ (cart.vat * 100).toFixed(1) }}%)</span>
             <span>{{ t('common.omr') }} {{ savedVat.toFixed(3) }}</span>
           </div>
           <div v-if="loyaltyDiscount > 0" class="flex justify-between text-red-600">
