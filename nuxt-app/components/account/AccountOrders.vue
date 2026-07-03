@@ -70,6 +70,7 @@ interface OrderDetails {
         contact_name?: string | null
         phone?: string | null
         email?: string | null
+        title?: string | null
         designation?: string | null
         remarks?: string | null
         country?: string | null
@@ -546,7 +547,7 @@ const deliveryLabel = (type?: string | null) => ({
                 </div>
 
                 <div v-if="detail.fulfillment.shipping?.address" class="rounded-lg bg-slate-50 p-3 text-slate-700">
-                  <div class="font-semibold text-slate-900">{{ detail.fulfillment.shipping.address.contact_name || t('orders.shippingContact') }}</div>
+                  <div class="font-semibold text-slate-900">{{ [detail.fulfillment.shipping.address.title || detail.fulfillment.shipping.address.designation, detail.fulfillment.shipping.address.contact_name].filter(Boolean).join(' ') || t('orders.shippingContact') }}</div>
                   <div class="mt-1">{{ [
                     detail.fulfillment.shipping.address.country,
                     detail.fulfillment.shipping.address.region,

@@ -4,6 +4,8 @@ import * as Toastification from 'vue-toastification'
 
 type Option = { id: number; Country_Name?: string; Region_Name?: string; District_Name?: string; City_Name?: string }
 
+type TitleOption = { id: number; Title_Name?: string; Title_Name_Ar?: string | null }
+
 type Address = {
   id: number
   Country_Id?: number | string
@@ -14,6 +16,8 @@ type Address = {
   Telephone_Country_Code?: string
   Telephone?: string
   Designation?: string
+  Title_Id?: number | string | null
+  title_name?: string | null
   Remarks?: string
   Email?: string
   Is_Default?: boolean | number
@@ -49,6 +53,7 @@ const loading = ref<boolean>(true)
 const selectedId = ref<number | null>(null)
 
 const countries = ref<Option[]>([])
+const titles    = ref<TitleOption[]>([])
 const regions   = ref<Option[]>([])
 const districts = ref<Option[]>([])
  
@@ -71,7 +76,7 @@ const form = reactive({
   Contact_Person_Name: '',
   Telephone_Country_Code: '+968',
   Telephone: '',
-  Designation: '',
+  Title_Id: '' as number | string,
   Remarks: '',
   Email: '',
   Type: 'shipping', // optional if your API expects it
@@ -81,6 +86,13 @@ const loadCountries = async () => {
   try {
     const res = await $axios.get('/api/countries')
     countries.value = res.data
+  } catch (e) { console.error(e) }
+}
+
+const loadTitles = async () => {
+  try {
+    const res = await $axios.get('/api/titles')
+    titles.value = Array.isArray(res.data) ? res.data : []
   } catch (e) { console.error(e) }
 }
 
@@ -183,7 +195,7 @@ const resetForm = () => {
   form.Contact_Person_Name = ''
   form.Telephone_Country_Code = '+968'
   form.Telephone = ''
-  form.Designation = ''
+  form.Title_Id = ''
   form.Remarks = ''
   form.Email = ''
   form.Type = 'shipping'
@@ -224,7 +236,13 @@ const openEdit = async (addr: Address) => {
   form.Contact_Person_Name = addr.Contact_Person_Name || ''
   form.Telephone_Country_Code = normalizePhoneCode(addr.Telephone_Country_Code)
   form.Telephone = addr.Telephone || ''
-  form.Designation = addr.Designation || ''
+  // Prefill Title: prefer Title_Id; legacy rows may only carry a title string in Designation
+  form.Title_Id = toId(addr.Title_Id)
+  if (!form.Title_Id && addr.Designation) {
+    const legacy = String(addr.Designation).trim().toLowerCase()
+    const match = titles.value.find(ti => (ti.Title_Name || '').trim().toLowerCase() === legacy)
+    if (match) form.Title_Id = match.id
+  }
   form.Remarks = addr.Remarks || ''
   form.Email = addr.Email || ''
 
@@ -243,7 +261,7 @@ const closeModal = () => {
 const ensureLookupsLoaded = async () => {
   // load basic lists if empty
   if (!countries.value.length) await loadCountries()
- 
+  if (!titles.value.length) await loadTitles()
 }
 
 const cleanTelephone = () => {
@@ -252,6 +270,14 @@ const cleanTelephone = () => {
 
 const isDefaultAddress = (addr: Address) => Boolean(addr.is_default || addr.Is_Default)
 const placeName = (source: unknown, key: string) => field(source, key)
+
+// Localized title for an address: resolve via Title_Id from the titles lookup,
+// fall back to the API-provided title_name, then to the legacy Designation string.
+const addressTitle = (addr: Address) => {
+  const match = addr.Title_Id ? titles.value.find(ti => Number(ti.id) === Number(addr.Title_Id)) : null
+  if (match) return field(match, 'Title_Name')
+  return addr.title_name || addr.Designation || ''
+}
 
 // ------------ CRUD ------------
 const submitAdd = async () => {
@@ -265,7 +291,7 @@ District_Id: form.District_Id ? Number(form.District_Id) : null,
       Contact_Person_Name: form.Contact_Person_Name || null,
       Telephone_Country_Code: form.Telephone_Country_Code || null,
       Telephone: digitsOnly(form.Telephone) || null,
-      Designation: form.Designation || null,
+      Title_Id: form.Title_Id ? Number(form.Title_Id) : null,
       Remarks: form.Remarks || null,
       Email: form.Email || null,
       Type: form.Type || null,
@@ -293,7 +319,7 @@ District_Id: form.District_Id ? Number(form.District_Id) : null,
       Contact_Person_Name: form.Contact_Person_Name || null,
       Telephone_Country_Code: form.Telephone_Country_Code || null,
       Telephone: digitsOnly(form.Telephone) || null,
-      Designation: form.Designation || null,
+      Title_Id: form.Title_Id ? Number(form.Title_Id) : null,
       Remarks: form.Remarks || null,
       Email: form.Email || null,
       Type: form.Type || null,
@@ -442,7 +468,7 @@ onMounted(async () => {
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="text-slate-900 font-semibold">
-                  {{ addr.Contact_Person_Name || t('addresses.recipient') }}
+                  <span v-if="addressTitle(addr)">{{ addressTitle(addr) }} </span>{{ addr.Contact_Person_Name || t('addresses.recipient') }}
                 </h3>
                 <span
                   v-if="isDefaultAddress(addr)"
@@ -615,6 +641,18 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- Title -->
+          <div class="md:col-span-1">
+            <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.contactTitle') }}</label>
+            <div class="relative">
+              <select v-model="form.Title_Id" :class="selectCls">
+                <option value="">{{ t('addresses.selectTitle') }}</option>
+                <option v-for="ti in titles" :key="ti.id" :value="ti.id">{{ placeName(ti, 'Title_Name') }}</option>
+              </select>
+              <ChevronDown />
+            </div>
+          </div>
+
           <!-- Contact Person -->
           <div class="md:col-span-1">
             <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.contactPerson') }}</label>
@@ -643,24 +681,6 @@ onMounted(async () => {
                 @input="cleanTelephone"
               />
             </div>
-          </div>
-
-          <!-- Designation -->
-          <div class="md:col-span-1">
-            <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.designation') }}</label>
-            <select v-model="form.Designation" :class="selectCls">
-
-            <option value="">{{ t('addresses.selectDesignation') }}</option>
-                <option value="Mr">Mr</option>
-                <option value="Ms">Ms</option>
-                <option value="Mrs">Mrs</option>
-                <option value="Dr">Dr</option>
-                <option value="Prof">Prof</option>
-                
-                <option value="Sir">Sir</option>
-                <option value="Eng">Eng</option>
-                </select>
-
           </div>
 
           <!-- Email -->
