@@ -9,6 +9,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useOrderConfirmPdf } from '@/composables/useOrderConfirmPdf'
 import { useLoyaltyStore } from '~/stores/loyalty'
 import { fieldA11y } from '~/utils/accessibility.js'
+import { formatBulkTierRange } from '~/utils/bulkPricing.js'
 
 // import { useToast } from 'vue-toastification'
 
@@ -133,23 +134,45 @@ const ensureSavedIdempotencyKey = () => {
 
 
  
+// Contact title for display: prefer the DB-driven title name, fallback to legacy Designation text
+const contactTitle = (a: any) => a?.title_name || a?.Designation || ''
+
 const shippingAddressText = computed(() => {
   const a = selectedAddress.value
   return a
-    ? `${a?.Contact_Person_Name || ''}\n${formatPhone(a?.Telephone_Country_Code, a?.Telephone)}\n` +
+    ? `${[contactTitle(a), a?.Contact_Person_Name].filter(Boolean).join(' ')}\n${formatPhone(a?.Telephone_Country_Code, a?.Telephone)}\n` +
     `${field(a?.country, 'Country_Name') || ''}, ${field(a?.region, 'Region_Name') || ''}, ` +
     `${field(a?.district, 'District_Name') || ''}, ${field(a?.city, 'City_Name') || ''}`
     : '—'
 })
 
+// Bulk tier for a line: resolved client-side for cart items; null for server detail rows
+// (their unit_price already carries the tier price and Product_Discount_* is empty).
+const lineBulkTier = (item: any) => {
+  if (typeof item?.quantity === 'undefined' || typeof item?.price === 'undefined') return null
+  return cart.bulkTierFor(item)
+}
+
+// Unit price actually charged for a line (tier wins over product discounts, no stacking).
+const lineUnitPrice = (item: any): number => {
+  if (item?.unit_price !== undefined && item?.unit_price !== null) return Number(item.unit_price)
+  if (typeof item?.quantity !== 'undefined' && typeof item?.price !== 'undefined') {
+    return cart.effectiveUnitPrice(item)
+  }
+  return Number(item?.price ?? 0)
+}
+
 const invoiceProductDescription = (item: any) => {
   const details = field(item, ['description', 'Product_Description']) || field(item.product, 'Product_Description')
+  const bulkTier = lineBulkTier(item)
   const discount = Number(item.discountAmount || item.discount_amount || item.unit_discount_amount || 0)
   const original = Number(item.originalPrice || item.original_price || item.original_unit_price || 0)
   const discountName = item.activeDiscount?.name || item.active_discount?.name || item.discount?.name
-  const discountLine = discount > 0
-    ? `Discount: ${discountName ? `${discountName} - ` : ''}saved OMR ${discount.toFixed(3)} each${original ? ` from OMR ${original.toFixed(3)}` : ''}`
-    : ''
+  const discountLine = bulkTier
+    ? `Bulk price: OMR ${Number(bulkTier.unit_price).toFixed(3)} each (qty ${formatBulkTierRange(bulkTier)})`
+    : (discount > 0
+      ? `Discount: ${discountName ? `${discountName} - ` : ''}saved OMR ${discount.toFixed(3)} each${original ? ` from OMR ${original.toFixed(3)}` : ''}`
+      : '')
   return [productName(item) || item.product_name || t('common.products'), details, discountLine].filter(Boolean).join('\n')
 }
 
@@ -158,7 +181,7 @@ const linesForPdf = (items: any[] = cart.cartItems) =>
     description: invoiceProductDescription(i),
     qty: Number(i.quantity || i.qty || 0),
     unit: 'EA',
-    unitPrice: Number(i.unit_price ?? i.price ?? 0),
+    unitPrice: lineUnitPrice(i),
     vatPct: +(cart.vat * 100).toFixed(2),
   }))
 
@@ -477,8 +500,10 @@ const submitOrder = async () => {
       cart_items: cart.cartItems.map(item => ({
         product_id: item.id,
         quantity: item.quantity,
-        price: item.price,
-        subtotal: item.price * item.quantity,
+        // Effective unit price (bulk tier wins over product discounts); the server
+        // recomputes pricing authoritatively in place(), this keeps display == server.
+        price: cart.effectiveUnitPrice(item),
+        subtotal: cart.effectiveUnitPrice(item) * item.quantity,
         vat: 0,
       })),
       payment
@@ -693,16 +718,16 @@ const getshippingcod = async (id: number) : Promise<void> => {
         swift: 'NBOMOMRXXXX',
         bankName: 'National Bank of Oman',
         bankAddress: 'Corporate Branch, PO Box 751, PC:112, Ruwi, Muscat, Sultanate of Oman'
-      }" :items="cart.cartItems.map((i: { name: any; slug: any; id: any; quantity: any; price: any }, idx: number) => ({
+      }" :items="cart.cartItems.map((i: any, idx: number) => ({
         sl: idx + 1,
         description: invoiceProductDescription(i),
         qty: i.quantity,
         unit: 'EA',
-        unitPrice: Number(i.price),
-        totalExcl: Number(i.price) * Number(i.quantity),
+        unitPrice: cart.effectiveUnitPrice(i),
+        totalExcl: cart.effectiveUnitPrice(i) * Number(i.quantity),
         vatPct: +(cart.vat * 100).toFixed(2),
-        vatAmt: Number(i.price) * Number(i.quantity) * cart.vat,
-        totalIncl: Number(i.price) * Number(i.quantity) * (1 + cart.vat)
+        vatAmt: cart.effectiveUnitPrice(i) * Number(i.quantity) * cart.vat,
+        totalIncl: cart.effectiveUnitPrice(i) * Number(i.quantity) * (1 + cart.vat)
       }))" :totals="{
         originalSubtotal: savedOriginalSubtotal,
         productDiscount: savedProductDiscount,
@@ -767,12 +792,18 @@ const getshippingcod = async (id: number) : Promise<void> => {
 
                     </div>
 
-                    <p class="text-xs text-gray-500 mt-1">{{ t('common.omr') }} {{ item.price }} / {{ t('product.each') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      {{ t('common.omr') }} {{ cart.effectiveUnitPrice(item).toFixed(3) }} / {{ t('product.each') }}
+                      <span v-if="cart.hasBulkPricing(item)"
+                        class="ml-1 inline-flex items-center rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-700 ring-1 ring-cyan-200">
+                        {{ t('cart.bulkPrice') }}
+                      </span>
+                    </p>
                   </div>
                 </div>
 
                 <p class="text-sm font-semibold text-gray-800 whitespace-nowrap">
-                  {{ t('common.omr') }} {{ (item.price * item.quantity).toFixed(2) }}
+                  {{ t('common.omr') }} {{ (cart.effectiveUnitPrice(item) * item.quantity).toFixed(3) }}
                 </p>
               </div>
             </div>
@@ -1071,7 +1102,7 @@ const getshippingcod = async (id: number) : Promise<void> => {
 
         <h3 class="font-semibold text-gray-800 text-lg mb-1">{{ t('checkout.shippingTo') }}</h3>
         <p class="text-sm text-gray-600" v-if="selectedAddress">
-          {{ selectedAddress.Contact_Person_Name }}<br>
+          {{ [contactTitle(selectedAddress), selectedAddress.Contact_Person_Name].filter(Boolean).join(' ') }}<br>
           {{ formatPhone(selectedAddress.Telephone_Country_Code, selectedAddress.Telephone) }}<br>
           {{ field(selectedAddress.country, 'Country_Name') }}, {{ field(selectedAddress.region, 'Region_Name') }}, {{
             field(selectedAddress.district, 'District_Name') }} , {{ field(selectedAddress.city, 'City_Name') }},

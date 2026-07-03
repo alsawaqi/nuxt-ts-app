@@ -3,6 +3,8 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { useNuxtApp } from "#imports";
 import { useUserStore } from "~/stores/user"; // adjust path/name to your user store
+import { normalizeBulkTiers, resolveBulkTier } from "~/utils/bulkPricing.js";
+import type { BulkPriceTier } from "~/utils/bulkPricing.js";
 
 export interface CartItem {
   id: number;
@@ -26,6 +28,12 @@ export interface CartItem {
   width: number;
   height: number;
   Product_Stock: number; // Add the stock field here
+
+  // Quantity-tier bulk pricing (tier wins over product discounts, no stacking)
+  bulkPrices?: BulkPriceTier[];
+  hasBulkPrice?: boolean;
+  bulkUnitPrice?: number | null;
+  bulkTier?: { min_qty: number; max_qty: number | null } | null;
 }
 
 export const useCartStore = defineStore("cart", () => {
@@ -72,6 +80,12 @@ export const useCartStore = defineStore("cart", () => {
     const finalPrice = Number(p.Product_Final_Price ?? p.Discounted_Price ?? p.Product_Price ?? 0);
     const discountAmount = Number(p.Discount_Amount ?? Math.max(originalPrice - finalPrice, 0));
 
+    // Bulk pricing decorations from the cart API (attributes may live on the row or the product)
+    const bulkPrices = normalizeBulkTiers(row.bulk_prices ?? p.bulk_prices ?? p.Bulk_Prices ?? p.bulkPrices ?? []);
+    const hasBulkPrice = Boolean(row.Has_Bulk_Price ?? p.Has_Bulk_Price ?? false);
+    const rawBulkUnitPrice = row.Bulk_Unit_Price ?? p.Bulk_Unit_Price ?? null;
+    const rawBulkTier = row.Bulk_Tier ?? p.Bulk_Tier ?? null;
+
     return {
       id: Number(row.Products_Id ?? p.id),
       slug: p.Slug ?? p.Product_Slug ?? "",
@@ -97,7 +111,47 @@ export const useCartStore = defineStore("cart", () => {
       width: Number(p.Width_Cm ?? p.Width ?? 0),
       height: Number(p.Height_Cm ?? p.Height ?? 0),
       Product_Stock: Number(p.Product_Stock ?? 0),
+
+      bulkPrices,
+      hasBulkPrice,
+      bulkUnitPrice: rawBulkUnitPrice === null || rawBulkUnitPrice === undefined ? null : Number(rawBulkUnitPrice),
+      bulkTier: rawBulkTier
+        ? {
+            min_qty: Number(rawBulkTier.min_qty ?? rawBulkTier.Min_Qty ?? 1),
+            max_qty: (rawBulkTier.max_qty ?? rawBulkTier.Max_Qty ?? null) === null
+              ? null
+              : Number(rawBulkTier.max_qty ?? rawBulkTier.Max_Qty),
+          }
+        : null,
     };
+  };
+
+  // ---------- Bulk pricing (mirror of the server rule: tier wins, no discount stacking) ----------
+  // Prefer resolving from the tiers array (guest carts / product payloads); fall back to the
+  // server-decorated Bulk_* attributes on authed cart rows (always fresh for the row quantity
+  // because every quantity change round-trips through the API).
+  const bulkTierFor = (i: CartItem): BulkPriceTier | null => {
+    const resolved = resolveBulkTier(i.bulkPrices ?? [], Number(i.quantity || 0));
+    if (resolved) return resolved;
+
+    if ((i.bulkPrices ?? []).length === 0 && i.hasBulkPrice && i.bulkUnitPrice != null) {
+      return {
+        min_qty: Number(i.bulkTier?.min_qty ?? 1),
+        max_qty: i.bulkTier?.max_qty ?? null,
+        unit_price: Number(i.bulkUnitPrice),
+      };
+    }
+
+    return null;
+  };
+
+  const hasBulkPricing = (i: CartItem): boolean => bulkTierFor(i) !== null;
+
+  // Unit price actually charged for the line: tier price when a tier matches, else the
+  // normal (possibly discounted) price.
+  const effectiveUnitPrice = (i: CartItem): number => {
+    const tier = bulkTierFor(i);
+    return tier ? Number(tier.unit_price) : Number(i.price || 0);
   };
 
   const setCartFromApi = (res: any) => {
@@ -215,9 +269,10 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
 
 
   // ✅ total price (keep same API you already use)
+  // Uses the effective unit price so bulk-tier lines match the server's lineSubtotal.
   const totalPrice = () => {
     return cartItems.value.reduce((sum, i) => {
-      return sum + Number(i.price || 0) * Number(i.quantity || 0);
+      return sum + effectiveUnitPrice(i) * Number(i.quantity || 0);
     }, 0);
   };
 
@@ -229,6 +284,8 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
 
   const totalDiscount = () => {
     return cartItems.value.reduce((sum, i) => {
+      // Tier wins: product discounts do NOT stack on bulk-priced lines (unit_discount = 0)
+      if (hasBulkPricing(i)) return sum;
       const unitDiscount = Number(i.discountAmount ?? Math.max(Number(i.originalPrice ?? i.price ?? 0) - Number(i.price ?? 0), 0));
       return sum + unitDiscount * Number(i.quantity || 0);
     }, 0);
@@ -302,6 +359,9 @@ const decrementQty = async (productId: number) => {
     totalPrice,
     totalOriginalPrice,
     totalDiscount,
+    bulkTierFor,
+    hasBulkPricing,
+    effectiveUnitPrice,
     updateQuantity,
     incrementQty,
 

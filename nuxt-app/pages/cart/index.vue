@@ -49,7 +49,7 @@ const checkoutSignature = () => JSON.stringify({
   items: cart.cartItems.map(i => ({
     id: i.id,
     quantity: i.quantity,
-    price: i.price,
+    price: cart.effectiveUnitPrice(i),
   })),
 })
 
@@ -195,6 +195,7 @@ watch(quoteKey, requestQuotes, { immediate: true })
 const addresses = ref<any[]>([])
 const showAddressModal = ref(false)
 const countries = ref<Option[]>([])
+const titles = ref<any[]>([])
 const regions = ref<Option[]>([])
 const districts = ref<Option[]>([])
 const states = ref<Option[]>([]) // kept for parity if you later need state-level
@@ -208,7 +209,7 @@ const form = reactive({
   Contact_Person_Name: '',
   Telephone_Country_Code: '+968',
   Telephone: '',
-  Designation: '',
+  Title_Id: '' as number | string,
   Remarks: '',
   Email: '',
   Type: 'shipping', // optional if your API expects it
@@ -298,6 +299,20 @@ const loadCountries = async () => {
     countries.value = res.data
   } catch (e) { console.error(e) }
 }
+
+const loadTitles = async () => {
+  try {
+    const res = await $axios.get('/api/titles')
+    titles.value = Array.isArray(res.data) ? res.data : []
+  } catch (e) { console.error(e) }
+}
+
+// Localized title for an address row (fallback to legacy Designation text for old rows)
+const contactTitle = (a: any) => {
+  const match = a?.Title_Id ? titles.value.find(ti => Number(ti.id) === Number(a.Title_Id)) : null
+  if (match) return field(match, 'Title_Name')
+  return a?.title_name || a?.Designation || ''
+}
  
 
 
@@ -353,7 +368,7 @@ const submitAddress = async () => {
       Contact_Person_Name: form.Contact_Person_Name || null,
       Telephone_Country_Code: form.Telephone_Country_Code || null,
       Telephone: digitsOnly(form.Telephone) || null,
-      Designation: form.Designation || null,
+      Title_Id: form.Title_Id ? Number(form.Title_Id) : null,
       Remarks: form.Remarks || null,
       Email: form.Email || null,
       Type: form.Type || null,
@@ -449,10 +464,14 @@ const persistCheckout = () => {
       id: i.id,
       slug: i.slug,
       qty: i.quantity,
-      price: i.price,
+      // Effective unit price: bulk-tier price when a tier matches the quantity (tier wins,
+      // no discount stacking), otherwise the normal (possibly discounted) price.
+      price: cart.effectiveUnitPrice(i),
       original_price: i.originalPrice ?? i.price,
-      discount_amount: i.discountAmount ?? 0,
-      active_discount: i.activeDiscount ?? null,
+      discount_amount: cart.hasBulkPricing(i) ? 0 : (i.discountAmount ?? 0),
+      active_discount: cart.hasBulkPricing(i) ? null : (i.activeDiscount ?? null),
+      has_bulk_price: cart.hasBulkPricing(i),
+      bulk_tier: cart.bulkTierFor(i),
     })),
 
     savedAt: new Date().toISOString(),
@@ -513,8 +532,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
   if (isAuthenticated.value === true) {
     await fetchAddresses()
     await loadCountries()
- 
-
+    await loadTitles()
   }
 })
 </script>
@@ -602,15 +620,26 @@ if (locCandidate) cart.selectedLocationId = locCandidate
                 </div>
                 <p :id="`cart-qty-${item.id}-hint`" class="sr-only">{{ t('cart.quantityHint') }}</p>
                 <p class="text-xs sm:text-sm text-emerald-700 font-semibold mt-1.5">
-                  {{ t('common.omr') }} {{ Number(item.price || 0).toFixed(3) }}
+                  {{ t('common.omr') }} {{ cart.effectiveUnitPrice(item).toFixed(3) }}
                   <span class="text-[10px] sm:text-xs text-gray-500 font-normal">/ {{ t('product.each') }}</span>
                 </p>
-                <p v-if="item.hasDiscount" class="text-[11px] text-gray-400 line-through">
-                  {{ t('common.omr') }} {{ Number(item.originalPrice || item.price || 0).toFixed(3) }}
-                </p>
-                <p v-if="item.hasDiscount" class="text-[11px] text-emerald-700">
-                  {{ t('listing.saveAmount', { amount: Number(item.discountAmount || 0).toFixed(3) }) }} / {{ t('product.each') }}
-                </p>
+                <!-- Bulk tier wins: show badge + struck base price, no product-discount lines -->
+                <template v-if="cart.hasBulkPricing(item)">
+                  <span class="mt-1 inline-flex items-center rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold text-cyan-700 ring-1 ring-cyan-200">
+                    {{ t('cart.bulkPrice') }}
+                  </span>
+                  <p v-if="cart.effectiveUnitPrice(item) < Number(item.originalPrice || item.price || 0)" class="text-[11px] text-gray-400 line-through">
+                    {{ t('common.omr') }} {{ Number(item.originalPrice || item.price || 0).toFixed(3) }}
+                  </p>
+                </template>
+                <template v-else>
+                  <p v-if="item.hasDiscount" class="text-[11px] text-gray-400 line-through">
+                    {{ t('common.omr') }} {{ Number(item.originalPrice || item.price || 0).toFixed(3) }}
+                  </p>
+                  <p v-if="item.hasDiscount" class="text-[11px] text-emerald-700">
+                    {{ t('listing.saveAmount', { amount: Number(item.discountAmount || 0).toFixed(3) }) }} / {{ t('product.each') }}
+                  </p>
+                </template>
               </div>
             </div>
           </div>
@@ -690,7 +719,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
                     :aria-label="t('cart.selectShippingAddress')"
                     class="w-full rounded-md border border-slate-300 px-3 py-2 bg-white text-sm">
                     <option v-for="a in addresses" :key="a.id" :value="a.id">
-                      {{ isDefaultAddress(a) ? `${t('cart.defaultAddress')} - ` : '' }}{{ a.Contact_Person_Name }} — {{ formatPhone(a.Telephone_Country_Code, a.Telephone) }} — {{ field(a.country, 'Country_Name') }}, {{ field(a.city, 'City_Name') }}
+                      {{ isDefaultAddress(a) ? `${t('cart.defaultAddress')} - ` : '' }}{{ [contactTitle(a), a.Contact_Person_Name].filter(Boolean).join(' ') }} — {{ formatPhone(a.Telephone_Country_Code, a.Telephone) }} — {{ field(a.country, 'Country_Name') }}, {{ field(a.city, 'City_Name') }}
                     </option>
                   </select>
                   <button type="button" @click="showAddressModal = true" class="text-xs text-teal-700 hover:underline">
@@ -865,6 +894,18 @@ if (locCandidate) cart.selectedLocationId = locCandidate
               </div>
             </div>
 
+            <!-- Title -->
+            <div class="md:col-span-1">
+              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.contactTitle') }}</label>
+              <div class="relative">
+                <select v-model="form.Title_Id" :class="selectCls">
+                  <option value="">{{ t('addresses.selectTitle') }}</option>
+                  <option v-for="ti in titles" :key="ti.id" :value="ti.id">{{ field(ti, 'Title_Name') }}</option>
+                </select>
+                <ChevronDown />
+              </div>
+            </div>
+
             <!-- Contact Person -->
             <div class="md:col-span-1">
               <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.contactPerson') }}</label>
@@ -893,24 +934,6 @@ if (locCandidate) cart.selectedLocationId = locCandidate
                   @input="cleanTelephone"
                 />
               </div>
-            </div>
-
-            <!-- Designation -->
-            <div class="md:col-span-1">
-              <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.designation') }}</label>
-              <select v-model="form.Designation" :class="selectCls">
-
-                <option value="">{{ t('addresses.selectDesignation') }}</option>
-                <option value="Mr">Mr</option>
-                <option value="Ms">Ms</option>
-                <option value="Mrs">Mrs</option>
-                <option value="Dr">Dr</option>
-                <option value="Prof">Prof</option>
-
-                <option value="Sir">Sir</option>
-                <option value="Eng">Eng</option>
-              </select>
-
             </div>
 
             <!-- Email -->

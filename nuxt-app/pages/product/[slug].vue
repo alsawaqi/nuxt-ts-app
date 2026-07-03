@@ -9,6 +9,7 @@ import * as Toastification from 'vue-toastification'
 import { formatRatingSummary, starStates } from '~/utils/productEngagement.js'
 import { filterAndSortProducts, readRecentlyViewed, updateRecentlyViewed, writeRecentlyViewed } from '~/utils/discovery.js'
 import { breadcrumbJsonLd, canonicalUrl, productJsonLd, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
+import { formatBulkTierRange, normalizeBulkTiers, resolveBulkTier } from '~/utils/bulkPricing.js'
 
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
@@ -87,6 +88,8 @@ interface Product {
   Discount_Amount?: number;
   Has_Discount?: boolean;
   Active_Discount?: any | null;
+  Bulk_Prices?: any[];
+  bulk_prices?: any[];
   Inhouse_Barcode_Source: string;
   Product_Description: string;
   Product_Stock: number;
@@ -157,6 +160,15 @@ const productFinalPrice = computed(() => Number(product.value?.Product_Final_Pri
 const productUnitDiscount = computed(() => Number(product.value?.Discount_Amount ?? Math.max(productOriginalPrice.value - productFinalPrice.value, 0)))
 const productHasDiscount = computed(() => Boolean(product.value?.Has_Discount ?? productUnitDiscount.value > 0))
 const isOutOfStock = computed(() => Number(product.value?.Product_Stock ?? 0) <= 0)
+
+// --- Quantity-tier bulk pricing (tier wins over product discounts, no stacking) ---
+// laravel-api's detail endpoint exposes the tiers as 'Bulk_Prices' (house casing);
+// bulk_prices/bulkPrices kept as fallbacks for other serializations.
+const bulkTiers = computed(() => normalizeBulkTiers((product.value as any)?.Bulk_Prices ?? (product.value as any)?.bulk_prices ?? (product.value as any)?.bulkPrices ?? []))
+const activeBulkTier = computed(() => resolveBulkTier(bulkTiers.value, quantity.value || 1))
+const effectiveUnitPrice = computed(() =>
+  activeBulkTier.value ? Number(activeBulkTier.value.unit_price) : productFinalPrice.value
+)
 
 // --- Breadcrumb navigation helpers ---
 const goDept = () => {
@@ -366,6 +378,7 @@ const addToCart = async () => {
         discountAmount: productUnitDiscount.value,
         hasDiscount: productHasDiscount.value,
         activeDiscount: product.value.Active_Discount ?? null,
+        bulkPrices: bulkTiers.value, // cached so the guest cart can resolve tier prices client-side
         image: product.value.images?.[0]?.Image_Path || '',
         weight: product.value.Weight_Kg,
         length: product.value.Length_Cm,
@@ -810,8 +823,34 @@ onMounted(async(): Promise<void> => {
               </div>
             </div>
 
-       
-          
+          <!-- Bulk pricing tiers -->
+          <div v-if="bulkTiers.length" class="mt-4 rounded-xl ring-1 ring-cyan-200 bg-cyan-50/40 p-4">
+            <h2 class="text-sm font-semibold text-slate-900">{{ t('product.bulkPricing') }}</h2>
+            <div class="mt-2 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-[11px] uppercase tracking-wide text-slate-500">
+                    <th class="py-1.5 pr-3 font-medium">{{ t('product.bulkQtyRange') }}</th>
+                    <th class="py-1.5 font-medium">{{ t('product.bulkUnitPrice') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(tier, tierIndex) in bulkTiers"
+                    :key="`bulk-tier-${tierIndex}`"
+                    class="border-t border-cyan-100"
+                    :class="activeBulkTier && activeBulkTier.min_qty === tier.min_qty
+                      ? 'font-semibold text-cyan-800'
+                      : 'text-slate-700'"
+                  >
+                    <td class="py-1.5 pr-3">{{ formatBulkTierRange(tier) }}</td>
+                    <td class="py-1.5">{{ t('common.omr') }} {{ Number(tier.unit_price).toFixed(3) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
 
         <!-- Purchase card -->
@@ -848,7 +887,7 @@ onMounted(async(): Promise<void> => {
                 <div>
                   <div class="text-slate-500">{{ t('product.subTotal') }}</div>
                   <div class="font-semibold">
-                    {{ (productFinalPrice * (quantity || 1)).toFixed(3) }}
+                    {{ (effectiveUnitPrice * (quantity || 1)).toFixed(3) }}
                   </div>
                 </div>
               </div>
@@ -876,6 +915,10 @@ onMounted(async(): Promise<void> => {
                   aria-label="Increase quantity"
                 >+</button>
               </div>
+              <!-- Live bulk-tier hint -->
+              <p v-if="activeBulkTier" class="mt-2 text-xs font-semibold text-cyan-700">
+                {{ t('product.bulkApplied', { price: Number(activeBulkTier.unit_price).toFixed(3) }) }}
+              </p>
             </div>
 
 
