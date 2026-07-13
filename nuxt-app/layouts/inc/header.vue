@@ -155,7 +155,7 @@ const mobileMenuOpen = ref(false);
           </NuxtLink>
 
           <!-- Compact mobile checkout -->
-          <NuxtLink v-if="isAuthenticated" to="/cart/checkout" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full 
+          <NuxtLink v-if="isAuthenticated" to="/cart" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
          bg-gradient-to-r from-[#2F5FB6] to-[#07B6C6] text-white 
          hover:opacity-90 shadow-sm text-[12px] font-medium 
          md:hidden transition">
@@ -165,7 +165,7 @@ const mobileMenuOpen = ref(false);
 
           <!-- Tablet + Desktop checkout -->
         
-          <NuxtLink v-if="isAuthenticated" to="/cart/checkout" class="hidden md:inline-flex inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white 
+          <NuxtLink v-if="isAuthenticated" to="/cart" class="hidden md:inline-flex inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white
          bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">
             <CreditCardIcon class="inline-block w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />

@@ -57,6 +57,13 @@ export const useUserStore = defineStore('user', () => {
   clearUser()
   useLoyaltyStore().clear()
 
+  if (import.meta.client) {
+    localStorage.removeItem('amwal_pending_order')
+    localStorage.removeItem('checkout_prefill')
+    localStorage.removeItem('checkout_idempotency_key')
+    localStorage.removeItem('checkout_idempotency_signature')
+  }
+
   // ✅ switch cart back to guest state
   const cart = useCartStore()
   await cart.loadCart()

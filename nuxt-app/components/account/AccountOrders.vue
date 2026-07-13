@@ -293,6 +293,17 @@ const paymentLabel = (method?: string | null) => ({
   loyalty: t('account.payment.loyalty'),
 }[String(method || '').toLowerCase()] ?? t('account.notRecorded'))
 
+const paymentStatusLabel = (status?: string | null) => ({
+  paid: t('orders.paymentPaid'),
+  paid_requires_review: t('orders.paymentRequiresReview'),
+  pending: t('orders.paymentPending'),
+  failed: t('orders.paymentFailed'),
+  cancelled: t('orders.paymentCancelled'),
+  unpaid: t('orders.paymentUnpaid'),
+  refunded: t('orders.paymentRefunded'),
+  partially_refunded: t('orders.paymentPartiallyRefunded'),
+}[String(status || '').toLowerCase()] ?? t('account.notRecorded'))
+
 const deliveryLabel = (type?: string | null) => ({
   ship: t('orders.shipToAddress'),
   pickup: t('orders.localPickup'),
@@ -499,6 +510,12 @@ const deliveryLabel = (type?: string | null) => ({
                 <div class="flex justify-between gap-3">
                   <dt class="text-slate-500">{{ t('orders.method') }}</dt>
                   <dd class="font-semibold text-slate-900">{{ paymentLabel(payment?.method) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <dt class="text-slate-500">{{ t('orders.paymentStatus') }}</dt>
+                  <dd class="font-semibold" :class="payment?.status === 'paid' ? 'text-emerald-700' : payment?.status === 'failed' ? 'text-red-700' : 'text-amber-700'">
+                    {{ paymentStatusLabel(payment?.status) }}
+                  </dd>
                 </div>
                 <div class="flex justify-between gap-3">
                   <dt class="text-slate-500">{{ t('orders.amount') }}</dt>
