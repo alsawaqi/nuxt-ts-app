@@ -23,7 +23,9 @@ jobs:
       - name: Confirm production deployment
         env:
           CONFIRM: ${{ inputs.confirm }}
-        run: test "$CONFIRM" = "deploy-production"
+        run: |
+          test "$CONFIRM" = "deploy-production"
+          test "$GITHUB_REF" = "refs/heads/main"
 
       - uses: actions/checkout@v4
 
@@ -80,16 +82,16 @@ jobs:
           case "$deploy_sha" in *[!0-9a-f]*) exit 2 ;; esac
 
           cd /home/abdallah/apps/nuxt-ts-app
-          unexpected="$(git status --porcelain --untracked-files=all | grep -Ev '^( M docker-compose\.prod\.yml| M nuxt-app/plugins/axios\.ts)$' || true)"
-          test -z "$unexpected"
+          test "$(git branch --show-current)" = "main"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
-          git fetch origin "$deploy_sha"
+          git fetch origin main
+          git cat-file -e "$deploy_sha^{commit}"
+          test "$(git rev-parse origin/main)" = "$deploy_sha"
           git merge-base --is-ancestor HEAD "$deploy_sha"
-          git merge --ff-only "$deploy_sha"
+          git merge --ff-only origin/main
           test "$(git rev-parse HEAD)" = "$deploy_sha"
-
-          unexpected="$(git status --porcelain --untracked-files=all | grep -Ev '^( M docker-compose\.prod\.yml| M nuxt-app/plugins/axios\.ts)$' || true)"
-          test -z "$unexpected"
+          test -z "$(git status --porcelain --untracked-files=all)"
 
           docker compose --env-file .env.production -f docker-compose.prod.yml \
             up -d --build --force-recreate nuxt-ui-app nginx
