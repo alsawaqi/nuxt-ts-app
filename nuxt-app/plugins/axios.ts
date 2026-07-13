@@ -42,7 +42,7 @@ export default defineNuxtPlugin(() => {
       // - already retried
       // - request WAS the refresh call
       // - Amwal rejected a gateway response signature (not customer auth)
-      const isRefreshCall = requestUrl.includes('/refresh')
+      const isRefreshCall = requestUrl.includes('/api/refresh')
       const isAmwalCallback = /\/api\/payments\/amwal\/orders\/\d+\/callback(?:\?|$)/.test(requestUrl)
       if ((status === 401 || status === 419)
         && !originalRequest?._retry
@@ -51,7 +51,7 @@ export default defineNuxtPlugin(() => {
         originalRequest._retry = true
         try {
           // Use the SAME axios instance so SSR cookie forwarding applies
-          await instance.post('/refresh')
+          await instance.post('/api/refresh')
           // Retry original request
           return instance(originalRequest)
         } catch (e) {
