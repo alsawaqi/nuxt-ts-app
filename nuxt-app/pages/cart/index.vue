@@ -5,6 +5,17 @@ definePageMeta({ layout: 'layouts' })
 import { useCartStore } from '~/stores/cart'
 import { useShippingQuotes } from '@/composables/useShippingQuotes'
 import { buttonLabel, quantityButtonLabel } from '~/utils/accessibility.js'
+import {
+  cartRestorationIsSafe,
+  classifyPendingPayment,
+  checkoutStateOwnership,
+  pendingCheckoutBelongsToTab,
+  pendingCheckoutIdentityFromRaw,
+  pendingCheckoutIdentityMatches,
+  pendingCheckoutMarkerRelation,
+  shouldPersistCheckout,
+  shouldReuseCheckoutKey,
+} from '~/utils/checkoutState.js'
 
 
 interface Loactions {
@@ -13,20 +24,43 @@ interface Loactions {
   Location_Name_Ar: string;
 }
 
+interface PendingAmwalCheckoutIdentity {
+  orderId: number
+  checkoutKey: string
+  ownerTabId?: string
+}
+
+type PendingRecoveryState = 'idle' | 'restoring' | 'error' | 'external'
+type PendingRecoveryOutcome = 'none' | 'restored' | 'error' | 'redirected' | 'external'
+type PendingRecoveryStepOutcome = PendingRecoveryOutcome | 'superseded'
+type PendingMarkerClearOutcome = 'cleared' | 'missing' | 'replaced'
+
 // Init first (so everything below can safely use them)
 const { $r2Url, $axios } = useNuxtApp()
 const cart = useCartStore()
 const { user, isAuthenticated } = useAuth()
 const { phoneCountryCodes, digitsOnly, formatPhone } = usePhoneCountryCodes()
 const { t, field, productName, locale } = useStorefrontLocale()
+const amwalCheckoutReconciliation = useAmwalCheckoutReconciliation()
+const amwalTabLease = useAmwalCheckoutTabLease()
 
 // Shipping quotes composable
-const { options: shippingOptions, loading: quotesLoading, fetchQuotes } = useShippingQuotes()
+const { options: shippingOptions, loading: quotesLoading, fetchQuotes, clear: clearShippingQuotes } = useShippingQuotes()
 
 const isClient = import.meta.client
 const CHECKOUT_IDEMPOTENCY_KEY = 'checkout_idempotency_key'
 const CHECKOUT_IDEMPOTENCY_SIGNATURE = 'checkout_idempotency_signature'
+const AMWAL_PENDING_ORDER_KEY = 'amwal_pending_order'
+const AMWAL_FORCE_FRESH_KEY = 'amwal_force_fresh_checkout_key'
 const SHIPPING_QUOTE_TTL_MS = 15 * 60 * 1000
+const cartMutationInFlight = ref(false)
+const pendingAmwalCheckout = ref<PendingAmwalCheckoutIdentity | null>(null)
+const pendingRecoveryState = ref<PendingRecoveryState>('idle')
+const pendingRecoveryBlocked = computed(() => pendingRecoveryState.value !== 'idle')
+const forceFreshCheckoutKey = ref(false)
+let pendingRecoveryPromise: Promise<PendingRecoveryOutcome> | null = null
+let pendingRecoveryRequested = false
+let externalRecoveryTimer: ReturnType<typeof window.setTimeout> | null = null
 
 const makeCheckoutIdempotencyKey = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -35,6 +69,8 @@ const makeCheckoutIdempotencyKey = () => {
 
   return `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
 }
+
+const currentAmwalTabId = amwalTabLease.currentTabId
 
 const checkoutSignature = () => JSON.stringify({
   deliveryMethod: cart.deliveryMethod,
@@ -56,20 +92,468 @@ const checkoutSignature = () => JSON.stringify({
 const ensureCheckoutIdempotencyKey = () => {
   if (!import.meta.client) return ''
 
+  if (sessionStorage.getItem(AMWAL_FORCE_FRESH_KEY) === '1') {
+    forceFreshCheckoutKey.value = true
+  }
+
   const signature = checkoutSignature()
   const storedKey = localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY)
   const storedSignature = localStorage.getItem(CHECKOUT_IDEMPOTENCY_SIGNATURE)
+  const pendingIdentity = pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+  const pendingKey = pendingIdentity?.checkoutKey || ''
 
-  if (storedKey && storedSignature === signature) {
+  if (!forceFreshCheckoutKey.value && shouldReuseCheckoutKey({
+    storedKey,
+    storedSignature,
+    signature,
+    pendingKey,
+    hasPendingRecord: Boolean(pendingIdentity),
+    hasItems: cart.cartItems.length > 0,
+  })) {
     return storedKey
   }
 
-  const nextKey = makeCheckoutIdempotencyKey()
+  let nextKey = makeCheckoutIdempotencyKey()
+  if (pendingKey && nextKey === pendingKey) nextKey = makeCheckoutIdempotencyKey()
   localStorage.setItem(CHECKOUT_IDEMPOTENCY_KEY, nextKey)
   localStorage.setItem(CHECKOUT_IDEMPOTENCY_SIGNATURE, signature)
+  forceFreshCheckoutKey.value = false
+  sessionStorage.removeItem(AMWAL_FORCE_FRESH_KEY)
 
   return nextKey
 }
+
+const readCheckoutPrefillKey = () => {
+  if (!import.meta.client) return ''
+
+  try {
+    const raw = localStorage.getItem('checkout_prefill')
+    const parsed = raw ? JSON.parse(raw) : null
+    return typeof parsed?.idempotencyKey === 'string' ? parsed.idempotencyKey.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
+const clearRecoveredCheckoutStateIfOwned = (expected: PendingAmwalCheckoutIdentity): PendingMarkerClearOutcome => {
+  if (!import.meta.client) return 'missing'
+
+  const actual = pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+  const initialRelation = pendingCheckoutMarkerRelation(expected, actual)
+  if (initialRelation !== 'same') return initialRelation
+
+  const ownership = checkoutStateOwnership({
+    ownerKey: expected.checkoutKey,
+    storedKey: localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY),
+    prefillKey: readCheckoutPrefillKey(),
+  })
+
+  // Re-check the pending identity immediately before deleting it. A stale tab
+  // must never detach a newer payment attempt written by another tab.
+  const latest = pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+  const latestRelation = pendingCheckoutMarkerRelation(expected, latest)
+  if (latestRelation !== 'same') return latestRelation
+
+  localStorage.removeItem(AMWAL_PENDING_ORDER_KEY)
+  forceFreshCheckoutKey.value = true
+  if (ownership.ownsStoredKey && localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY) === expected.checkoutKey) {
+    localStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY)
+    localStorage.removeItem(CHECKOUT_IDEMPOTENCY_SIGNATURE)
+  }
+  if (ownership.ownsPrefill && readCheckoutPrefillKey() === expected.checkoutKey) {
+    localStorage.removeItem('checkout_prefill')
+  }
+
+  if (pendingCheckoutIdentityMatches(expected, pendingAmwalCheckout.value)) {
+    pendingAmwalCheckout.value = null
+  }
+
+  return 'cleared'
+}
+
+const routeCapturedPaymentToOrders = async (pending: PendingAmwalCheckoutIdentity): Promise<PendingRecoveryOutcome> => {
+  clearRecoveredCheckoutStateIfOwned(pending)
+
+  try {
+    await cart.loadCart()
+  } catch {
+    // The account page is authoritative for a captured/review payment.
+  }
+
+  await navigateTo('/account?tab=orders')
+  return 'redirected'
+}
+
+const claimPendingCheckoutForCurrentTab = (
+  rawPending: string,
+  storedPending: PendingAmwalCheckoutIdentity,
+): PendingAmwalCheckoutIdentity | 'external' | 'superseded' => {
+  const tabId = currentAmwalTabId()
+  if (!pendingCheckoutBelongsToTab(storedPending, tabId)
+    && amwalTabLease.ownerIsActive(storedPending.ownerTabId)) return 'external'
+  if (storedPending.ownerTabId === tabId) return storedPending
+
+  // Claim a legacy marker or an expired tab's marker only if the exact raw
+  // record is still current, so takeover cannot overwrite a newer attempt.
+  if (localStorage.getItem(AMWAL_PENDING_ORDER_KEY) !== rawPending) return 'superseded'
+  try {
+    const parsed = JSON.parse(rawPending)
+    const claimed = { ...parsed, ownerTabId: tabId }
+    if (localStorage.getItem(AMWAL_PENDING_ORDER_KEY) !== rawPending) return 'superseded'
+    localStorage.setItem(AMWAL_PENDING_ORDER_KEY, JSON.stringify(claimed))
+    return { ...storedPending, ownerTabId: tabId }
+  } catch {
+    return 'superseded'
+  }
+}
+
+const markerCleanupOutcome = (pending: PendingAmwalCheckoutIdentity): 'ready' | 'superseded' => {
+  const outcome = clearRecoveredCheckoutStateIfOwned(pending)
+  if (outcome !== 'replaced') return 'ready'
+
+  pendingAmwalCheckout.value = pendingCheckoutIdentityFromRaw(
+    localStorage.getItem(AMWAL_PENDING_ORDER_KEY),
+  )
+  pendingRecoveryState.value = 'restoring'
+  return 'superseded'
+}
+
+const clearCreationCheckoutState = (
+  journal: { checkoutKey: string; ownerTabId: string; createdAt: number },
+  orderId: number,
+) => {
+  if (!amwalCheckoutReconciliation.isCurrent(journal)) return false
+  const recoveredIdentity: PendingAmwalCheckoutIdentity = {
+    orderId,
+    checkoutKey: journal.checkoutKey,
+    ownerTabId: journal.ownerTabId,
+  }
+  const marker = pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+  if (pendingCheckoutIdentityMatches(recoveredIdentity, marker)) {
+    clearRecoveredCheckoutStateIfOwned(recoveredIdentity)
+  } else if (!marker) {
+    const ownership = checkoutStateOwnership({
+      ownerKey: journal.checkoutKey,
+      storedKey: localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY),
+      prefillKey: readCheckoutPrefillKey(),
+    })
+    if (ownership.ownsStoredKey) {
+      localStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY)
+      localStorage.removeItem(CHECKOUT_IDEMPOTENCY_SIGNATURE)
+    }
+    if (ownership.ownsPrefill) localStorage.removeItem('checkout_prefill')
+    forceFreshCheckoutKey.value = true
+  }
+  return amwalCheckoutReconciliation.clear(journal)
+}
+
+const finishCreationRecovery = async (
+  journal: { checkoutKey: string; ownerTabId: string; createdAt: number },
+  orderId: number,
+) => {
+  if (!clearCreationCheckoutState(journal, orderId)) return 'superseded' as const
+  try {
+    await cart.loadCart()
+  } catch {
+    pendingRecoveryState.value = 'error'
+    return 'error' as const
+  }
+  pendingRecoveryState.value = 'idle'
+  return 'restored' as const
+}
+
+const recoverOneAmwalCreationJournal = async (): Promise<PendingRecoveryStepOutcome> => {
+  let journal = amwalCheckoutReconciliation.read()
+  if (!journal) return 'none'
+  if (journal.ownerTabId !== currentAmwalTabId()) {
+    if (amwalTabLease.ownerIsActive(journal.ownerTabId)) {
+      pendingRecoveryState.value = 'external'
+      return 'external'
+    }
+    const claimed = amwalCheckoutReconciliation.takeover(journal)
+    if (!claimed) return 'superseded'
+    journal = claimed
+  }
+
+  pendingRecoveryState.value = 'restoring'
+  clearShippingQuotes()
+  selectedOptionKey.value = null
+  const reconciliation = await amwalCheckoutReconciliation.reconcile(journal)
+  if (reconciliation.kind === 'absent') {
+    if (!amwalCheckoutReconciliation.clear(journal)) return 'superseded'
+    pendingRecoveryState.value = 'idle'
+    return 'none'
+  }
+  if (reconciliation.kind === 'ambiguous') {
+    pendingRecoveryState.value = 'error'
+    return 'error'
+  }
+
+  const responseData = reconciliation.data
+  const orderId = Number(responseData?.order_id)
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    pendingRecoveryState.value = 'error'
+    return 'error'
+  }
+
+  const reconciledOutcome = classifyPendingPayment(responseData?.payment)
+  if (reconciledOutcome === 'paid' || reconciledOutcome === 'review') {
+    clearCreationCheckoutState(journal, orderId)
+    return await routeCapturedPaymentToOrders({
+      orderId,
+      checkoutKey: journal.checkoutKey,
+      ownerTabId: journal.ownerTabId,
+    })
+  }
+
+  // Re-check immediately before the destructive request. A stale tab that
+  // lost its lease must not cancel an attempt claimed by a newer tab while
+  // reconciliation was in flight.
+  if (!amwalCheckoutReconciliation.isCurrent(journal)) return 'superseded'
+
+  try {
+    const { data } = await $axios.post(
+      `/api/payments/amwal/orders/${orderId}/cancel`,
+      { restore_cart: true },
+      { withCredentials: true },
+    )
+    const cancellationOutcome = classifyPendingPayment(data?.payment)
+    if (cancellationOutcome === 'paid' || cancellationOutcome === 'review') {
+      clearCreationCheckoutState(journal, orderId)
+      return await routeCapturedPaymentToOrders({
+        orderId,
+        checkoutKey: journal.checkoutKey,
+        ownerTabId: journal.ownerTabId,
+      })
+    }
+    if (!cartRestorationIsSafe(data?.cancellation?.cart_restoration)) {
+      pendingRecoveryState.value = 'error'
+      return 'error'
+    }
+    return await finishCreationRecovery(journal, orderId)
+  } catch {
+    try {
+      const { data } = await $axios.get(
+        `/api/payments/amwal/orders/${orderId}/status`,
+        { withCredentials: true },
+      )
+      const payment = data?.payment
+      const outcome = classifyPendingPayment(payment)
+      if (outcome === 'paid' || outcome === 'review') {
+        clearCreationCheckoutState(journal, orderId)
+        return await routeCapturedPaymentToOrders({
+          orderId,
+          checkoutKey: journal.checkoutKey,
+          ownerTabId: journal.ownerTabId,
+        })
+      }
+      if (outcome === 'terminal' && cartRestorationIsSafe(payment?.cart_restoration)) {
+        return await finishCreationRecovery(journal, orderId)
+      }
+    } catch {
+      // Retain the journal so a retry can resolve this ambiguous creation.
+    }
+    pendingRecoveryState.value = 'error'
+    return 'error'
+  }
+}
+
+const recoverOnePendingAmwalCheckout = async (): Promise<PendingRecoveryStepOutcome> => {
+  if (!import.meta.client) return 'none'
+
+  const rawPending = localStorage.getItem(AMWAL_PENDING_ORDER_KEY)
+  let storedPending = pendingCheckoutIdentityFromRaw(rawPending)
+  if (!storedPending) {
+    // A malformed marker cannot identify a server order. Remove only that
+    // marker; without an owner key, no checkout state can be safely detached.
+    if (rawPending) {
+      localStorage.removeItem(AMWAL_PENDING_ORDER_KEY)
+      forceFreshCheckoutKey.value = true
+    }
+    pendingAmwalCheckout.value = null
+    pendingRecoveryState.value = 'idle'
+    return 'none'
+  }
+
+  const ownership = claimPendingCheckoutForCurrentTab(rawPending!, storedPending)
+  if (ownership === 'external') {
+    pendingAmwalCheckout.value = storedPending
+    pendingRecoveryState.value = 'external'
+    return 'external'
+  }
+  if (ownership === 'superseded') return 'superseded'
+  storedPending = ownership
+
+  const pending = storedPending
+  pendingAmwalCheckout.value = pending
+  pendingRecoveryState.value = 'restoring'
+  clearShippingQuotes()
+  selectedOptionKey.value = null
+
+  let cancellation: any
+  try {
+    const { data } = await $axios.post(
+      `/api/payments/amwal/orders/${pending.orderId}/cancel`,
+      { restore_cart: true },
+      { withCredentials: true },
+    )
+    cancellation = data
+  } catch (error: any) {
+    if (Number(error?.response?.status) === 404) {
+      // The marker belongs to an order that is unavailable to this customer
+      // (already removed, another account, or malformed stale state). It must
+      // not keep the current cart locked.
+      if (markerCleanupOutcome(pending) === 'superseded') return 'superseded'
+      try {
+        await cart.loadCart()
+        pendingRecoveryState.value = 'idle'
+        return 'restored'
+      } catch {
+        pendingRecoveryState.value = 'error'
+        return 'error'
+      }
+    }
+
+    // A capture notification may win the cancellation lock. Status is the
+    // authoritative way to distinguish that race from a retryable failure.
+    try {
+      const { data } = await $axios.get(
+        `/api/payments/amwal/orders/${pending.orderId}/status`,
+        { withCredentials: true },
+      )
+      const payment = data?.payment
+      const outcome = classifyPendingPayment(payment)
+      if (outcome === 'paid' || outcome === 'review') {
+        return await routeCapturedPaymentToOrders(pending)
+      }
+      if (outcome === 'terminal' && cartRestorationIsSafe(payment?.cart_restoration)) {
+        if (markerCleanupOutcome(pending) === 'superseded') return 'superseded'
+        await cart.loadCart()
+        pendingRecoveryState.value = 'idle'
+        return 'restored'
+      }
+    } catch {
+      // Preserve the matching recovery marker so a retry cannot create a
+      // second payment while the first attempt remains unresolved.
+    }
+
+    pendingRecoveryState.value = 'error'
+    try {
+      await cart.loadCart()
+    } catch {
+      // The retry action will reload the server cart again.
+    }
+    return 'error'
+  }
+
+  const paymentOutcome = classifyPendingPayment(cancellation?.payment)
+  if (paymentOutcome === 'paid' || paymentOutcome === 'review') {
+    return await routeCapturedPaymentToOrders(pending)
+  }
+
+  if (!cartRestorationIsSafe(cancellation?.cancellation?.cart_restoration)) {
+    pendingRecoveryState.value = 'error'
+    try {
+      await cart.loadCart()
+    } catch {
+      // Keep the recovery marker and let the customer retry safely.
+    }
+    return 'error'
+  }
+
+  if (markerCleanupOutcome(pending) === 'superseded') return 'superseded'
+
+  try {
+    await cart.loadCart()
+  } catch {
+    pendingRecoveryState.value = 'error'
+    return 'error'
+  }
+
+  pendingRecoveryState.value = 'idle'
+  return 'restored'
+}
+
+const recoverPendingAmwalCheckout = async (): Promise<PendingRecoveryOutcome> => {
+  pendingRecoveryRequested = true
+  if (pendingRecoveryPromise) return pendingRecoveryPromise
+
+  const run = async (): Promise<PendingRecoveryOutcome> => {
+    let outcome: PendingRecoveryStepOutcome = 'none'
+    do {
+      pendingRecoveryRequested = false
+      const creationOutcome = await recoverOneAmwalCreationJournal()
+      if (['error', 'external', 'redirected'].includes(creationOutcome)) return creationOutcome as PendingRecoveryOutcome
+
+      const pendingOutcome = await recoverOnePendingAmwalCheckout()
+      outcome = pendingOutcome === 'none' && creationOutcome === 'restored'
+        ? 'restored'
+        : pendingOutcome
+    } while (outcome === 'superseded' || pendingRecoveryRequested)
+    return outcome
+  }
+
+  pendingRecoveryPromise = run().finally(() => {
+    pendingRecoveryPromise = null
+    if (pendingRecoveryRequested) void recoverPendingAmwalCheckout()
+  })
+  return pendingRecoveryPromise
+}
+
+const ensurePendingRecoveryBeforeCartAction = async () => {
+  const marker = pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+  const creationJournal = amwalCheckoutReconciliation.read()
+  if (!marker && !creationJournal) {
+    if (pendingRecoveryState.value === 'external') pendingRecoveryState.value = 'idle'
+    return pendingRecoveryState.value === 'idle'
+  }
+
+  pendingAmwalCheckout.value = marker
+  const outcome = await recoverPendingAmwalCheckout()
+  return (outcome === 'restored' || outcome === 'none')
+    && pendingRecoveryState.value === 'idle'
+    && !pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+    && !amwalCheckoutReconciliation.read()
+}
+
+const handlePendingAmwalStorage = (event: StorageEvent) => {
+  if (![AMWAL_PENDING_ORDER_KEY, amwalCheckoutReconciliation.journalKey].includes(String(event.key))) return
+  void (async () => {
+    const outcome = await recoverPendingAmwalCheckout()
+    if (outcome === 'none') {
+      try {
+        await cart.loadCart()
+      } catch {
+        pendingRecoveryState.value = 'error'
+      }
+    }
+  })()
+}
+
+const retryPendingRecovery = async () => {
+  if (pendingRecoveryState.value === 'restoring') return
+  const outcome = await recoverPendingAmwalCheckout()
+  if (outcome !== 'none') return
+
+  pendingRecoveryState.value = 'restoring'
+  try {
+    await cart.loadCart()
+    pendingRecoveryState.value = 'idle'
+  } catch {
+    pendingRecoveryState.value = 'error'
+  }
+}
+
+watch(pendingRecoveryState, state => {
+  if (!import.meta.client) return
+  if (externalRecoveryTimer !== null) window.clearTimeout(externalRecoveryTimer)
+  externalRecoveryTimer = null
+  if (state !== 'external') return
+  externalRecoveryTimer = window.setTimeout(() => {
+    externalRecoveryTimer = null
+    void recoverPendingAmwalCheckout()
+  }, 5_000)
+})
 
 
 const locations = ref<Loactions[]>([])
@@ -148,30 +632,43 @@ const itemsForQuote = computed(() =>
 )
 
 const requestQuotes = async () => {
+  if (
+    pendingRecoveryBlocked.value
+    || (import.meta.client && pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY)))
+    || (import.meta.client && amwalCheckoutReconciliation.read())
+  ) {
+    clearShippingQuotes()
+    selectedOptionKey.value = null
+    return
+  }
+
   if (cart.deliveryMethod !== 'ship') {
-    shippingOptions.value = []
+    clearShippingQuotes()
     selectedOptionKey.value = null
     return
   }
 
   if (!isAuthenticated.value || !cart.selectedAddressId) {
-    shippingOptions.value = []
+    clearShippingQuotes()
     selectedOptionKey.value = null
     return
   }
 
   const items = itemsForQuote.value
   if (!items.length) {
-    shippingOptions.value = []
+    clearShippingQuotes()
     selectedOptionKey.value = null
     return
   }
 
-  await fetchQuotes({
+  selectedOptionKey.value = null
+  const result = await fetchQuotes({
     address_id: Number(cart.selectedAddressId),
     items,
     include_heavy: false,
   })
+
+  if (result === null) return
 
   // ✅ keep user's selection if still exists, else pick cheapest
   pickCheapestIfNeeded()
@@ -285,13 +782,26 @@ const grandTotal = computed(() =>
 )
 
 // Qty handlers, address helpers (unchanged)
-const onQtyInputChange = async (e: Event, id: number) => {
-  const v = (e.target as HTMLInputElement).valueAsNumber
-  if (v > 0) await cart.updateQuantity(id, v)
+const runCartMutation = async (action: () => Promise<void>) => {
+  if (cartMutationInFlight.value) return
+  if (!(await ensurePendingRecoveryBeforeCartAction())) return
+  cartMutationInFlight.value = true
+  clearShippingQuotes()
+  selectedOptionKey.value = null
+  try {
+    await action()
+  } finally {
+    cartMutationInFlight.value = false
+  }
 }
 
-const incrementQty = async (id: number) => await cart.incrementQty(id)
-const decrementQty = async (id: number) => await cart.decrementQty(id)
+const onQtyInputChange = async (e: Event, id: number) => {
+  const v = (e.target as HTMLInputElement).valueAsNumber
+  if (v > 0) await runCartMutation(() => cart.updateQuantity(id, v))
+}
+
+const incrementQty = async (id: number) => await runCartMutation(() => cart.incrementQty(id))
+const decrementQty = async (id: number) => await runCartMutation(() => cart.decrementQty(id))
 
 const loadCountries = async () => {
   try {
@@ -394,15 +904,11 @@ const closeModal = () => {
 }
 
 const onClearCart = async () => {
-  await cart.clearCart()
-  shippingOptions.value = []
-  selectedOptionKey.value = null
+  await runCartMutation(() => cart.clearCart())
 }
 
 const onRemoveItem = async (id: number) => {
-  await cart.removeFromCart(id)
-  shippingOptions.value = []
-  selectedOptionKey.value = null
+  await runCartMutation(() => cart.removeFromCart(id))
 }
 
 
@@ -422,7 +928,13 @@ watch(() => cart.selectedLocationId, (id) => {
 
 // --- PERSIST CHECKOUT SELECTION & TOTALS ---
 const persistCheckout = () => {
-  if (!import.meta.client) return
+  if (
+    !import.meta.client
+    || pendingRecoveryBlocked.value
+    || pendingCheckoutIdentityFromRaw(localStorage.getItem(AMWAL_PENDING_ORDER_KEY))
+    || amwalCheckoutReconciliation.read()
+    || !shouldPersistCheckout(cart.cartItems)
+  ) return false
 
   const isShip = cart.deliveryMethod === 'ship'
   const isPickup = cart.deliveryMethod === 'pickup'
@@ -478,6 +990,7 @@ const persistCheckout = () => {
   }
 
   localStorage.setItem('checkout_prefill', JSON.stringify(payload))
+  return true
 }
 
 
@@ -493,14 +1006,24 @@ const selectedPickupLocation = computed(() =>
 
 
 const router = useRouter()
-const goCheckout = () => {
-  persistCheckout()
+const goCheckout = async () => {
+  if (cartMutationInFlight.value || quotesLoading.value) return
+  if (!(await ensurePendingRecoveryBeforeCartAction())) return
+  if (!persistCheckout()) return
   router.push('/cart/checkout')
 }
 
 onMounted(async () => {
+  amwalTabLease.start()
+  window.addEventListener('storage', handlePendingAmwalStorage)
 
-  await cart.loadCart()
+  pendingAmwalCheckout.value = pendingCheckoutIdentityFromRaw(
+    localStorage.getItem(AMWAL_PENDING_ORDER_KEY),
+  )
+
+  const recoveryOutcome = await recoverPendingAmwalCheckout()
+  if (recoveryOutcome === 'redirected') return
+  if (recoveryOutcome !== 'restored') await cart.loadCart()
 
   await cart.getVat()
 
@@ -524,6 +1047,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
       vat,
       grandTotal,
       () => cart.cartItems,
+      () => pendingRecoveryState.value,
     ],
     persistCheckout,
     { deep: true, immediate: true }
@@ -534,6 +1058,13 @@ if (locCandidate) cart.selectedLocationId = locCandidate
     await loadCountries()
     await loadTitles()
   }
+})
+
+onBeforeUnmount(() => {
+  if (externalRecoveryTimer !== null) window.clearTimeout(externalRecoveryTimer)
+  externalRecoveryTimer = null
+  amwalTabLease.stop()
+  window.removeEventListener('storage', handlePendingAmwalStorage)
 })
 </script>
 
@@ -562,6 +1093,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
             <button
               type="button"
               @click="onClearCart"
+              :disabled="cartMutationInFlight || pendingRecoveryBlocked"
               :aria-label="buttonLabel(t('cart.clearLabel'), t(cart.cartItems.length === 1 ? 'common.item' : 'common.items', { count: cart.cartItems.length }))"
               class="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-xs sm:text-sm transition">
               <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -574,9 +1106,39 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
 
           <!-- Line items -->
-          <div v-if="!cart.cartItems.length" role="status" class="px-5 py-10 text-center text-gray-600">
+          <div
+            v-if="pendingRecoveryState === 'restoring'"
+            role="status"
+            aria-live="polite"
+            class="m-3 rounded-lg border border-slate-200 bg-slate-50 px-5 py-6 text-slate-700 sm:m-5"
+          >
+            <div class="flex items-center gap-3">
+              <svg aria-hidden="true" class="h-5 w-5 shrink-0 animate-spin text-[#00bfa5]" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+              <p class="text-sm font-medium">{{ t('cart.paymentRecoveryRestoring') }}</p>
+            </div>
+          </div>
+          <div
+            v-else-if="['error', 'external'].includes(pendingRecoveryState)"
+            role="alert"
+            class="m-3 rounded-lg border border-red-200 bg-red-50 px-5 py-6 text-red-800 sm:m-5"
+          >
+            <p class="text-sm leading-6">{{ t(pendingRecoveryState === 'external' ? 'cart.paymentRecoveryExternal' : 'cart.paymentRecoveryError') }}</p>
+            <button
+              type="button"
+              class="mt-3 inline-flex items-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+              :disabled="pendingRecoveryState === 'restoring'"
+              @click="retryPendingRecovery"
+            >
+              {{ t('cart.paymentRecoveryRetry') }}
+            </button>
+          </div>
+          <div v-else-if="!cart.cartItems.length" role="status" class="px-5 py-10 text-center text-gray-600">
             {{ t('cart.empty') }}
           </div>
+          <template v-else>
           <div v-for="item in cart.cartItems" :key="item.id"
             class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90">
             <div class="grid grid-cols-[64px,1fr,auto] sm:grid-cols-[84px,1fr,auto] gap-3 sm:gap-4 items-start">
@@ -591,7 +1153,8 @@ if (locCandidate) cart.selectedLocationId = locCandidate
                 <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5">Item #{{ item.id }}</p>
                 <button
                   type="button"
-                  @click.prevent="cart.removeFromCart(item.id)"
+                  @click.prevent="onRemoveItem(item.id)"
+                  :disabled="cartMutationInFlight"
                   :aria-label="t('cart.removeItem', { name: productName(item) })"
                   class="mt-1.5 text-xs text-[#00bfa5] hover:underline">
                   {{ t('cart.remove') }}
@@ -605,7 +1168,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 	                  <button
 	                    type="button"
 	                    @click="decrementQty(item.id)"
-	                    :disabled="Number(item.quantity || 1) <= 1"
+	                    :disabled="cartMutationInFlight || Number(item.quantity || 1) <= 1"
 	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
 	                    :aria-label="quantityButtonLabel('decrease', productName(item), Number(item.quantity || 1) - 1, locale)">−</button>
                   <input :id="`cart-qty-${item.id}`" type="number" min="1" v-model.number="item.quantity"
@@ -615,6 +1178,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 	                  <button
 	                    type="button"
 	                    @click="incrementQty(item.id)"
+	                    :disabled="cartMutationInFlight"
 	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
 	                    :aria-label="quantityButtonLabel('increase', productName(item), Number(item.quantity || 1) + 1, locale)">+</button>
                 </div>
@@ -643,6 +1207,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
               </div>
             </div>
           </div>
+          </template>
         </div>
       </div>
 
@@ -791,7 +1356,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 
             <button type="button" @click="goCheckout" class="mt-3 sm:mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135]
                      text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
-              :disabled="cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
+              :disabled="pendingRecoveryBlocked || cartMutationInFlight || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
               {{ t('cart.proceedToCheckout') }}
             </button>
           </div>
@@ -810,7 +1375,7 @@ if (locCandidate) cart.selectedLocationId = locCandidate
         </div>
         <button type="button" @click="goCheckout" class="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white
                  bg-[#2f5fb6] hover:bg-[#274f97] transition disabled:bg-gray-300"
-          :disabled="cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
+          :disabled="pendingRecoveryBlocked || cartMutationInFlight || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
           {{ t('cart.checkout') }}
         </button>
       </div>

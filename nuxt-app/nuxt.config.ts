@@ -10,7 +10,7 @@ export default defineNuxtConfig({
     '~/plugins/init-auth.global.ts',
   ],
 
-  css: ['assets/css/card.min.css', 'assets/css/storefront-rtl.css'],
+  css: ['assets/css/storefront-rtl.css'],
 
   modules: ['@pinia/nuxt','nuxt-pdfeasy'],
   components: true,
