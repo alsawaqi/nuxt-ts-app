@@ -35,6 +35,13 @@ jobs:
           cache: npm
           cache-dependency-path: nuxt-app/package-lock.json
 
+      - name: Verify Apple Pay association file
+        run: |
+          association_file="nuxt-app/public/.well-known/apple-developer-merchantid-domain-association"
+          test -f "$association_file"
+          test "$(sha256sum "$association_file" | cut -d ' ' -f 1)" = \
+            "f369c2f46d269fb67da79613d2a81f02a955ff9f8f6700fa266c9c8d8a7ad42c"
+
       - name: Install dependencies
         working-directory: nuxt-app
         run: npm ci
@@ -107,5 +114,16 @@ jobs:
 
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
             --max-time 20 https://avinaq.com/ > /dev/null
+
+          association_body="$(mktemp)"
+          trap 'rm -f "$association_body"' EXIT
+          association_status="$(curl -sS --max-redirs 0 --max-time 20 \
+            -o "$association_body" -w '%{http_code}' \
+            https://avinaq.com/.well-known/apple-developer-merchantid-domain-association)"
+          test "$association_status" = "200"
+          test "$(sha256sum "$association_body" | cut -d ' ' -f 1)" = \
+            "f369c2f46d269fb67da79613d2a81f02a955ff9f8f6700fa266c9c8d8a7ad42c"
+          rm -f "$association_body"
+          trap - EXIT
           echo "Storefront deployment completed: $deploy_sha"
           REMOTE
