@@ -1,7 +1,77 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'layouts' })
+definePageMeta({
+  layout: 'layouts',
+  alias: ['/ar/contact'],
+})
 
 import { ref } from 'vue'
+import { assetUrl, canonicalUrl, localizedAlternateLinks, openGraphLocale, organizationJsonLd, seoTitle, webPageJsonLd } from '~/utils/storefrontSeo.js'
+
+const config = useRuntimeConfig()
+const { locale, localePath } = useStorefrontLocale()
+const siteUrl = computed(() => String(config.public.siteUrl || ''))
+const contactCopy = computed(() => locale.value === 'ar'
+  ? {
+      title: 'تواصل مع مركز المستلزمات الصناعية',
+      description: 'تواصل مع فريق مركز المستلزمات الصناعية للاستفسار عن المنتجات والطلبات والشراكات في سلطنة عُمان.',
+      eyebrow: 'تواصل معنا',
+    }
+  : {
+      title: 'Contact Industrial Supplies Center',
+      description: 'Contact Industrial Supplies Center for help with industrial products, orders and partnerships in Oman.',
+      eyebrow: 'Get in touch',
+    })
+
+useHead(() => {
+  const canonical = canonicalUrl(siteUrl.value, localePath('/contact'))
+  const image = assetUrl(siteUrl.value, '/logonew1.jpg')
+  const title = seoTitle(contactCopy.value.title)
+
+  return {
+    title,
+    meta: [
+      { name: 'description', content: contactCopy.value.description },
+      { property: 'og:title', content: title },
+      { property: 'og:description', content: contactCopy.value.description },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: canonical },
+      { property: 'og:site_name', content: 'ISC Depot' },
+      { property: 'og:locale', content: openGraphLocale(locale.value) },
+      { property: 'og:image', content: image },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: title },
+      { name: 'twitter:description', content: contactCopy.value.description },
+      { name: 'twitter:image', content: image },
+    ],
+    link: [
+      { rel: 'canonical', href: canonical },
+      ...localizedAlternateLinks(siteUrl.value, '/contact'),
+    ],
+    script: [
+      {
+        key: 'contact-organization-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(organizationJsonLd({
+          siteUrl: siteUrl.value,
+          email: 'motorsales@isc-depot.com',
+          telephone: '+96824460320',
+        })),
+      },
+      {
+        key: 'contact-page-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(webPageJsonLd({
+          siteUrl: siteUrl.value,
+          path: localePath('/contact'),
+          name: contactCopy.value.title,
+          description: contactCopy.value.description,
+          locale: locale.value,
+          type: 'ContactPage',
+        })),
+      },
+    ],
+  }
+})
 
 const form = ref({
   name: '',
@@ -49,34 +119,34 @@ const submit = async () => {
           <!-- LEFT -->
           <div>
             <span class="inline-flex items-center gap-2 text-xs font-medium text-sky-700 bg-sky-50 ring-1 ring-sky-100 px-2.5 py-1 rounded-full">
-              <span>✉️</span> Get in touch
+              <span>✉️</span> {{ contactCopy.eyebrow }}
             </span>
             <h1 class="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900">
-              Contact Industrial Supplies Center
+              {{ contactCopy.title }}
             </h1>
             <p class="mt-3 text-slate-600 max-w-prose">
-              Questions about products, orders, or partnerships? Our team is here to help and typically replies within one business day.
+              {{ contactCopy.description }}
             </p>
 
             <!-- Quick actions -->
             <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <a href="tel:+96800000000" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
+              <a href="tel:+96824460320" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
                 <div class="h-9 w-9 grid place-items-center rounded-lg bg-sky-50 ring-1 ring-sky-100">
                   <svg class="h-5 w-5 text-sky-600" viewBox="0 0 24 24" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.01-.24 11.36 11.36 0 003.56.57 1 1 0 011 1V20a1 1 0 01-1 1C10.07 21 3 13.93 3 5a1 1 0 011-1h2.5a1 1 0 011 1c0 1.23.2 2.43.57 3.56a1 1 0 01-.25 1.02l-2.2 2.21z"/></svg>
                 </div>
                 <div>
                   <div class="text-[11px] uppercase tracking-wide text-slate-500">Call</div>
-                  <div class="font-semibold text-slate-900">+968 0000 0000</div>
+                  <div class="font-semibold text-slate-900">+968 2446 0320</div>
                 </div>
               </a>
 
-              <a href="mailto:support@isc-depot.com" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
+              <a href="mailto:motorsales@isc-depot.com" class="group flex items-center gap-3 rounded-xl ring-1 ring-slate-200 bg-white p-3 hover:shadow-sm transition">
                 <div class="h-9 w-9 grid place-items-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100">
                   <svg class="h-5 w-5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor"><path d="M2.94 6.34A2 2 0 014.6 5h10.8a2 2 0 011.67.94l-7.07 4.12a1.5 1.5 0 01-1.53 0L2.94 6.34z"/><path d="M18 8.12v5.38A2.5 2.5 0 0115.5 16h-11A2.5 2.5 0 012 13.5V8.12l6.34 3.7a3 3 0 002.98 0L18 8.12z"/></svg>
                 </div>
                 <div>
                   <div class="text-[11px] uppercase tracking-wide text-slate-500">Email</div>
-                  <div class="font-semibold text-slate-900">support@isc-depot.com</div>
+                  <div class="font-semibold text-slate-900">motorsales@isc-depot.com</div>
                 </div>
               </a>
 
@@ -85,8 +155,8 @@ const submit = async () => {
                   <svg class="h-5 w-5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h12v2H6zM4 6h16v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm4 3v2h8V9H8z"/></svg>
                 </div>
                 <div>
-                  <div class="text-[11px] uppercase tracking-wide text-slate-500">Hours</div>
-                  <div class="font-semibold text-slate-900">Sun–Thu, 9:00–18:00</div>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-500">Mobile</div>
+                  <div class="font-semibold text-slate-900">+968 9321 9447</div>
                 </div>
               </div>
             </div>
@@ -249,19 +319,19 @@ const submit = async () => {
         <div class="grid sm:grid-cols-2 gap-6">
           <div class="info-card">
             <h3 class="info-title">Head Office</h3>
-            <p class="info-body">Al Mahbeela, Muscat, Oman<br/>PO Box 1234</p>
+            <p class="info-body">Al Mahbeela, Muscat, Oman</p>
           </div>
           <div class="info-card">
             <h3 class="info-title">Sales</h3>
-            <p class="info-body">sales@isc-depot.com<br/>+968 0000 0001</p>
+            <p class="info-body">motorsales@isc-depot.com<br/>+968 2446 0320</p>
           </div>
           <div class="info-card">
             <h3 class="info-title">Support</h3>
-            <p class="info-body">support@isc-depot.com<br/>+968 0000 0002</p>
+            <p class="info-body">motorsales@isc-depot.com<br/>+968 9321 9447</p>
           </div>
           <div class="info-card">
             <h3 class="info-title">WhatsApp</h3>
-            <p class="info-body">+968 0000 0003</p>
+            <p class="info-body"><a href="https://wa.me/96893219447" rel="noopener" class="hover:text-cyan-700">+968 9321 9447</a></p>
           </div>
         </div>
       </div>
@@ -282,7 +352,7 @@ const submit = async () => {
           </details>
           <details class="faq">
             <summary>Can I request a quotation?</summary>
-            <p>Absolutely—use the form above or email sales@isc-depot.com with item codes and quantities.</p>
+            <p>Absolutely—use the form above or email motorsales@isc-depot.com with item codes and quantities.</p>
           </details>
         </div>
       </div>

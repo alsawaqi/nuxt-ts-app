@@ -1,23 +1,87 @@
 <script setup lang="ts">
 import { findPolicyPage, policyPages } from '~/utils/policyPages'
+import { assetUrl, breadcrumbJsonLd, canonicalUrl, localizedAlternateLinks, openGraphLocale, seoDescription, seoTitle, webPageJsonLd } from '~/utils/storefrontSeo.js'
 
-definePageMeta({ layout: 'layouts' })
+definePageMeta({
+  layout: 'layouts',
+  alias: ['/ar/policies/:slug'],
+})
 
 const route = useRoute()
-const { t, field } = useStorefrontLocale()
+const config = useRuntimeConfig()
+const { t, field, locale, localePath } = useStorefrontLocale()
 const slug = computed(() => String(route.params.slug || ''))
 const page = computed(() => findPolicyPage(slug.value))
+const siteUrl = computed(() => String(config.public.siteUrl || ''))
 
 if (!page.value) {
   throw createError({ statusCode: 404, statusMessage: 'Policy page not found' })
 }
+
+watch(page, (nextPage) => {
+  if (!nextPage) {
+    showError(createError({ statusCode: 404, statusMessage: 'Policy page not found' }))
+  }
+})
+
+useHead(() => {
+  const title = field(page.value, 'title') || 'Policy'
+  const description = seoDescription(field(page.value, 'summary'))
+  const basePath = `/policies/${slug.value}`
+  const currentPath = localePath(basePath)
+  const canonical = canonicalUrl(siteUrl.value, currentPath)
+  const image = assetUrl(siteUrl.value, '/logonew1.jpg')
+
+  return {
+    title: seoTitle(title),
+    meta: [
+      { name: 'description', content: description },
+      { property: 'og:title', content: seoTitle(title) },
+      { property: 'og:description', content: description },
+      { property: 'og:type', content: 'article' },
+      { property: 'og:url', content: canonical },
+      { property: 'og:site_name', content: 'ISC Depot' },
+      { property: 'og:locale', content: openGraphLocale(locale.value) },
+      { property: 'og:image', content: image },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: seoTitle(title) },
+      { name: 'twitter:description', content: description },
+      { name: 'twitter:image', content: image },
+    ],
+    link: [
+      { rel: 'canonical', href: canonical },
+      ...localizedAlternateLinks(siteUrl.value, basePath),
+    ],
+    script: [
+      {
+        key: 'policy-page-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(webPageJsonLd({
+          siteUrl: siteUrl.value,
+          path: currentPath,
+          name: title,
+          description,
+          locale: locale.value,
+        })),
+      },
+      {
+        key: 'policy-breadcrumb-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(breadcrumbJsonLd([
+          { name: t('common.home'), path: localePath('/') },
+          { name: title, path: currentPath },
+        ], siteUrl.value)),
+      },
+    ],
+  }
+})
 </script>
 
 <template>
   <section class="bg-slate-50">
     <div class="max-w-5xl mx-auto px-4 py-10 md:py-14">
       <nav class="mb-6 text-sm text-slate-600">
-        <NuxtLink to="/" class="hover:text-cyan-700">{{ t('common.home') }}</NuxtLink>
+        <NuxtLink :to="localePath('/')" class="hover:text-cyan-700">{{ t('common.home') }}</NuxtLink>
         <span class="mx-2">/</span>
         <span>{{ field(page, 'title') }}</span>
       </nav>
@@ -45,7 +109,7 @@ if (!page.value) {
           <NuxtLink
             v-for="item in policyPages"
             :key="item.slug"
-            :to="`/policies/${item.slug}`"
+            :to="localePath(`/policies/${item.slug}`)"
             class="rounded-md border px-3 py-2 text-sm"
             :class="item.slug === slug ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'"
           >

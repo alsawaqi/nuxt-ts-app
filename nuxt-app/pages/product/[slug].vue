@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({
     layout: 'layouts',
+    alias: ['/ar/product/:slug'],
   })
 import { ref, onMounted, computed, reactive, watch } from 'vue'
 import VueEasyLightbox from 'vue-easy-lightbox'
@@ -8,7 +9,7 @@ import { useCartStore } from '~/stores/cart'
 import * as Toastification from 'vue-toastification'
 import { formatRatingSummary, starStates } from '~/utils/productEngagement.js'
 import { filterAndSortProducts, readRecentlyViewed, updateRecentlyViewed, writeRecentlyViewed } from '~/utils/discovery.js'
-import { breadcrumbJsonLd, canonicalUrl, productJsonLd, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
+import { assetUrl, breadcrumbJsonLd, canonicalUrl, localizedAlternateLinks, openGraphLocale, productJsonLd, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
 import { formatBulkTierRange, normalizeBulkTiers, resolveBulkTier } from '~/utils/bulkPricing.js'
 
 import { Swiper, SwiperSlide } from 'swiper/vue'
@@ -22,12 +23,17 @@ const { $axios, $r2Url } = useNuxtApp()
 const config = useRuntimeConfig()
 const route = useRoute()
 
-const slug = useParam('slug');
+const slug = computed(() => String(route.params.slug || ''))
 
 const cart = useCartStore()
-const toast = Toastification.useToast()
+const toast = import.meta.client && typeof Toastification.useToast === 'function'
+  ? Toastification.useToast()
+  : {
+      success: () => undefined,
+      error: () => undefined,
+    }
 const { isAuthenticated } = useAuth()
-const { t, field, productName, productText, categoryName } = useStorefrontLocale()
+const { t, field, locale, localePath, productName, productText, categoryName } = useStorefrontLocale()
 const quantity = ref<number>(1);
 
 const visible = ref<boolean>(false);
@@ -174,7 +180,7 @@ const effectiveUnitPrice = computed(() =>
 const goDept = () => {
   if (!dept.value?.id) return
   router.push({
-    path: '/',
+    path: localePath('/'),
     query: { deptId: dept.value.id }
   })
 }
@@ -182,7 +188,7 @@ const goDept = () => {
 const goSub = () => {
   if (!dept.value?.id || !sub.value?.id) return
   router.push({
-    path: '/',
+    path: localePath('/'),
     query: { deptId: dept.value.id, subId: sub.value.id }
   })
 }
@@ -191,7 +197,7 @@ const goSubSub = () => {
   if (!subSub.value?.Slug) return
   // Goes to /departments/<slug> as requested. We also pass ids to keep context.
   router.push({
-    path: `/departments/${subSub.value.Slug}`,
+    path: localePath(`/departments/${subSub.value.Slug}`),
     query: {
       deptId: dept.value?.id ?? undefined,
       subId:  sub.value?.id ?? undefined,
@@ -218,29 +224,48 @@ const ratingStars = computed(() => starStates(reviewSummary.value.average_rating
 const relatedProducts = ref<any[]>([])
 const recentlyViewedProducts = ref<any[]>([])
 const siteUrl = computed(() => String(config.public.siteUrl || ''))
-const productPath = computed(() => `/product/${product.value?.Slug || slug}`)
+const baseProductPath = computed(() => `/product/${product.value?.Slug || slug.value}`)
+const productPath = computed(() => localePath(baseProductPath.value))
 const seoBreadcrumbs = computed(() => [
-  { name: t('common.home'), path: '/' },
-  ...(deptName.value && dept.value?.id ? [{ name: deptName.value, path: `/?deptId=${dept.value.id}` }] : []),
-  ...(subName.value && sub.value?.id ? [{ name: subName.value, path: `/?deptId=${dept.value?.id ?? ''}&subId=${sub.value.id}` }] : []),
-  ...(subSubName.value && subSub.value?.Slug ? [{ name: subSubName.value, path: `/departments/${subSub.value.Slug}` }] : []),
+  { name: t('common.home'), path: localePath('/') },
+  ...(subSubName.value && subSub.value?.Slug ? [{ name: subSubName.value, path: localePath(`/departments/${subSub.value.Slug}`) }] : []),
   ...(productName(product.value) ? [{ name: productName(product.value), path: productPath.value }] : []),
 ])
 
 useHead(() => {
   const name = productName(product.value) || t('common.products')
-  const description = seoDescription(productText(product.value), `${name} from ISC Depot.`)
-  const canonical = canonicalUrl(siteUrl.value, route.path || productPath.value)
+  const description = seoDescription(
+    productText(product.value),
+    locale.value === 'ar' ? `${name} من مركز المستلزمات الصناعية.` : `${name} from ISC Depot.`,
+  )
+  const canonical = canonicalUrl(siteUrl.value, productPath.value)
+  const image = assetUrl(
+    String($r2Url || ''),
+    product.value?.images?.[0]?.Image_Path,
+  ) || assetUrl(siteUrl.value, '/logonew1.jpg')
+  const structuredProduct = product.value
+    ? productJsonLd({
+        product: {
+          ...product.value,
+          Product_Name: name,
+          Product_Description: productText(product.value),
+        },
+        reviewSummary: reviewSummary.value,
+        siteUrl: siteUrl.value,
+        r2Url: String($r2Url || ''),
+      })
+    : null
+
+  if (structuredProduct) {
+    structuredProduct.url = canonical
+    structuredProduct.offers.url = canonical
+  }
+
   const scripts = product.value ? [
     {
       key: 'product-jsonld',
       type: 'application/ld+json',
-      innerHTML: JSON.stringify(productJsonLd({
-        product: product.value,
-        reviewSummary: reviewSummary.value,
-        siteUrl: siteUrl.value,
-        r2Url: String($r2Url || ''),
-      })),
+      innerHTML: JSON.stringify(structuredProduct),
     },
     {
       key: 'product-breadcrumb-jsonld',
@@ -257,9 +282,20 @@ useHead(() => {
       { property: 'og:description', content: description },
       { property: 'og:type', content: 'product' },
       { property: 'og:url', content: canonical },
+      { property: 'og:site_name', content: 'ISC Depot' },
+      { property: 'og:locale', content: openGraphLocale(locale.value) },
+      { property: 'og:image', content: image },
+      { property: 'product:price:amount', content: productFinalPrice.value.toFixed(3) },
+      { property: 'product:price:currency', content: 'OMR' },
       { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: seoTitle(name) },
+      { name: 'twitter:description', content: description },
+      { name: 'twitter:image', content: image },
     ],
-    link: [{ rel: 'canonical', href: canonical }],
+    link: [
+      { rel: 'canonical', href: canonical },
+      ...localizedAlternateLinks(siteUrl.value, baseProductPath.value),
+    ],
     script: scripts,
   }
 })
@@ -268,7 +304,7 @@ useHead(() => {
 const getProductFeatures = async (): Promise<void> => {
     
     try{
-        const response = await $axios.get(`/api/products/value/${slug}`);
+        const response = await $axios.get(`/api/products/value/${slug.value}`);
          console.log('Product features response:', response.data.is_ative);
       
         is_active.value = response.data.is_ative;
@@ -308,7 +344,7 @@ const loadLocalFav = () => {
 
 // call after product loads
 watch(product, (p) => {
-  if (p) loadLocalFav()
+  if (p && import.meta.client) loadLocalFav()
 })
 
 const toggleFavorite = async () => {
@@ -425,7 +461,7 @@ const productCardSlug = (item: any) => item?.slug || item?.Slug
 const openProductCard = (item: any) => {
   const nextSlug = productCardSlug(item)
   if (!nextSlug) return
-  router.push(`/product/${nextSlug}`)
+  router.push(localePath(`/product/${nextSlug}`))
 }
 
 const loadRecentlyViewedProducts = () => {
@@ -472,20 +508,29 @@ const fetchRelatedProducts = async () => {
 
 const getProducts = async (): Promise<void> => {
   try {
-    const response = await $axios.get(`/api/products/details/${slug}`)
+    const response = await $axios.get(`/api/products/details/${slug.value}`)
  
-      product.value =  {
-                        ...response.data.product,
-                        price: parseFloat(response.data.product.price)
-                       };
-      specifications.value = response.data.specifications;
-      reviewSummary.value = response.data.review_summary || reviewSummary.value
-      await fetchRelatedProducts()
+    product.value = {
+      ...response.data.product,
+      price: parseFloat(response.data.product.price),
+    }
+    specifications.value = response.data.specifications
+    reviewSummary.value = response.data.review_summary || reviewSummary.value
+    await fetchRelatedProducts()
+ 
+  } catch (error: any) {
+    const status = Number(error?.response?.status || error?.statusCode || error?.status || 0)
+    if (status === 404) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Product not found',
+      })
+    }
 
-      console.log('Fetched product:', product.value);
- 
-  } catch (error) {
-    console.error('Error fetching product:', error)
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'Product information is temporarily unavailable',
+    })
   }
 }
 
@@ -493,8 +538,8 @@ const fetchProductEngagement = async () => {
   engagementLoading.value = true
   try {
     const [reviewResponse, questionResponse] = await Promise.all([
-      $axios.get(`/api/products/details/${slug}/reviews`),
-      $axios.get(`/api/products/details/${slug}/questions`),
+      $axios.get(`/api/products/details/${slug.value}/reviews`),
+      $axios.get(`/api/products/details/${slug.value}/questions`),
     ])
 
     reviewSummary.value = reviewResponse.data?.summary || reviewSummary.value
@@ -516,7 +561,7 @@ const submitReview = async () => {
   reviewBusy.value = true
   reviewMessage.value = ''
   try {
-    const { data } = await $axios.post(`/api/products/details/${slug}/reviews`, {
+    const { data } = await $axios.post(`/api/products/details/${slug.value}/reviews`, {
       rating: reviewForm.rating,
       title: reviewForm.title,
       body: reviewForm.body,
@@ -545,7 +590,7 @@ const submitQuestion = async () => {
   questionBusy.value = true
   questionMessage.value = ''
   try {
-    const { data } = await $axios.post(`/api/products/details/${slug}/questions`, {
+    const { data } = await $axios.post(`/api/products/details/${slug.value}/questions`, {
       question: questionForm.question,
     }, { withCredentials: true })
 
@@ -585,15 +630,44 @@ const reportQuestion = async (question: ProductQuestion) => {
   questions.value = questions.value.filter(item => item.id !== question.id)
 }
 
+const resetProductPage = () => {
+  product.value = null
+  specifications.value = []
+  reviewSummary.value = { average_rating: '0.00', review_count: 0, distribution: {} }
+  reviews.value = []
+  questions.value = []
+  relatedProducts.value = []
+  features.value = []
+  is_active.value = []
+  quantity.value = 1
+}
+
 if (import.meta.server) {
   await getProducts()
 }
 
 onMounted(async(): Promise<void> => {
-     if (!product.value) await getProducts();
-      await getProductFeatures();
-      await fetchProductEngagement();
-      rememberRecentlyViewedProduct();
+  if (!product.value) await getProducts()
+  await Promise.all([
+    getProductFeatures(),
+    fetchProductEngagement(),
+  ])
+  rememberRecentlyViewedProduct()
+})
+watch(slug, async (nextSlug, previousSlug) => {
+  if (!previousSlug || nextSlug === previousSlug) return
+
+  resetProductPage()
+  try {
+    await getProducts()
+    await Promise.all([
+      getProductFeatures(),
+      fetchProductEngagement(),
+    ])
+    rememberRecentlyViewedProduct()
+  } catch (error) {
+    showError(error as any)
+  }
 })
 
 
@@ -620,7 +694,7 @@ onMounted(async(): Promise<void> => {
 <nav aria-label="Breadcrumb" class="mb-3">
   <ol class="flex flex-wrap items-center gap-2 text-sm text-slate-600">
     <li>
-      <NuxtLink to="/" class="hover:text-[#07B6C6]">{{ t('common.home') }}</NuxtLink>
+      <NuxtLink :to="localePath('/')" class="hover:text-[#07B6C6]">{{ t('common.home') }}</NuxtLink>
     </li>
 
     <li class="opacity-60">/</li>

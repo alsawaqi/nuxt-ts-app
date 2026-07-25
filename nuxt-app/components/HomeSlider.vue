@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useNuxtApp, useRuntimeConfig } from '#imports'
+import { computed } from 'vue'
+import { useAsyncData, useNuxtApp, useRuntimeConfig } from '#imports'
 
 type Slide = {
   id: number
@@ -19,8 +19,19 @@ const { $axios } = useNuxtApp() as any
 const config = useRuntimeConfig()
 const { field } = useStorefrontLocale()
 
-const slides = ref<Slide[]>([])
-const loading = ref(true)
+const { data: sliderData, pending } = await useAsyncData<Slide[]>(
+  'storefront-home-sliders',
+  async () => {
+    try {
+      return await $axios.get('/api/ui-sliders').then((response: any) => response.data || [])
+    } catch {
+      return []
+    }
+  },
+  { default: () => [] },
+)
+const slides = computed(() => sliderData.value || [])
+const loading = computed(() => pending.value)
 
 const publicR2Base = () => String(config.public.r2Url || '').replace(/\/+$/, '')
 
@@ -66,14 +77,6 @@ const slideTitle = (slide: Slide) => field(slide, 'Title')
 const slideDescription = (slide: Slide) => field(slide, 'Description')
 const slideButton = (slide: Slide) => field(slide, 'Button_Text')
 
-onMounted(async () => {
-  try {
-    slides.value = await $axios.get('/api/ui-sliders').then((r: any) => r.data)
-  } finally {
-    loading.value = false
-  }
-})
-
 // Swiper (client-only)
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Autoplay, Pagination } from 'swiper/modules'
@@ -100,9 +103,9 @@ import 'swiper/css/pagination'
             <div class="absolute inset-0 flex items-center">
               <div class="max-w-screen-xl mx-auto w-full px-4">
                 <div class="max-w-xl">
-                  <h1 v-if="slideTitle(s)" class="text-white text-2xl md:text-3xl font-bold">
+                  <h2 v-if="slideTitle(s)" class="text-white text-2xl md:text-3xl font-bold">
                     {{ slideTitle(s) }}
-                  </h1>
+                  </h2>
                   <p v-if="slideDescription(s)" class="text-white/85 mt-1 text-sm md:text-base">
                     {{ slideDescription(s) }}
                   </p>
@@ -121,9 +124,9 @@ import 'swiper/css/pagination'
             <div class="absolute inset-0 flex items-center">
               <div class="max-w-screen-xl mx-auto w-full px-4">
                 <div class="max-w-xl">
-                  <h1 v-if="slideTitle(s)" class="text-white text-2xl md:text-3xl font-bold">
+                  <h2 v-if="slideTitle(s)" class="text-white text-2xl md:text-3xl font-bold">
                     {{ slideTitle(s) }}
-                  </h1>
+                  </h2>
                   <p v-if="slideDescription(s)" class="text-white/85 mt-1 text-sm md:text-base">
                     {{ slideDescription(s) }}
                   </p>
@@ -135,7 +138,19 @@ import 'swiper/css/pagination'
       </Swiper>
 
       <template #fallback>
-        <div class="w-full h-[220px] md:h-[300px] lg:h-[360px] bg-slate-800" />
+        <div v-if="slides[0]" class="relative block home-slide">
+          <img :src="img(slides[0])" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(slides[0]) || 'ISC Depot industrial supplies'" />
+          <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-900/48 to-transparent"></div>
+          <div class="absolute inset-0 flex items-center">
+            <div class="max-w-screen-xl mx-auto w-full px-4">
+              <div class="max-w-xl">
+                <h2 v-if="slideTitle(slides[0])" class="text-white text-2xl md:text-3xl font-bold">{{ slideTitle(slides[0]) }}</h2>
+                <p v-if="slideDescription(slides[0])" class="text-white/85 mt-1 text-sm md:text-base">{{ slideDescription(slides[0]) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="w-full h-[220px] md:h-[300px] lg:h-[360px] bg-slate-800" />
       </template>
     </ClientOnly>
   </section>

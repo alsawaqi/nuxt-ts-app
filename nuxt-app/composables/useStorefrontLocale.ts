@@ -11,24 +11,38 @@ import {
   t as translate,
 } from '~/utils/storefrontI18n.js'
 import type { StorefrontLocale } from '~/utils/storefrontI18n.js'
+import {
+  isLocalizedPublicPath,
+  localeFromPath,
+  localizedPath,
+} from '~/utils/storefrontSeo.js'
 
 const cookieName = 'isc_storefront_locale'
 const storageKey = 'isc_storefront_locale'
 
 export const useStorefrontLocale = () => {
+  const route = useRoute()
+  const routeLocale = isLocalizedPublicPath(route.path)
+    ? normalizeLocale(localeFromPath(route.path))
+    : null
   const cookie = useCookie<StorefrontLocale>(cookieName, {
-    default: () => 'en',
+    default: () => routeLocale || 'en',
     sameSite: 'lax',
     maxAge: 60 * 60 * 24 * 365,
   })
 
-  const locale = useState<StorefrontLocale>('storefront-locale', () => normalizeLocale(cookie.value))
+  const locale = useState<StorefrontLocale>('storefront-locale', () => routeLocale || normalizeLocale(cookie.value))
 
   if (locale.value !== normalizeLocale(locale.value)) {
     locale.value = 'en'
   }
 
-  const setLocale = (next: string) => {
+  if (routeLocale && locale.value !== routeLocale) {
+    locale.value = routeLocale
+    cookie.value = routeLocale
+  }
+
+  const setLocale = async (next: string) => {
     const normalized = normalizeLocale(next)
     locale.value = normalized
     cookie.value = normalized
@@ -36,9 +50,23 @@ export const useStorefrontLocale = () => {
     if (import.meta.client) {
       window.localStorage.setItem(storageKey, normalized)
     }
+
+    if (isLocalizedPublicPath(route.path)) {
+      const nextPath = localizedPath(route.path, normalized)
+      if (nextPath !== route.path) {
+        await navigateTo({
+          path: nextPath,
+          query: route.query,
+          hash: route.hash,
+        })
+      }
+    }
   }
 
   const toggleLocale = () => setLocale(locale.value === 'ar' ? 'en' : 'ar')
+  const localePath = (path: string, targetLocale: StorefrontLocale = locale.value) => (
+    localizedPath(path, normalizeLocale(targetLocale))
+  )
   const dir = computed(() => directionFor(locale.value))
   const isArabic = computed(() => locale.value === 'ar')
   const language = computed(() => localeMeta[locale.value])
@@ -51,11 +79,23 @@ export const useStorefrontLocale = () => {
   const categoryText = (category: unknown) => categoryDescription(category, locale.value)
 
   onMounted(() => {
+    if (isLocalizedPublicPath(route.path)) return
+
     const stored = window.localStorage.getItem(storageKey)
     if (stored && normalizeLocale(stored) !== locale.value) {
       setLocale(stored)
     }
   })
+
+  watch(() => route.path, (path) => {
+    if (!isLocalizedPublicPath(path)) return
+
+    const next = normalizeLocale(localeFromPath(path))
+    if (locale.value !== next) {
+      locale.value = next
+      cookie.value = next
+    }
+  }, { immediate: true })
 
   watch(locale, (next) => {
     const normalized = normalizeLocale(next)
@@ -89,6 +129,7 @@ export const useStorefrontLocale = () => {
     isArabic,
     setLocale,
     toggleLocale,
+    localePath,
     t,
     field,
     productName,

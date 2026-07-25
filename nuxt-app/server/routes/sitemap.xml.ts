@@ -1,89 +1,68 @@
-import { canonicalUrl, sitemapXml } from '~/utils/storefrontSeo.js'
+import {
+  buildLocalizedSitemapEntries,
+  isSeoSitemapPayload,
+  localizedSitemapXml,
+} from '~/utils/storefrontSitemap.js'
+import type { SeoSitemapPayload } from '~/utils/storefrontSitemap.js'
 
-type ApiCategory = {
-  id: number
-  Slug?: string
-  slug?: string
+const absoluteHttpUrl = (value: unknown) => {
+  try {
+    const url = new URL(String(value || ''))
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString().replace(/\/+$/, '') : ''
+  } catch {
+    return ''
+  }
 }
 
-type ApiProduct = {
-  slug?: string
-  Slug?: string
-}
-
-const uniqueEntries = (entries: Array<Record<string, any>>) => {
-  const seen = new Set<string>()
-
-  return entries.filter((entry) => {
-    if (!entry.loc || seen.has(entry.loc)) return false
-    seen.add(entry.loc)
-    return true
-  })
-}
-
-export default defineEventHandler(async (event) => {
-  setHeader(event, 'content-type', 'application/xml; charset=UTF-8')
-  setHeader(event, 'cache-control', 'public, max-age=1800')
-
+export default defineCachedEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
-  const siteUrl = String(config.public.siteUrl || '')
-  const apiBase = String(config.public.apiBase || '').replace(/\/+$/, '')
-  const today = new Date().toISOString().slice(0, 10)
+  const siteUrl = absoluteHttpUrl(config.public.siteUrl)
+  const apiBase = absoluteHttpUrl(config.public.apiBase)
 
-  const entries: Array<Record<string, any>> = [
-    { loc: canonicalUrl(siteUrl, '/'), changefreq: 'daily', priority: 1 },
-    { loc: canonicalUrl(siteUrl, '/contact'), changefreq: 'monthly', priority: 0.5 },
-    ...['shipping', 'returns', 'privacy', 'terms', 'warranty', 'faq'].map((slug) => ({
-      loc: canonicalUrl(siteUrl, `/policies/${slug}`),
-      changefreq: 'monthly',
-      priority: 0.4,
-    })),
-  ]
-
-  if (apiBase) {
-    try {
-      const departments = await $fetch<ApiCategory[]>(`${apiBase}/api/productdepartment`)
-
-      for (const department of departments || []) {
-        const subs = await $fetch<ApiCategory[]>(`${apiBase}/api/categories/${department.id}/subcategories`)
-
-        for (const sub of subs || []) {
-          const finalCategories = await $fetch<ApiCategory[]>(`${apiBase}/api/subcategories/${sub.id}/subsubcategories`)
-
-          for (const category of finalCategories || []) {
-            const slug = category.Slug || category.slug
-            if (!slug) continue
-
-            entries.push({
-              loc: canonicalUrl(siteUrl, `/departments/${slug}`),
-              lastmod: today,
-              changefreq: 'weekly',
-              priority: 0.8,
-            })
-
-            try {
-              const listing = await $fetch<{ products?: ApiProduct[] }>(`${apiBase}/api/products/${slug}`)
-              for (const product of listing.products || []) {
-                const productSlug = product.slug || product.Slug
-                if (!productSlug) continue
-
-                entries.push({
-                  loc: canonicalUrl(siteUrl, `/product/${productSlug}`),
-                  lastmod: today,
-                  changefreq: 'weekly',
-                  priority: 0.7,
-                })
-              }
-            } catch {
-              // Keep the category in the sitemap even if one product listing fails.
-            }
-          }
-        }
-      }
-    } catch {
-      // Static pages are still useful when the API is not reachable.
-    }
+  if (!siteUrl || !apiBase) {
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'Sitemap configuration is unavailable',
+    })
   }
 
-  return sitemapXml(uniqueEntries(entries))
+  let payload: SeoSitemapPayload
+
+  try {
+    const response = await $fetch<unknown>(`${apiBase}/api/seo/sitemap`, {
+      method: 'GET',
+      retry: 1,
+      timeout: 10_000,
+    })
+
+    if (!isSeoSitemapPayload(response)) {
+      throw new TypeError('The SEO sitemap endpoint returned an invalid payload.')
+    }
+
+    payload = response
+  } catch (error) {
+    console.error('[sitemap] Unable to load the flattened SEO sitemap payload.', error)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Sitemap source is unavailable',
+    })
+  }
+
+  const entries = buildLocalizedSitemapEntries({
+    siteUrl,
+    categories: payload.categories,
+    products: payload.products,
+  })
+
+  setResponseHeaders(event, {
+    'content-type': 'application/xml; charset=UTF-8',
+    'cache-control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
+  })
+
+  return localizedSitemapXml(entries)
+}, {
+  name: 'storefront-sitemap-v2',
+  maxAge: 3600,
+  staleMaxAge: 86400,
+  swr: true,
 })

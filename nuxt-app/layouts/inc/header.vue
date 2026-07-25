@@ -6,6 +6,7 @@ import { useCartStore } from '~/stores/cart'
 import { useLoyaltyStore } from '~/stores/loyalty'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 import { ShoppingBagIcon, CreditCardIcon } from '@heroicons/vue/24/solid'
+import { stripLocalePrefix } from '~/utils/storefrontSeo.js'
 
 const cart = useCartStore()
 const loyalty = useLoyaltyStore()
@@ -13,7 +14,9 @@ const router = useRouter()
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
 const points = computed(() => loyalty.points)
-const { t, isArabic } = useStorefrontLocale()
+const { t, isArabic, localePath } = useStorefrontLocale()
+const route = useRoute()
+const publicPath = computed(() => stripLocalePrefix(route.path))
 
 
 const logout = async () => {
@@ -25,7 +28,7 @@ const logout = async () => {
 function gotoProduct(item: any) {
   if (item.Result_Type === 'category' && item.Slug) {
     router.push({
-      path: `/departments/${item.Slug}`,
+      path: localePath(`/departments/${item.Slug}`),
       query: item.Route_Query ?? {
         deptId: item.Product_Department_Id ?? undefined,
         subId: item.Product_Sub_Department_Id ?? undefined,
@@ -36,7 +39,7 @@ function gotoProduct(item: any) {
   }
 
   if (item.Slug) {
-    router.push(`/product/${item.Slug}`)
+    router.push(localePath(`/product/${item.Slug}`))
     return
   }
 
@@ -98,16 +101,16 @@ const mobileMenuOpen = ref(false);
           <!-- Desktop nav (tighter at md, roomy at lg) -->
           <nav
             class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[17px] font-semibold text-slate-700">
-            <NuxtLink to="/" class="pb-1 border-b-2"
-              :class="$route.path === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
+            <NuxtLink :to="localePath('/')" class="pb-1 border-b-2"
+              :class="publicPath === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.home') }}
             </NuxtLink>
-            <NuxtLink :to="{ path: '/', query: { section: 'categories' } }" class="pb-1 border-b-2" :class="($route.path === '/' && (($route.query.section as string) ?? 'categories') === 'categories')
+            <NuxtLink :to="{ path: localePath('/'), query: { section: 'categories' } }" class="pb-1 border-b-2" :class="(publicPath === '/' && (($route.query.section as string) ?? 'categories') === 'categories')
               ? 'border-emerald-600 text-slate-900'
               : 'border-transparent hover:text-slate-900'">
               {{ t('nav.shops') }}
             </NuxtLink>
-            <NuxtLink :to="{ path: '/', query: { section: 'brand' } }" class="pb-1 border-b-2" :class="($route.path === '/' && $route.query.section === 'brand')
+            <NuxtLink :to="{ path: localePath('/'), query: { section: 'brand' } }" class="pb-1 border-b-2" :class="(publicPath === '/' && $route.query.section === 'brand')
               ? 'border-emerald-600 text-slate-900'
               : 'border-transparent hover:text-slate-900'">
               {{ t('nav.brands') }}
@@ -116,8 +119,8 @@ const mobileMenuOpen = ref(false);
               :class="$route.path.startsWith('/dealerships') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.dealerships') }}
             </NuxtLink>
-            <NuxtLink to="/contact" class="pb-1 border-b-2"
-              :class="$route.path.startsWith('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
+            <NuxtLink :to="localePath('/contact')" class="pb-1 border-b-2"
+              :class="publicPath.startsWith('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.contact') }}
             </NuxtLink>
           </nav>
@@ -125,8 +128,8 @@ const mobileMenuOpen = ref(false);
 
         <!-- Center: Logo + name (scale down at md, big at lg) -->
         <div class="justify-self-center flex flex-col items-center min-w-0">
-          <NuxtLink to="/" class="flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-4" @click="mobileMenuOpen = false">
-            <img src="/logonew1.jpg" alt="ISC" class="h-10 w-auto object-contain sm:h-12 md:h-12 lg:h-16" />
+          <NuxtLink :to="localePath('/')" class="flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-4" @click="mobileMenuOpen = false">
+            <img src="/logonew1.jpg" alt="Industrial Supplies Center LLC" class="h-10 w-auto object-contain sm:h-12 md:h-12 lg:h-16" />
           </NuxtLink>
           <span
             class="mt-1.5 sm:mt-2 text-[14px] sm:text-[15px] md:text-[15px] lg:text-[17px] font-semibold text-slate-800 text-center truncate">
@@ -221,7 +224,7 @@ const mobileMenuOpen = ref(false);
         mobileMenuOpen ? 'translate-x-0' : (isArabic ? 'translate-x-full' : '-translate-x-full')
       ]">
       <div class="p-3 sm:p-4 flex justify-between items-center border-b">
-        <NuxtLink to="/" class="flex items-center gap-2" @click="mobileMenuOpen = false">
+        <NuxtLink :to="localePath('/')" class="flex items-center gap-2" @click="mobileMenuOpen = false">
           <img src="/logonew1.jpg" alt="ISC" class="h-7 sm:h-8 w-auto rounded ring-1 ring-black/10" />
           <span class="font-semibold">ISC</span>
         </NuxtLink>
@@ -232,20 +235,20 @@ const mobileMenuOpen = ref(false);
         <div class="px-3 py-2">
           <LanguageSwitcher />
         </div>
-        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
-        <NuxtLink :to="{ path: '/', query: { section: 'categories' } }" @click="mobileMenuOpen = false"
+        <NuxtLink :to="localePath('/')" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
+        <NuxtLink :to="{ path: localePath('/'), query: { section: 'categories' } }" @click="mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">
           {{ t('nav.shops') }}
         </NuxtLink>
 
-        <NuxtLink :to="{ path: '/', query: { section: 'brand' } }" @click="mobileMenuOpen = false"
+        <NuxtLink :to="{ path: localePath('/'), query: { section: 'brand' } }" @click="mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">
           {{ t('nav.brands') }}
         </NuxtLink>
 
         <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.dealerships') }}
         </NuxtLink>
-        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
+        <NuxtLink :to="localePath('/contact')" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
         </NuxtLink>
         <div class="h-px my-2 bg-slate-200"></div>
         <template v-if="!isAuthenticated">

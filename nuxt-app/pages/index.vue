@@ -1,8 +1,10 @@
 <script setup lang="ts">
   definePageMeta({
     layout: 'layout',
+    alias: ['/ar'],
   })
 import { ref, watch, onMounted, computed } from 'vue'
+import { assetUrl, canonicalUrl, localizedAlternateLinks, openGraphLocale, organizationJsonLd, seoTitle, webPageJsonLd, websiteJsonLd } from '~/utils/storefrontSeo.js'
 import SearchAutocomplete from '~/components/SearchAutocomplete.vue'
 import { Squares2X2Icon, ListBulletIcon, ChartPieIcon, ShoppingBagIcon, CreditCardIcon } from '@heroicons/vue/24/solid'
 import { useUserStore } from '~/stores/user'
@@ -18,9 +20,10 @@ const route = useRoute()
 const points = computed(() => loyalty.points)
 const { user, isAuthenticated } = useAuth()
 const userStore = useUserStore()
-const { t, isArabic, categoryName } = useStorefrontLocale()
+const { t, isArabic, locale, localePath, categoryName } = useStorefrontLocale()
 
 const { $axios, $r2Url } = useNuxtApp();
+const config = useRuntimeConfig()
 
 type Section = 'categories' | 'products' | 'brand'
 
@@ -30,7 +33,7 @@ type Section = 'categories' | 'products' | 'brand'
 function gotoProduct(item: any) {
   if (item.Result_Type === 'category' && item.Slug) {
     router.push({
-      path: `/departments/${item.Slug}`,
+      path: localePath(`/departments/${item.Slug}`),
       query: item.Route_Query ?? {
         deptId: item.Product_Department_Id ?? undefined,
         subId: item.Product_Sub_Department_Id ?? undefined,
@@ -41,11 +44,9 @@ function gotoProduct(item: any) {
   }
 
   if (item.Slug) {
-    router.push(`/product/${item.Slug}`)
+    router.push(localePath(`/product/${item.Slug}`))
     return
   }
-
-  router.push(`/product/id/${item.id}`)
 }
 
 interface ProductDepartment {
@@ -72,6 +73,91 @@ const bannerStyle = 'background-image: url(\'https://www.aabtools.com/banner/Hom
 
 const viewMode = ref<'grid' | 'list' | 'pie'>('grid')
 
+const { data: homeTaxonomy } = await useAsyncData(
+  'storefront-home-taxonomy',
+  async () => {
+    const [departmentsResponse, brandsResponse] = await Promise.all([
+      $axios.get('/api/productdepartment'),
+      $axios.get('/api/productbrand'),
+    ])
+
+    return {
+      departments: departmentsResponse.data || [],
+      brands: brandsResponse.data || [],
+    }
+  },
+  {
+    default: () => ({
+      departments: [] as ProductDepartment[],
+      brands: [] as ProductBrand[],
+    }),
+  },
+)
+
+prodcutsDepartments.value = homeTaxonomy.value.departments
+productBrands.value = homeTaxonomy.value.brands
+
+const siteUrl = computed(() => String(config.public.siteUrl || ''))
+
+useHead(() => {
+  const title = locale.value === 'ar'
+    ? 'المستلزمات الصناعية والأدوات في عُمان'
+    : 'Industrial Supplies, Tools and Equipment in Oman'
+  const description = locale.value === 'ar'
+    ? 'تسوّق المستلزمات الصناعية والأدوات وقطع الغيار والمعدات من مركز المستلزمات الصناعية في سلطنة عُمان.'
+    : 'Shop industrial supplies, tools, parts and equipment from Industrial Supplies Center LLC in Oman.'
+  const canonical = canonicalUrl(siteUrl.value, localePath('/'))
+  const image = assetUrl(siteUrl.value, '/logonew1.jpg')
+
+  return {
+    title: seoTitle(title),
+    meta: [
+      { name: 'description', content: description },
+      { property: 'og:title', content: seoTitle(title) },
+      { property: 'og:description', content: description },
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: canonical },
+      { property: 'og:site_name', content: 'ISC Depot' },
+      { property: 'og:locale', content: openGraphLocale(locale.value) },
+      { property: 'og:image', content: image },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: seoTitle(title) },
+      { name: 'twitter:description', content: description },
+      { name: 'twitter:image', content: image },
+    ],
+    link: [
+      { rel: 'canonical', href: canonical },
+      ...localizedAlternateLinks(siteUrl.value, '/'),
+    ],
+    script: [
+      {
+        key: 'organization-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(organizationJsonLd({
+          siteUrl: siteUrl.value,
+          email: 'motorsales@isc-depot.com',
+          telephone: '+96824460320',
+        })),
+      },
+      {
+        key: 'website-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(websiteJsonLd({ siteUrl: siteUrl.value })),
+      },
+      {
+        key: 'home-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(webPageJsonLd({
+          siteUrl: siteUrl.value,
+          path: localePath('/'),
+          name: title,
+          description,
+          locale: locale.value,
+        })),
+      },
+    ],
+  }
+})
 
 const subCategories = ref<any[]>([])
 const subSubCategories = ref<any[]>([])
@@ -219,7 +305,7 @@ const onSliceClick = (it: any) => {
   if (!slug) return
 
   return router.push({
-    path: `/departments/${slug}`,
+    path: localePath(`/departments/${slug}`),
     query: {
       deptId: selectedDepartment.value ? String(selectedDepartment.value) : undefined,
       subId: selectedSubCategory.value ? String(selectedSubCategory.value) : undefined,
@@ -298,23 +384,6 @@ function resetToMainCategory() {
   subCategories.value = []
   subSubCategories.value = []
 }
-
-
-const fetchData = async () => {
-  isloadingCategories.value = true
-  try {
-    const response = await $axios.get('/api/productdepartment')
-    // Process the response data as needed
-    console.log(response.data);
-    prodcutsDepartments.value = response.data;
-  } catch (error) {
-    console.error('Error fetching data:', error)
-  } finally {
-    isloadingCategories.value = false
-  }
-}
-
-
 
 const fetchSubCategories = async (departmentId: number) => {
   isloadingCategories.value = true
@@ -423,28 +492,12 @@ function goBack() {
   }
 }
 
-const getBrands = async () => {
-  isloadingBrand.value = true
-  try {
-    const response = await $axios.get('/api/productbrand')
-    productBrands.value = response.data
-
-  } catch (error) {
-    console.error('Error fetching brands:', error)
-  } finally {
-    isloadingBrand.value = false
-  }
-}
-
-
 const logout = async () => {
   await userStore.logout()
 }
 
 
 onMounted(async () => {
-  await fetchData();
-  await getBrands();
   await restoreFromQuery()
 
   if (typeof window !== 'undefined') {
@@ -514,8 +567,8 @@ onMounted(async () => {
           <!-- Desktop nav (tighter at md, roomy at lg) -->
           <nav
             class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[17px] font-semibold text-slate-700">
-            <NuxtLink to="/" class="pb-1 border-b-2"
-              :class="$route.path === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
+            <NuxtLink :to="localePath('/')" class="pb-1 border-b-2"
+              :class="$route.path === localePath('/') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.home') }}
             </NuxtLink>
             <button @click="currentSection = 'categories'" class="pb-1 border-b-2"
@@ -530,8 +583,8 @@ onMounted(async () => {
               :class="$route.path.startsWith('/dealerships') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.dealerships') }}
             </NuxtLink>
-            <NuxtLink to="/contact" class="pb-1 border-b-2"
-              :class="$route.path.startsWith('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
+            <NuxtLink :to="localePath('/contact')" class="pb-1 border-b-2"
+              :class="$route.path === localePath('/contact') ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.contact') }}
             </NuxtLink>
           </nav>
@@ -539,13 +592,13 @@ onMounted(async () => {
 
         <!-- Center: Logo + name (scale down at md, big at lg) -->
         <div class="justify-self-center flex flex-col items-center min-w-0">
-          <NuxtLink to="/" class="flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-4" @click="mobileMenuOpen = false">
-            <img src="/logonew1.jpg" alt="ISC" class="h-10 w-auto object-contain sm:h-12 md:h-12 lg:h-16" />
+          <NuxtLink :to="localePath('/')" class="flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-4" @click="mobileMenuOpen = false">
+            <img src="/logonew1.jpg" alt="Industrial Supplies Center LLC" class="h-10 w-auto object-contain sm:h-12 md:h-12 lg:h-16" />
           </NuxtLink>
-          <span
+          <h1
             class="mt-1.5 sm:mt-2 text-[14px] sm:text-[15px] md:text-[15px] lg:text-[17px] font-semibold text-slate-800 text-center truncate">
             Industrial Supplies Center LLC
-          </span>
+          </h1>
         </div>
 
         <!-- Right: Cart + Checkout + Account -->
@@ -643,7 +696,7 @@ onMounted(async () => {
         mobileMenuOpen ? 'translate-x-0' : (isArabic ? 'translate-x-full' : '-translate-x-full')
       ]">
       <div class="p-3 sm:p-4 flex justify-between items-center border-b">
-        <NuxtLink to="/" class="flex items-center gap-2" @click="mobileMenuOpen = false">
+        <NuxtLink :to="localePath('/')" class="flex items-center gap-2" @click="mobileMenuOpen = false">
           <img src="/logonew1.jpg" alt="ISC" class="h-7 sm:h-8 w-auto rounded ring-1 ring-black/10" />
           <span class="font-semibold">ISC</span>
         </NuxtLink>
@@ -654,14 +707,14 @@ onMounted(async () => {
         <div class="px-3 py-2">
           <LanguageSwitcher />
         </div>
-        <NuxtLink to="/" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
+        <NuxtLink :to="localePath('/')" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.home') }}</NuxtLink>
         <button @click="currentSection = 'categories'; mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.shops') }}</button>
         <button @click="currentSection = 'brand'; mobileMenuOpen = false"
           class="text-left px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.brands') }}</button>
         <NuxtLink to="#" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.dealerships') }}
         </NuxtLink>
-        <NuxtLink to="/contact" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
+        <NuxtLink :to="localePath('/contact')" @click="mobileMenuOpen = false" class="px-3 py-2 rounded hover:bg-slate-50">{{ t('nav.contact') }}
         </NuxtLink>
         <div class="h-px my-2 bg-slate-200"></div>
         <template v-if="!isAuthenticated">
@@ -1018,7 +1071,7 @@ onMounted(async () => {
               <div v-if="viewMode === 'grid'">
                 <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
-                    path: `/departments/${subSub.Slug}`,
+                    path: localePath(`/departments/${subSub.Slug}`),
                     query: {
                       deptId: selectedDepartment ?? undefined,
                       subId: selectedSubCategory ?? undefined,
@@ -1049,7 +1102,7 @@ onMounted(async () => {
               <!-- LIST mode -->
               <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
                 <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
-                  path: `/departments/${subSub.Slug}`,
+                  path: localePath(`/departments/${subSub.Slug}`),
                   query: {
                     deptId: selectedDepartment ?? undefined,
                     subId: selectedSubCategory ?? undefined,

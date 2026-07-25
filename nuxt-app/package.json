@@ -16,7 +16,6 @@
     "axios": "^1.9.0",
     "dayjs": "^1.11.13",
     "jquery": "^3.7.1",
-    "nuxt-pdfeasy": "^1.4.0",
     "pdf-lib": "^1.17.1",
     "pinia": "^3.0.3",
     "pinia-plugin-persistedstate": "^4.5.0",

@@ -58,7 +58,7 @@ export function useOrderConfirmPdf() {
   const buildPdfUrl = async (input: BuildPdfInput): Promise<string> => {
     if (!import.meta.client) return ''
 
-    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+    const { PDFDocument, StandardFonts, rgb } = await import('~/utils/pdfRuntime.client')
 
     const pdfDoc = await PDFDocument.create()
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica)

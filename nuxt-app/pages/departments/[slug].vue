@@ -1,18 +1,21 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'layouts' })
+definePageMeta({
+  layout: 'layouts',
+  alias: ['/ar/departments/:slug'],
+})
 
 import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
 import { activeDescendantState } from '~/utils/accessibility.js'
 import { filterAndSortProducts } from '~/utils/discovery.js'
 import { formatRatingSummary, starStates } from '~/utils/productEngagement.js'
-import { breadcrumbJsonLd, canonicalUrl, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
+import { assetUrl, breadcrumbJsonLd, canonicalUrl, collectionPageJsonLd, localizedAlternateLinks, openGraphLocale, seoDescription, seoTitle } from '~/utils/storefrontSeo.js'
 const { $axios, $r2Url } = useNuxtApp()
 const config = useRuntimeConfig()
-const { t, isArabic, categoryName, categoryText, productName } = useStorefrontLocale()
+const { t, isArabic, locale, localePath, categoryName, categoryText, productName } = useStorefrontLocale()
 
 const showFilters = ref(false);
 const route = useRoute();
-const slug = computed(() => route.params.slug as string)
+const slug = computed(() => String(route.params.slug || ''))
 
 const isloadingsubsubdepartments = ref(true)
 const isloadingproducts = ref(true)
@@ -79,18 +82,18 @@ watch(
 
 // breadcrumb navigation helpers (send query so index.vue restores state)
 const goDept = () => router.push({
-  path: '/',
+  path: localePath('/'),
   query: { deptId: parentDeptId.value ?? undefined }
 })
 
 const goSub = () => router.push({
-  path: '/',
+  path: localePath('/'),
   query: { deptId: parentDeptId.value ?? undefined, subId: parentSubId.value ?? undefined }
 })
 
 // optional: go to the list that contains this sub-sub, and optionally highlight it
 const goSubSubList = () => router.push({
-  path: '/',
+  path: localePath('/'),
   query: {
     deptId: parentDeptId.value ?? undefined,
     subId: parentSubId.value ?? undefined,
@@ -161,7 +164,7 @@ const clearAllFilters = () => {                            // clear all groups
 
 
 
-const goProduct = (slug: string) => router.push(`/product/${slug}`)
+const goProduct = (slug: string) => router.push(localePath(`/product/${slug}`))
 
 
 
@@ -230,16 +233,23 @@ const discoveryActiveCount = computed(() =>
 )
 
 const siteUrl = computed(() => String(config.public.siteUrl || ''))
+const baseCategoryPath = computed(() => `/departments/${slug.value}`)
+const categoryPath = computed(() => localePath(baseCategoryPath.value))
 
 useHead(() => {
   const title = categoryName(subsubdepartment.value) || t('common.products')
-  const description = seoDescription(categoryText(subsubdepartment.value), `${title} products from ISC Depot.`)
-  const canonical = canonicalUrl(siteUrl.value, route.path)
+  const description = seoDescription(
+    categoryText(subsubdepartment.value),
+    locale.value === 'ar' ? `تسوّق منتجات ${title} من مركز المستلزمات الصناعية.` : `Shop ${title} products from ISC Depot.`,
+  )
+  const canonical = canonicalUrl(siteUrl.value, categoryPath.value)
+  const image = assetUrl(
+    String($r2Url || ''),
+    subsubdepartment.value?.Image_Path,
+  ) || assetUrl(siteUrl.value, '/logonew1.jpg')
   const breadcrumbs = [
-    { name: t('common.home'), path: '/' },
-    ...(parentDeptName.value ? [{ name: parentDeptName.value, path: `/?deptId=${parentDeptId.value ?? ''}` }] : []),
-    ...(parentSubName.value ? [{ name: parentSubName.value, path: `/?deptId=${parentDeptId.value ?? ''}&subId=${parentSubId.value ?? ''}` }] : []),
-    ...(title ? [{ name: title, path: route.path }] : []),
+    { name: t('common.home'), path: localePath('/') },
+    { name: title, path: categoryPath.value },
   ]
 
   return {
@@ -250,13 +260,38 @@ useHead(() => {
       { property: 'og:description', content: description },
       { property: 'og:type', content: 'website' },
       { property: 'og:url', content: canonical },
+      { property: 'og:site_name', content: 'ISC Depot' },
+      { property: 'og:locale', content: openGraphLocale(locale.value) },
+      { property: 'og:image', content: image },
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:title', content: seoTitle(title) },
+      { name: 'twitter:description', content: description },
+      { name: 'twitter:image', content: image },
     ],
-    link: [{ rel: 'canonical', href: canonical }],
-    script: title ? [{
-      key: 'category-breadcrumb-jsonld',
-      type: 'application/ld+json',
-      innerHTML: JSON.stringify(breadcrumbJsonLd(breadcrumbs, siteUrl.value)),
-    }] : [],
+    link: [
+      { rel: 'canonical', href: canonical },
+      ...localizedAlternateLinks(siteUrl.value, baseCategoryPath.value),
+    ],
+    script: title ? [
+      {
+        key: 'category-collection-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(collectionPageJsonLd({
+          siteUrl: siteUrl.value,
+          path: categoryPath.value,
+          name: title,
+          description,
+          locale: locale.value,
+          products: visibleRows.value,
+          r2Url: String($r2Url || ''),
+        })),
+      },
+      {
+        key: 'category-breadcrumb-jsonld',
+        type: 'application/ld+json',
+        innerHTML: JSON.stringify(breadcrumbJsonLd(breadcrumbs, siteUrl.value)),
+      },
+    ] : [],
   }
 })
 
@@ -341,14 +376,32 @@ const clearPriceFilter = () => {
   else releaseSync()
 }
 
+const categoryPageError = (error: any) => {
+  const status = Number(error?.response?.status || error?.statusCode || error?.status || 0)
+
+  if (status === 404) {
+    return createError({
+      statusCode: 404,
+      statusMessage: 'Category not found',
+    })
+  }
+
+  return createError({
+    statusCode: 503,
+    statusMessage: 'Category information is temporarily unavailable',
+  })
+}
+
 const getSlugId = async () => {
   try {
     const res = await $axios.get(`/api/subsubdepartments/slug/${slug.value}`)
-
-    slugId.value = res.data.data.id;
+    const payload = res.data
+    const id = Number(payload?.data?.id ?? payload?.id ?? payload)
+    slugId.value = Number.isFinite(id) ? id : null
 
   } catch (error) {
     console.error('Error fetching slug ID:', error)
+    slugId.value = null
     return null
   }
 }
@@ -382,16 +435,16 @@ const getDepartment = async () => {
       acc[f.id] = [] as number[]
       return acc
     }, {} as Record<number, number[]>)
-  } catch (error) {
-    console.error('Error fetching department:', error)
+  } catch (error: any) {
     filtersError.value = t('listing.filtersError')
+    throw categoryPageError(error)
   } finally {
     isloadingsubsubdepartments.value = false
   }
 }
 
 
-const getProducts = async () => {
+const getProducts = async (fatal = false) => {
   isloadingproducts.value = true
   productsError.value = ''
   try {
@@ -411,9 +464,11 @@ const getProducts = async () => {
     headers.value = data.headers ?? []
     rows.value = data.products ?? []
     syncPriceBounds(data.price_range)
-  } catch (e) {
-    console.error('Error fetching products grid:', e)
+  } catch (error: any) {
     productsError.value = t('listing.productsError')
+    if (fatal) {
+      throw categoryPageError(error)
+    }
   } finally {
     isloadingproducts.value = false
   }
@@ -421,6 +476,7 @@ const getProducts = async () => {
 
 // Refetch products whenever filters change
 watch(selectedFilters, async () => {
+  if (categoryRouteLoading) return
   queueProductsFetch()
 }, { deep: true })
 
@@ -436,16 +492,65 @@ watch(showFilters, (val) => {
   if (import.meta.client) document.body.style.overflow = val ? 'hidden' : ''
 })
 
+let categoryRouteLoading = false
+
+const resetCategoryPage = () => {
+  if (productsTimer) {
+    clearTimeout(productsTimer)
+    productsTimer = null
+  }
+
+  subsubdepartment.value = null
+  parentDeptRecord.value = null
+  parentSubRecord.value = null
+  filters.value = []
+  selectedFilters.value = {}
+  headers.value = []
+  rows.value = []
+  slugId.value = null
+  priceBounds.value = { min: 0, max: 0 }
+  priceMin.value = 0
+  priceMax.value = 0
+  priceFilterActive.value = false
+}
+
+const loadCategoryPage = async () => {
+  categoryRouteLoading = true
+  resetCategoryPage()
+
+  try {
+    await getDepartment()
+    await Promise.all([
+      getProducts(true),
+      getSlugId(),
+    ])
+  } finally {
+    categoryRouteLoading = false
+  }
+}
+
 if (import.meta.server) {
-  await getDepartment();
-  await getProducts();
-  await getSlugId();
+  await loadCategoryPage()
 }
 
 onMounted(async () => {
-  if (!subsubdepartment.value) await getDepartment();
-  if (!rows.value.length) await getProducts();
-  if (!slugId.value) await getSlugId();
+  if (!subsubdepartment.value) {
+    try {
+      await loadCategoryPage()
+    } catch (error) {
+      showError(error as any)
+    }
+  }
+})
+
+watch(slug, async (nextSlug, previousSlug) => {
+  if (!previousSlug || nextSlug === previousSlug) return
+
+  try {
+    await loadCategoryPage()
+  } catch (error) {
+    showError(error as any)
+  }
 })
 
 onBeforeUnmount(() => {

@@ -42,6 +42,13 @@ jobs:
           test "$(sha256sum "$association_file" | cut -d ' ' -f 1)" = \
             "f369c2f46d269fb67da79613d2a81f02a955ff9f8f6700fa266c9c8d8a7ad42c"
 
+      - name: Validate production Nginx configuration
+        run: |
+          docker run --rm \
+            --add-host nuxt-ui-app:127.0.0.1 \
+            --volume "$PWD/docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:alpine nginx -t
+
       - name: Install dependencies
         working-directory: nuxt-app
         run: npm ci
@@ -53,6 +60,10 @@ jobs:
       - name: Build storefront
         working-directory: nuxt-app
         run: npm run build
+
+      - name: Smoke test built SEO endpoints
+        working-directory: nuxt-app
+        run: node scripts/smoke-built-seo.mjs
 
   deploy:
     needs: verify
@@ -103,27 +114,60 @@ jobs:
           docker compose --env-file .env.production -f docker-compose.prod.yml \
             up -d --build --force-recreate nuxt-ui-app nginx
 
+          docker compose -f docker-compose.prod.yml exec -T nginx nginx -t
+
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if docker compose -f docker-compose.prod.yml exec -T nginx \
-              wget -qO- http://127.0.0.1/ > /dev/null; then
+              wget -qO- --header='Host: avinaq.com' http://127.0.0.1/ > /dev/null; then
               break
             fi
             test "$attempt" -lt 10
             sleep 2
           done
 
+          association_body="$(mktemp)"
+          robots_body="$(mktemp)"
+          sitemap_body="$(mktemp)"
+          trap 'rm -f "$association_body" "$robots_body" "$sitemap_body"' EXIT
+
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
             --max-time 20 https://avinaq.com/ > /dev/null
 
-          association_body="$(mktemp)"
-          trap 'rm -f "$association_body"' EXIT
           association_status="$(curl -sS --max-redirs 0 --max-time 20 \
             -o "$association_body" -w '%{http_code}' \
             https://avinaq.com/.well-known/apple-developer-merchantid-domain-association)"
           test "$association_status" = "200"
           test "$(sha256sum "$association_body" | cut -d ' ' -f 1)" = \
             "f369c2f46d269fb67da79613d2a81f02a955ff9f8f6700fa266c9c8d8a7ad42c"
-          rm -f "$association_body"
+
+          robots_status="$(curl -sS --max-redirs 0 --max-time 20 \
+            -o "$robots_body" -w '%{http_code}' \
+            https://avinaq.com/robots.txt)"
+          test "$robots_status" = "200"
+          grep -Fqx 'Sitemap: https://avinaq.com/sitemap.xml' "$robots_body"
+          ! grep -Fq 'localhost' "$robots_body"
+
+          sitemap_result="$(curl -sS --max-redirs 0 --max-time 30 \
+            -o "$sitemap_body" -w '%{http_code} %{content_type}' \
+            https://avinaq.com/sitemap.xml)"
+          read -r sitemap_status sitemap_content_type <<< "$sitemap_result"
+          test "$sitemap_status" = "200"
+          case "$sitemap_content_type" in application/xml*) ;; *) exit 1 ;; esac
+          grep -Fq 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' "$sitemap_body"
+          grep -Fq 'hreflang="en-OM"' "$sitemap_body"
+          grep -Fq 'hreflang="ar-OM"' "$sitemap_body"
+          grep -Fq '<loc>https://avinaq.com/ar' "$sitemap_body"
+          grep -Fq '<lastmod>' "$sitemap_body"
+          ! grep -Fq 'localhost' "$sitemap_body"
+
+          www_result="$(curl -sS --max-redirs 0 --max-time 20 \
+            -o /dev/null -w '%{http_code} %{redirect_url}' \
+            'https://www.avinaq.com/seo-canonical-check?source=ci')"
+          read -r www_status www_redirect <<< "$www_result"
+          test "$www_status" = "308"
+          test "$www_redirect" = "https://avinaq.com/seo-canonical-check?source=ci"
+
+          rm -f "$association_body" "$robots_body" "$sitemap_body"
           trap - EXIT
           echo "Storefront deployment completed: $deploy_sha"
           REMOTE

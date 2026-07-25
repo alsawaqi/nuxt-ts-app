@@ -12,7 +12,7 @@ export default defineNuxtConfig({
 
   css: ['assets/css/storefront-rtl.css'],
 
-  modules: ['@pinia/nuxt','nuxt-pdfeasy'],
+  modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
   components: true,
 
   devtools: {
@@ -22,6 +22,27 @@ export default defineNuxtConfig({
 
   vite: {
     optimizeDeps: { include: ['swiper', 'vue-easy-lightbox'] },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            const normalizedId = id.replace(/\\/g, '/')
+
+            if (normalizedId.includes('/node_modules/@pdf-lib/standard-fonts/')) {
+              return 'pdf-standard-fonts'
+            }
+
+            if (normalizedId.includes('/node_modules/@pdf-lib/upng/')) {
+              return 'pdf-png'
+            }
+
+            if (normalizedId.includes('/node_modules/pdf-lib/')) {
+              return 'pdf-engine'
+            }
+          },
+        },
+      },
+    },
   },
 
   runtimeConfig: {
