@@ -662,7 +662,7 @@ onMounted(async () => {
           <!-- Telephone -->
           <div class="md:col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.telephone') }}</label>
-            <div class="grid grid-cols-[120px,1fr] gap-2">
+            <div class="grid grid-cols-[120px_1fr] gap-2">
               <div class="relative">
                 <select v-model="form.Telephone_Country_Code" :class="selectCls">
                   <option v-for="item in phoneCountryCodes" :key="item.code" :value="item.code">

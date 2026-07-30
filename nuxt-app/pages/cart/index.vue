@@ -1141,7 +1141,7 @@ onBeforeUnmount(() => {
           <template v-else>
           <div v-for="item in cart.cartItems" :key="item.id"
             class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90">
-            <div class="grid grid-cols-[64px,1fr,auto] sm:grid-cols-[84px,1fr,auto] gap-3 sm:gap-4 items-start">
+            <div class="grid grid-cols-[64px_1fr_auto] sm:grid-cols-[84px_1fr_auto] gap-3 sm:gap-4 items-start">
               <!-- image -->
               <NuxtLink :to="`/product/${item.slug}`" class="block rounded-lg overflow-hidden ring-1 ring-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" :aria-label="t('listing.viewProduct', { name: productName(item) })">
                 <img :src="`${$r2Url}/${item.image}`" :alt="productName(item)" class="w-16 h-16 sm:w-20 sm:h-20 object-cover" />
@@ -1480,7 +1480,7 @@ onBeforeUnmount(() => {
             <!-- Telephone -->
             <div class="md:col-span-2">
               <label class="block text-sm font-medium text-slate-700 mb-1">{{ t('addresses.telephone') }}</label>
-              <div class="grid grid-cols-[120px,1fr] gap-2">
+              <div class="grid grid-cols-[120px_1fr] gap-2">
                 <div class="relative">
                   <select v-model="form.Telephone_Country_Code" :class="selectCls">
                     <option v-for="item in phoneCountryCodes" :key="item.code" :value="item.code">

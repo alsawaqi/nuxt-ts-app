@@ -400,7 +400,7 @@ const deliveryLabel = (type?: string | null) => ({
           </div>
         </section>
 
-        <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr),320px]">
+        <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section class="min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm">
             <div class="border-b border-slate-200 px-4 py-3">
               <h3 class="text-sm font-semibold text-slate-900">{{ t('orders.products') }}</h3>

@@ -5,9 +5,11 @@ import Header from '~/layouts/inc/header.vue'
 const { dir } = useStorefrontLocale()
 </script>
 <template>
- <div class="bg-gray-50 text-gray-800" :dir="dir">
+ <div class="min-h-screen flex flex-col bg-gray-50 text-gray-800" :dir="dir">
     <Header />
+    <div class="flex-1">
       <slot />
+    </div>
     <Footer />
  </div>
 </template>

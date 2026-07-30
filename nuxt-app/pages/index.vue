@@ -550,7 +550,7 @@ onMounted(async () => {
     <!-- Main row -->
     <div class="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6">
       <!-- md: optimized to prevent collisions -->
-      <div class="grid grid-cols-[auto,1fr,auto] md:grid-cols-[1fr,auto,1fr] items-center
+      <div class="grid grid-cols-[auto_1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center
                 gap-2 sm:gap-3 md:gap-3 lg:gap-5 py-2.5 sm:py-3 md:py-3.5 lg:py-4">
 
         <!-- Left: Nav / Hamburger -->
@@ -899,7 +899,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(280px,420px),1fr] lg:items-center">
+            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(280px,420px)_1fr] lg:items-center">
               <div class="relative mx-auto w-full max-w-[420px]">
                 <div v-if="isloadingCategories"
                   class="absolute inset-6 z-10 grid place-items-center rounded-full bg-white/80 backdrop-blur-sm">

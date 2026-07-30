@@ -335,7 +335,7 @@ onMounted(async () => {
 
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">{{ t('profile.phone') }}</label>
-            <div class="grid grid-cols-[120px,1fr] gap-2">
+            <div class="grid grid-cols-[120px_1fr] gap-2">
               <select
                 v-model="form.phoneCountryCode"
                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-200"
