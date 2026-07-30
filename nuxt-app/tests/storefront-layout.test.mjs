@@ -31,3 +31,25 @@ test('storefront grid track lists use Tailwind arbitrary-value spaces', async ()
     }
   }
 })
+
+test('Tailwind 4 keeps the storefront legacy cursor and border defaults', async () => {
+  const css = await source('assets/css/storefront-rtl.css')
+
+  assert.match(css, /border-color:\s*var\(--color-gray-200,\s*#e5e7eb\)/)
+  assert.match(css, /button:not\(:disabled\)/)
+  assert.match(css, /\[role='link'\]/)
+  assert.match(css, /button:disabled/)
+})
+
+test('cart quantity writes remain optimistic while checkout waits for confirmation', async () => {
+  const cartStore = await source('stores/cart.ts')
+  const cartPage = await source('pages/cart/index.vue')
+
+  const optimisticUpdate = cartStore.indexOf('existing.quantity = quantity')
+  const queuedWrite = cartStore.indexOf('quantityQueue.enqueue(product.id, quantity, confirmedQuantity)')
+
+  assert.ok(optimisticUpdate >= 0)
+  assert.ok(queuedWrite > optimisticUpdate)
+  assert.match(cartPage, /cartActionBlocked = computed\(\(\) => cartMutationInFlight\.value \|\| cart\.quantitySyncPending\)/)
+  assert.match(cartPage, /cart\.quantitySyncPending \? t\('cart\.updatingCart'\)/)
+})

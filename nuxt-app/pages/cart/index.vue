@@ -53,7 +53,10 @@ const CHECKOUT_IDEMPOTENCY_SIGNATURE = 'checkout_idempotency_signature'
 const AMWAL_PENDING_ORDER_KEY = 'amwal_pending_order'
 const AMWAL_FORCE_FRESH_KEY = 'amwal_force_fresh_checkout_key'
 const SHIPPING_QUOTE_TTL_MS = 15 * 60 * 1000
+const SHIPPING_QUOTE_DEBOUNCE_MS = 250
 const cartMutationInFlight = ref(false)
+const quantityMutationError = ref('')
+const cartActionBlocked = computed(() => cartMutationInFlight.value || cart.quantitySyncPending)
 const pendingAmwalCheckout = ref<PendingAmwalCheckoutIdentity | null>(null)
 const pendingRecoveryState = ref<PendingRecoveryState>('idle')
 const pendingRecoveryBlocked = computed(() => pendingRecoveryState.value !== 'idle')
@@ -61,6 +64,7 @@ const forceFreshCheckoutKey = ref(false)
 let pendingRecoveryPromise: Promise<PendingRecoveryOutcome> | null = null
 let pendingRecoveryRequested = false
 let externalRecoveryTimer: ReturnType<typeof window.setTimeout> | null = null
+let shippingQuoteTimer: number | null = null
 
 const makeCheckoutIdempotencyKey = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -686,7 +690,25 @@ const quoteKey = computed(() => {
   return `${cart.deliveryMethod}|${cart.selectedAddressId ?? ''}|${itemsKey}`
 })
 
-watch(quoteKey, requestQuotes, { immediate: true })
+const scheduleQuoteRequest = () => {
+  if (!import.meta.client) return
+  if (shippingQuoteTimer !== null) window.clearTimeout(shippingQuoteTimer)
+
+  shippingQuoteTimer = window.setTimeout(() => {
+    shippingQuoteTimer = null
+
+    // A quote must use the quantity confirmed by the cart API. Keep waiting
+    // while rapid optimistic clicks are being coalesced and persisted.
+    if (cart.quantitySyncPending) {
+      scheduleQuoteRequest()
+      return
+    }
+
+    void requestQuotes()
+  }, SHIPPING_QUOTE_DEBOUNCE_MS)
+}
+
+watch(quoteKey, scheduleQuoteRequest, { immediate: true })
 
 // Addresses
 const addresses = ref<any[]>([])
@@ -783,9 +805,10 @@ const grandTotal = computed(() =>
 
 // Qty handlers, address helpers (unchanged)
 const runCartMutation = async (action: () => Promise<void>) => {
-  if (cartMutationInFlight.value) return
+  if (cartActionBlocked.value) return
   if (!(await ensurePendingRecoveryBeforeCartAction())) return
   cartMutationInFlight.value = true
+  quantityMutationError.value = ''
   clearShippingQuotes()
   selectedOptionKey.value = null
   try {
@@ -795,13 +818,29 @@ const runCartMutation = async (action: () => Promise<void>) => {
   }
 }
 
-const onQtyInputChange = async (e: Event, id: number) => {
-  const v = (e.target as HTMLInputElement).valueAsNumber
-  if (v > 0) await runCartMutation(() => cart.updateQuantity(id, v))
+const runQuantityMutation = async (action: () => Promise<void>) => {
+  if (cartMutationInFlight.value || pendingRecoveryBlocked.value) return
+  if (!(await ensurePendingRecoveryBeforeCartAction())) return
+
+  quantityMutationError.value = ''
+  clearShippingQuotes()
+  selectedOptionKey.value = null
+
+  // The store updates the displayed quantity synchronously, then serializes
+  // and coalesces the authenticated API writes in the background.
+  void action().catch((error: any) => {
+    quantityMutationError.value =
+      error?.response?.data?.message || t('cart.quantityUpdateError')
+  })
 }
 
-const incrementQty = async (id: number) => await runCartMutation(() => cart.incrementQty(id))
-const decrementQty = async (id: number) => await runCartMutation(() => cart.decrementQty(id))
+const onQtyInputChange = async (e: Event, id: number) => {
+  const v = (e.target as HTMLInputElement).valueAsNumber
+  if (v > 0) await runQuantityMutation(() => cart.updateQuantity(id, v))
+}
+
+const incrementQty = async (id: number) => await runQuantityMutation(() => cart.incrementQty(id))
+const decrementQty = async (id: number) => await runQuantityMutation(() => cart.decrementQty(id))
 
 const loadCountries = async () => {
   try {
@@ -1007,7 +1046,7 @@ const selectedPickupLocation = computed(() =>
 
 const router = useRouter()
 const goCheckout = async () => {
-  if (cartMutationInFlight.value || quotesLoading.value) return
+  if (cartActionBlocked.value || quotesLoading.value) return
   if (!(await ensurePendingRecoveryBeforeCartAction())) return
   if (!persistCheckout()) return
   router.push('/cart/checkout')
@@ -1063,6 +1102,8 @@ if (locCandidate) cart.selectedLocationId = locCandidate
 onBeforeUnmount(() => {
   if (externalRecoveryTimer !== null) window.clearTimeout(externalRecoveryTimer)
   externalRecoveryTimer = null
+  if (shippingQuoteTimer !== null) window.clearTimeout(shippingQuoteTimer)
+  shippingQuoteTimer = null
   amwalTabLease.stop()
   window.removeEventListener('storage', handlePendingAmwalStorage)
 })
@@ -1093,7 +1134,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               @click="onClearCart"
-              :disabled="cartMutationInFlight || pendingRecoveryBlocked"
+              :disabled="cartActionBlocked || pendingRecoveryBlocked"
               :aria-label="buttonLabel(t('cart.clearLabel'), t(cart.cartItems.length === 1 ? 'common.item' : 'common.items', { count: cart.cartItems.length }))"
               class="inline-flex items-center gap-1 text-red-600 hover:bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md text-xs sm:text-sm transition">
               <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1139,6 +1180,16 @@ onBeforeUnmount(() => {
             {{ t('cart.empty') }}
           </div>
           <template v-else>
+          <div
+            v-if="quantityMutationError"
+            role="alert"
+            class="m-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:m-5"
+          >
+            {{ quantityMutationError }}
+          </div>
+          <p class="sr-only" role="status" aria-live="polite">
+            {{ cart.quantitySyncPending ? t('cart.updatingCart') : '' }}
+          </p>
           <div v-for="item in cart.cartItems" :key="item.id"
             class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90">
             <div class="grid grid-cols-[64px_1fr_auto] sm:grid-cols-[84px_1fr_auto] gap-3 sm:gap-4 items-start">
@@ -1154,7 +1205,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   @click.prevent="onRemoveItem(item.id)"
-                  :disabled="cartMutationInFlight"
+                  :disabled="cartActionBlocked"
                   :aria-label="t('cart.removeItem', { name: productName(item) })"
                   class="mt-1.5 text-xs text-[#00bfa5] hover:underline">
                   {{ t('cart.remove') }}
@@ -1164,11 +1215,16 @@ onBeforeUnmount(() => {
               <!-- qty + price -->
               <div class="text-right">
                 <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1" :for="`cart-qty-${item.id}`">{{ t('cart.qty') }}</label>
-                <div class="flex items-center justify-end gap-1" role="group" :aria-label="t('cart.quantityFor', { name: productName(item) })">
+                <div
+                  class="flex items-center justify-end gap-1"
+                  role="group"
+                  :aria-busy="cart.isQuantitySyncing(item.id)"
+                  :aria-label="t('cart.quantityFor', { name: productName(item) })"
+                >
 	                  <button
 	                    type="button"
 	                    @click="decrementQty(item.id)"
-	                    :disabled="cartMutationInFlight || Number(item.quantity || 1) <= 1"
+	                    :disabled="cartMutationInFlight || pendingRecoveryBlocked || Number(item.quantity || 1) <= 1"
 	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
 	                    :aria-label="quantityButtonLabel('decrease', productName(item), Number(item.quantity || 1) - 1, locale)">−</button>
                   <input :id="`cart-qty-${item.id}`" type="number" min="1" v-model.number="item.quantity"
@@ -1178,8 +1234,8 @@ onBeforeUnmount(() => {
 	                  <button
 	                    type="button"
 	                    @click="incrementQty(item.id)"
-	                    :disabled="cartMutationInFlight"
-	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+	                    :disabled="cartMutationInFlight || pendingRecoveryBlocked || Number(item.quantity || 0) >= Number(item.Product_Stock || 0)"
+	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
 	                    :aria-label="quantityButtonLabel('increase', productName(item), Number(item.quantity || 1) + 1, locale)">+</button>
                 </div>
                 <p :id="`cart-qty-${item.id}-hint`" class="sr-only">{{ t('cart.quantityHint') }}</p>
@@ -1356,8 +1412,8 @@ onBeforeUnmount(() => {
 
             <button type="button" @click="goCheckout" class="mt-3 sm:mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#88c547] hover:from-[#00a891] hover:to-[#76b135]
                      text-white text-center font-semibold py-2.5 rounded-md shadow transition disabled:opacity-60"
-              :disabled="pendingRecoveryBlocked || cartMutationInFlight || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
-              {{ t('cart.proceedToCheckout') }}
+              :disabled="pendingRecoveryBlocked || cartActionBlocked || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
+              {{ cart.quantitySyncPending ? t('cart.updatingCart') : t('cart.proceedToCheckout') }}
             </button>
           </div>
         </div>
@@ -1375,8 +1431,8 @@ onBeforeUnmount(() => {
         </div>
         <button type="button" @click="goCheckout" class="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white
                  bg-[#2f5fb6] hover:bg-[#274f97] transition disabled:bg-gray-300"
-          :disabled="pendingRecoveryBlocked || cartMutationInFlight || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
-          {{ t('cart.checkout') }}
+          :disabled="pendingRecoveryBlocked || cartActionBlocked || quotesLoading || cart.cartItems.length === 0 || (cart.deliveryMethod === 'ship' && !selectedOption)">
+          {{ cart.quantitySyncPending ? t('cart.updatingCart') : t('cart.checkout') }}
         </button>
       </div>
       <div class="h-[env(safe-area-inset-bottom)]"></div>

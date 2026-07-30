@@ -5,6 +5,7 @@ import { useNuxtApp } from "#imports";
 import { useUserStore } from "~/stores/user"; // adjust path/name to your user store
 import { normalizeBulkTiers, resolveBulkTier } from "~/utils/bulkPricing.js";
 import type { BulkPriceTier } from "~/utils/bulkPricing.js";
+import { createLatestQuantityQueue } from "~/utils/latestQuantityQueue.js";
 
 export interface CartItem {
   id: number;
@@ -154,9 +155,63 @@ export const useCartStore = defineStore("cart", () => {
     return tier ? Number(tier.unit_price) : Number(i.price || 0);
   };
 
+  const cartItemsFromApi = (res: any): CartItem[] =>
+    (res?.data?.data || []).map(mapApiToCartItem);
+
   const setCartFromApi = (res: any) => {
-    cartItems.value = (res?.data?.data || []).map(mapApiToCartItem);
+    cartItems.value = cartItemsFromApi(res);
   };
+
+  // Authenticated quantity changes are optimistic in the UI but remain
+  // serialized and authoritative on the server. Rapid clicks are coalesced to
+  // the latest absolute quantity, so an older response can never overwrite a
+  // newer customer choice.
+  const quantitySyncCount = ref(0);
+  const quantitySyncPending = computed(() => quantitySyncCount.value > 0);
+
+  let quantityQueue: ReturnType<typeof createLatestQuantityQueue<number, any>>;
+
+  const setCartFromApiPreservingPending = (
+    res: any,
+    excludedProductId?: number
+  ) => {
+    const nextItems = cartItemsFromApi(res);
+
+    for (const [productId, desiredQuantity] of quantityQueue.desiredEntries(excludedProductId)) {
+      const pendingItem = nextItems.find((item) => item.id === productId);
+      if (pendingItem) pendingItem.quantity = desiredQuantity;
+    }
+
+    cartItems.value = nextItems;
+  };
+
+  quantityQueue = createLatestQuantityQueue<number, any>({
+    delayMs: 200,
+    persist: async (productId, quantity) => $axios.post(
+      "/api/cart/item",
+      { product_id: productId, quantity },
+      { withCredentials: true }
+    ),
+    onResult: (_productId, _quantity, res) => {
+      setCartFromApiPreservingPending(res);
+    },
+    onError: async (productId, _error, state) => {
+      try {
+        const res = await $axios.get("/api/cart", { withCredentials: true });
+        setCartFromApiPreservingPending(res, productId);
+      } catch {
+        if (state.lastResult) {
+          setCartFromApiPreservingPending(state.lastResult, productId);
+        } else {
+          const item = cartItems.value.find((candidate) => candidate.id === productId);
+          if (item) item.quantity = state.confirmed;
+        }
+      }
+    },
+    onPendingChange: (count) => {
+      quantitySyncCount.value = count;
+    },
+  });
 
   // ---------- Public actions ----------
   const loadCart = async () => {
@@ -166,7 +221,7 @@ export const useCartStore = defineStore("cart", () => {
     }
 
     const res = await $axios.get("/api/cart", { withCredentials: true });
-    cartItems.value = (res.data?.data || []).map(mapApiToCartItem);
+    setCartFromApiPreservingPending(res);
   };
 
   const getVat = async (): Promise<number> => {
@@ -192,12 +247,16 @@ export const useCartStore = defineStore("cart", () => {
       return;
     }
 
-    const res = await $axios.post(
-      "/api/cart/item",
-      { product_id: product.id, quantity },
-      { withCredentials: true }
-    );
-    setCartFromApi(res);
+    const existing = cartItems.value.find((item) => item.id === product.id);
+    const confirmedQuantity = Number(existing?.quantity ?? quantity);
+
+    if (existing) {
+      existing.quantity = quantity;
+    } else {
+      cartItems.value.push({ ...product, quantity });
+    }
+
+    await quantityQueue.enqueue(product.id, quantity, confirmedQuantity);
   };
 
   const removeItem = async (productId: number) => {
@@ -347,6 +406,7 @@ const decrementQty = async (productId: number) => {
     selectedLocationId,
     totalItems,
     vat,
+    quantitySyncPending,
     
     getVat,
     loadCart,
@@ -362,6 +422,7 @@ const decrementQty = async (productId: number) => {
     bulkTierFor,
     hasBulkPricing,
     effectiveUnitPrice,
+    isQuantitySyncing: (productId: number) => quantityQueue.isPending(productId),
     updateQuantity,
     incrementQty,
 

@@ -1,3 +1,29 @@
+/*
+ * Tailwind 3 compatibility defaults used by the original storefront.
+ * Tailwind 4 intentionally changed both behaviors, which made legacy
+ * uncolored borders dark and removed the hand cursor from real buttons.
+ */
+@layer base {
+  *,
+  ::before,
+  ::after,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, #e5e7eb);
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='link'] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
 :root[dir='rtl'] body {
   direction: rtl;
 }
