@@ -56,7 +56,7 @@ const mobileMenuOpen = ref(false);
 
     <!-- Top slim bar -->
     <div class="hidden sm:block bg-slate-50 text-[12px] sm:text-[13px] text-slate-600">
-      <div class="max-w-screen-2xl mx-auto h-9 sm:h-10 px-3 sm:px-5 flex items-center justify-between">
+      <div class="max-w-screen-2xl mx-auto h-8 px-3 sm:px-5 flex items-center justify-between">
         <div class="flex items-center gap-4 sm:gap-6">
           <div class="flex items-center gap-2 sm:gap-3">
             <span class="font-medium text-slate-700 hidden md:inline">{{ t('nav.payments') }}</span>
@@ -85,7 +85,7 @@ const mobileMenuOpen = ref(false);
     <div class="max-w-screen-2xl mx-auto px-3 sm:px-4 md:px-6">
       <!-- md: optimized to prevent collisions -->
       <div class="grid grid-cols-[auto_1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center
-                gap-2 sm:gap-3 md:gap-3 lg:gap-5 py-2.5 sm:py-3 md:py-3.5 lg:py-4">
+                gap-2 sm:gap-3 md:gap-3 lg:gap-4 py-2">
 
         <!-- Left: Nav / Hamburger -->
         <div class="flex items-center">
@@ -100,7 +100,7 @@ const mobileMenuOpen = ref(false);
 
           <!-- Desktop nav (tighter at md, roomy at lg) -->
           <nav
-            class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[17px] font-semibold text-slate-700">
+            class="hidden md:flex items-center gap-5 lg:gap-8 text-[14px] md:text-[15px] lg:text-[16px] font-semibold text-slate-700">
             <NuxtLink :to="localePath('/')" class="pb-1 border-b-2"
               :class="publicPath === '/' ? 'border-emerald-600 text-slate-900' : 'border-transparent hover:text-slate-900'">
               {{ t('nav.home') }}
@@ -129,16 +129,16 @@ const mobileMenuOpen = ref(false);
         <!-- Center: Logo + name (scale down at md, big at lg) -->
         <div class="justify-self-center flex flex-col items-center min-w-0">
           <NuxtLink :to="localePath('/')" class="flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-4" @click="mobileMenuOpen = false">
-            <img src="/logonew1.jpg" alt="Industrial Supplies Center LLC" class="h-10 w-auto object-contain sm:h-12 md:h-12 lg:h-16" />
+            <img src="/logonew1.jpg" alt="Industrial Supplies Center LLC" class="h-9 w-auto object-contain sm:h-10 md:h-10 lg:h-11" />
           </NuxtLink>
           <span
-            class="mt-1.5 sm:mt-2 text-[14px] sm:text-[15px] md:text-[15px] lg:text-[17px] font-semibold text-slate-800 text-center truncate">
+            class="mt-1 text-[13px] sm:text-sm font-semibold text-slate-800 text-center truncate">
             Industrial Supplies Center LLC
           </span>
         </div>
 
         <!-- Right: Cart + Checkout + Account -->
-        <div class="justify-self-end flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-5">
+        <div class="justify-self-end flex items-center gap-2 sm:gap-3 md:gap-3 lg:gap-3">
           <!-- Cart (compact at md, larger at lg) -->
           <NuxtLink to="/cart" class="relative inline-flex items-center justify-center rounded-full p-1.5 md:p-2
                     ring-1 ring-slate-200 bg-white/90 hover:bg-white transition
@@ -168,7 +168,7 @@ const mobileMenuOpen = ref(false);
 
           <!-- Tablet + Desktop checkout -->
         
-          <NuxtLink v-if="isAuthenticated" to="/cart" class="hidden md:inline-flex inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white
+          <NuxtLink v-if="isAuthenticated" to="/cart" class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white
          bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">
             <CreditCardIcon class="inline-block w-4 h-4 lg:w-5 lg:h-5" aria-hidden="true" />
@@ -176,7 +176,7 @@ const mobileMenuOpen = ref(false);
           </NuxtLink>
           <!-- Account / Auth (HIDE at md to save width, show at lg) -->
           <div class="hidden lg:flex items-center gap-3 text-[15px]">
-            <NuxtLink v-if="isAuthenticated" to="/account" class="hidden md:inline-flex inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white 
+            <NuxtLink v-if="isAuthenticated" to="/account" class="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-white
                   bg-[#2f5fb6] hover:bg-[#264c95] shadow-sm
                   focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#07B6C6]">
 
@@ -203,11 +203,11 @@ const mobileMenuOpen = ref(false);
     </div>
 
     <!-- Blue divider -->
-    <div class="h-1.5 sm:h-2 bg-[#2f5fb6]"></div>
+    <div class="h-1 bg-[#2f5fb6]"></div>
 
     <!-- Search bar -->
     <div class="bg-white">
-      <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+      <div class="max-w-[900px] w-full mx-auto px-3 sm:px-4 md:px-6 py-2">
         <SearchAutocomplete :min-chars="2" :limit="10" :placeholder="t('nav.searchPlaceholder')"
           @select="gotoProduct" />
       </div>

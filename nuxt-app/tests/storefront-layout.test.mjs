@@ -32,6 +32,24 @@ test('storefront grid track lists use Tailwind arbitrary-value spaces', async ()
   }
 })
 
+test('storefront headers keep a compact responsive height contract', async () => {
+  for (const path of ['layouts/inc/header.vue', 'pages/index.vue']) {
+    const contents = await source(path)
+    const header = contents.match(/<header\b[\s\S]*?<\/header>/)?.[0]
+
+    assert.ok(header, `${path} must contain the storefront header`)
+    assert.ok(header.includes('h-8 px-3 sm:px-5'), `${path} must keep the utility bar compact`)
+    assert.ok(header.includes('lg:gap-4 py-2'), `${path} must keep the main row compact`)
+    assert.ok(header.includes('h-9 w-auto object-contain sm:h-10 md:h-10 lg:h-11'), `${path} must use the compact responsive logo scale`)
+    assert.ok(header.includes('mt-1 text-[13px] sm:text-sm'), `${path} must use the compact business name scale`)
+    assert.ok(header.includes('h-1 bg-[#2f5fb6]'), `${path} must use the slim brand divider`)
+    assert.ok(header.includes('md:px-6 py-2'), `${path} must keep the search row compact`)
+    assert.doesNotMatch(header, /lg:h-16/)
+    assert.doesNotMatch(header, /sm:py-4/)
+    assert.doesNotMatch(header, /hidden md:inline-flex inline-flex/)
+  }
+})
+
 test('Tailwind 4 keeps the storefront legacy cursor and border defaults', async () => {
   const css = await source('assets/css/storefront-rtl.css')
 

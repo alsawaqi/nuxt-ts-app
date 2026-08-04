@@ -108,7 +108,7 @@ function label(item: any) {
 
 <template>
   <div ref="box" class="relative">
-    <div class="flex items-stretch rounded-full bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[#2F5FB6] transition">
+    <div class="flex min-h-11 items-stretch rounded-full bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-[#2F5FB6] transition">
       <input
         ref="inputEl"
         v-model="q"
@@ -116,7 +116,7 @@ function label(item: any) {
         @keydown="onKeydown"
         @focus="() => { if (results.length) open = true }"
         type="text"
-        class="w-full px-4 sm:px-5 py-2.5 sm:py-3 text-[14px] sm:text-[16px] text-slate-700 placeholder:text-slate-400 outline-none"
+        class="w-full px-4 sm:px-5 py-2 text-sm text-slate-700 placeholder:text-slate-400 outline-none"
         aria-autocomplete="list"
         :aria-expanded="open"
         aria-controls="search-listbox"
