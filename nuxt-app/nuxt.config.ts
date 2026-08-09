@@ -1,6 +1,9 @@
 // nuxt.config.ts
 import { defineNuxtConfig } from 'nuxt/config'
 
+const apiBase = process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:83'
+const uploadsUrl = process.env.NUXT_PUBLIC_UPLOADS_URL || apiBase.replace(/\/+$/, '') + '/storage'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-05-15',
   ssr: true,
@@ -47,9 +50,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:83',
+      apiBase,
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
-      r2Url: 'https://pub-85c3b7ddc4814c45b25c1a5fb5bdad3f.r2.dev',
+      uploadsUrl,
+      r2Url: uploadsUrl,
     },
   },
 })

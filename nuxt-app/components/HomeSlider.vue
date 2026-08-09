@@ -33,7 +33,7 @@ const { data: sliderData, pending } = await useAsyncData<Slide[]>(
 const slides = computed(() => sliderData.value || [])
 const loading = computed(() => pending.value)
 
-const publicR2Base = () => String(config.public.r2Url || '').replace(/\/+$/, '')
+const publicUploadsBase = () => String(config.public.uploadsUrl || '').replace(/\/+$/, '')
 
 function normalizeSliderImagePath(value?: string | null) {
   const raw = String(value || '').trim().replace(/\\/g, '/')
@@ -42,7 +42,6 @@ function normalizeSliderImagePath(value?: string | null) {
   if (/^https?:\/\//i.test(raw)) {
     try {
       const url = new URL(raw)
-      if (url.hostname.includes('r2.dev')) return raw
 
       const path = decodeURIComponent(url.pathname).replace(/^\/+/, '')
       const sliderIndex = path.indexOf('Sliders/')
@@ -66,7 +65,7 @@ function normalizeSliderImagePath(value?: string | null) {
 }
 
 const img = (slide: Slide) => {
-  const base = publicR2Base()
+  const base = publicUploadsBase()
   const path = normalizeSliderImagePath(slide.Image_Path || slide.image_url)
   if (!path) return ''
   if (/^https?:\/\//i.test(path)) return path
