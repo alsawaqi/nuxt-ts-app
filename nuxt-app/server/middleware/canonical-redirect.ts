@@ -7,7 +7,7 @@ import {
 import {
   canonicalRedirectLocation,
   firstForwardedValue,
-} from '../../utils/seoRouting.js'
+} from '~/utils/seoRouting.js'
 
 const forwardedProtocol = (event: Parameters<typeof getHeader>[0], fallback: string) => {
   const cfVisitor = getHeader(event, 'cf-visitor')
