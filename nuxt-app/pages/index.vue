@@ -984,14 +984,14 @@ onMounted(async () => {
               <!-- Grid Mode: Premium card layout -->
               <div v-if="viewMode === 'grid'">
                 <TransitionGroup name="cat" tag="div"
-                  class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   <button v-for="department in prodcutsDepartments" :key="department.id"
                     @click="fetchSubCategories(department.id)" :aria-label="categoryName(department)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                                       hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
                                       focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
                     <div class="flex h-full flex-col p-4">
                       <!-- Image area -->
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
+                      <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                                               ring-1 ring-slate-100 overflow-hidden">
                         <img :src="`${$r2Url}/` + department.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
@@ -1026,13 +1026,13 @@ onMounted(async () => {
 
               <!-- GRID mode -->
               <div v-if="viewMode === 'grid'" class="">
-                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
                     :aria-label="categoryName(sub)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                   hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
                   focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
                     <div class="flex h-full flex-col p-4">
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
+                      <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
                         <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
@@ -1067,7 +1067,7 @@ onMounted(async () => {
 
               <!-- GRID mode -->
               <div v-if="viewMode === 'grid'">
-                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
                     path: localePath(`/departments/${subSub.Slug}`),
                     query: {
@@ -1075,10 +1075,10 @@ onMounted(async () => {
                       subId: selectedSubCategory ?? undefined,
                       subSubId: subSub.id
                     }
-                  }" :aria-label="categoryName(subSub)" class="group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
+                  }" :aria-label="categoryName(subSub)" class="group relative block rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                   hover:shadow-md hover:ring-slate-300 transition-all duration-200 h-full">
                     <div class="flex h-full flex-col p-4">
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
+                      <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
                         <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
