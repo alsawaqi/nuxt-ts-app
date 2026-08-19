@@ -20,6 +20,17 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nuxt-ui-nginx-prod
+    # The host source remains owner-only. Prepare a worker-readable copy
+    # inside the container before Nginx starts its unprivileged workers.
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        cp /etc/nginx/avinaq.htpasswd /tmp/avinaq.htpasswd
+        chown 101:101 /tmp/avinaq.htpasswd
+        chmod 0400 /tmp/avinaq.htpasswd
+        exec /docker-entrypoint.sh nginx -g "daemon off;"
     volumes:
       - ./docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nuxt-app/public/.well-known:/var/www/.well-known:ro

@@ -127,9 +127,10 @@ jobs:
           docker compose -f docker-compose.prod.yml exec -T nginx nginx -t
           docker compose -f docker-compose.prod.yml exec -T nginx \
             test -s /etc/nginx/avinaq.htpasswd
+          docker compose -f docker-compose.prod.yml exec -T nginx test -s /tmp/avinaq.htpasswd
           # Nginx workers run as uid/gid 101. Confirm they can read the
-          # VPS-only credential file before any authenticated smoke test.
-          docker compose -f docker-compose.prod.yml exec -T --user 101:101 nginx test -r /etc/nginx/avinaq.htpasswd
+          # container-private credential copy before any authenticated smoke test.
+          docker compose -f docker-compose.prod.yml exec -T --user 101:101 nginx test -r /tmp/avinaq.htpasswd
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if docker compose -f docker-compose.prod.yml exec -T nuxt-ui-app \
