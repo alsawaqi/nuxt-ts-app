@@ -988,17 +988,16 @@ onMounted(async () => {
                   <button v-for="department in prodcutsDepartments" :key="department.id"
                     @click="fetchSubCategories(department.id)" :aria-label="categoryName(department)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                                       hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
-                                      focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
-                    <div class="p-4">
+                                      focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
+                    <div class="flex h-full flex-col p-4">
                       <!-- Image area -->
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
                                               ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + department.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                                            group-hover:scale-[1.03]" />
+                        <img :src="`${$r2Url}/` + department.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
 
                       <!-- Title -->
-                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                      <h3 class="mt-3 min-h-10 text-[13px] sm:text-[14px] leading-5 font-semibold text-slate-800 line-clamp-2">
                         {{ categoryName(department) }}
                       </h3>
                     </div>
@@ -1031,15 +1030,14 @@ onMounted(async () => {
                   <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
                     :aria-label="categoryName(sub)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                   hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
-                  focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1">
-                    <div class="p-4">
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                  focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
+                    <div class="flex h-full flex-col p-4">
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                        group-hover:scale-[1.03]" />
+                        <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
 
-                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                      <h3 class="mt-3 min-h-10 text-[13px] sm:text-[14px] leading-5 font-semibold text-slate-800 line-clamp-2">
                         {{ categoryName(sub) }}
                       </h3>
                     </div>
@@ -1078,15 +1076,14 @@ onMounted(async () => {
                       subSubId: subSub.id
                     }
                   }" :aria-label="categoryName(subSub)" class="group relative rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
-                  hover:shadow-md hover:ring-slate-300 transition-all duration-200">
-                    <div class="p-4">
-                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 grid place-items-center
+                  hover:shadow-md hover:ring-slate-300 transition-all duration-200 h-full">
+                    <div class="flex h-full flex-col p-4">
+                      <div class="aspect-[4/3] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="max-h-full max-w-[92%] object-contain transition-transform duration-200
-                        group-hover:scale-[1.03]" />
+                        <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
                       </div>
 
-                      <h3 class="mt-3 text-[13px] sm:text-[14px] font-semibold text-slate-800 line-clamp-2">
+                      <h3 class="mt-3 min-h-10 text-[13px] sm:text-[14px] leading-5 font-semibold text-slate-800 line-clamp-2">
                         {{ categoryName(subSub) }}
                       </h3>
                     </div>
