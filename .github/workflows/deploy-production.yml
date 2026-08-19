@@ -44,9 +44,13 @@ jobs:
 
       - name: Validate production Nginx configuration
         run: |
+          auth_file="$(mktemp)"
+          trap 'rm -f "$auth_file"' EXIT
+          printf '%s\n' "ci-validation:\$apr1\$gatechec\$XENYm8kLoRIhyJyADhT/I." > "$auth_file"
           docker run --rm \
             --add-host nuxt-ui-app:127.0.0.1 \
             --volume "$PWD/docker/prod/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            --volume "$auth_file:/etc/nginx/avinaq.htpasswd:ro" \
             nginx:alpine nginx -t
 
       - name: Install dependencies
@@ -111,14 +115,22 @@ jobs:
           test "$(git rev-parse HEAD)" = "$deploy_sha"
           test -z "$(git status --porcelain --untracked-files=all)"
 
+          auth_file="/home/abdallah/.secrets/avinaq.htpasswd"
+          test -f "$auth_file"
+          test -s "$auth_file"
+          test -r "$auth_file"
+          test ! -L "$auth_file"
+
           docker compose --env-file .env.production -f docker-compose.prod.yml \
             up -d --build --force-recreate nuxt-ui-app nginx
 
           docker compose -f docker-compose.prod.yml exec -T nginx nginx -t
+          docker compose -f docker-compose.prod.yml exec -T nginx \
+            test -s /etc/nginx/avinaq.htpasswd
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if docker compose -f docker-compose.prod.yml exec -T nginx \
-              wget -qO- --header='Host: avinaq.com' http://127.0.0.1/ > /dev/null; then
+              wget -qO- --header='Host: avinaq.com' http://nuxt-ui-app:3000/ > /dev/null; then
               break
             fi
             test "$attempt" -lt 10
@@ -130,8 +142,10 @@ jobs:
           sitemap_body="$(mktemp)"
           trap 'rm -f "$association_body" "$robots_body" "$sitemap_body"' EXIT
 
-          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
-            --max-time 20 https://avinaq.com/ > /dev/null
+          homepage_status="$(curl -sS --max-redirs 0 --max-time 20 \
+            -o /dev/null -w '%{http_code}' \
+            https://avinaq.com/)"
+          test "$homepage_status" = "401"
 
           association_status="$(curl -sS --max-redirs 0 --max-time 20 \
             -o "$association_body" -w '%{http_code}' \
@@ -143,21 +157,12 @@ jobs:
           robots_status="$(curl -sS --max-redirs 0 --max-time 20 \
             -o "$robots_body" -w '%{http_code}' \
             https://avinaq.com/robots.txt)"
-          test "$robots_status" = "200"
-          grep -Fqx 'Sitemap: https://avinaq.com/sitemap.xml' "$robots_body"
-          ! grep -Fq 'localhost' "$robots_body"
+          test "$robots_status" = "401"
 
-          sitemap_result="$(curl -sS --max-redirs 0 --max-time 30 \
-            -o "$sitemap_body" -w '%{http_code} %{content_type}' \
+          sitemap_status="$(curl -sS --max-redirs 0 --max-time 30 \
+            -o "$sitemap_body" -w '%{http_code}' \
             https://avinaq.com/sitemap.xml)"
-          read -r sitemap_status sitemap_content_type <<< "$sitemap_result"
-          test "$sitemap_status" = "200"
-          case "$sitemap_content_type" in application/xml*) ;; *) exit 1 ;; esac
-          grep -Fq 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' "$sitemap_body"
-          grep -Fq 'hreflang="en-OM"' "$sitemap_body"
-          grep -Fq 'hreflang="ar-OM"' "$sitemap_body"
-          grep -Fq '<loc>https://avinaq.com/ar' "$sitemap_body"
-          ! grep -Fq 'localhost' "$sitemap_body"
+          test "$sitemap_status" = "401"
 
           www_result="$(curl -sS --max-redirs 0 --max-time 20 \
             -o /dev/null -w '%{http_code} %{redirect_url}' \
@@ -172,3 +177,42 @@ jobs:
           trap - EXIT
           echo "Storefront deployment completed: $deploy_sha"
           REMOTE
+
+      - name: Verify authorized storefront access
+        env:
+          AVINAQ_SMOKE_BASIC_AUTH: ${{ secrets.AVINAQ_SMOKE_BASIC_AUTH }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$AVINAQ_SMOKE_BASIC_AUTH"
+
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors \
+            --max-time 20 --user "$AVINAQ_SMOKE_BASIC_AUTH" \
+            https://avinaq.com/ > /dev/null
+
+          robots_body="$(mktemp)"
+          sitemap_body="$(mktemp)"
+          trap 'rm -f "$robots_body" "$sitemap_body"' EXIT
+
+          curl -fsS --max-time 20 --user "$AVINAQ_SMOKE_BASIC_AUTH" \
+            -o "$robots_body" https://avinaq.com/robots.txt
+          grep -Fqx 'Sitemap: https://avinaq.com/sitemap.xml' "$robots_body"
+          if grep -Fq 'localhost' "$robots_body"; then
+            exit 1
+          fi
+
+          sitemap_result="$(curl -fsS --max-time 30 --user "$AVINAQ_SMOKE_BASIC_AUTH" \
+            -o "$sitemap_body" -w '%{content_type}' https://avinaq.com/sitemap.xml)"
+          case "$sitemap_result" in application/xml*) ;; *) exit 1 ;; esac
+          grep -Fq 'xmlns:xhtml="http://www.w3.org/1999/xhtml"' "$sitemap_body"
+          grep -Fq 'hreflang="en-OM"' "$sitemap_body"
+          grep -Fq 'hreflang="ar-OM"' "$sitemap_body"
+          grep -Fq '<loc>https://avinaq.com/ar' "$sitemap_body"
+          if grep -Fq 'localhost' "$sitemap_body"; then
+            exit 1
+          fi
+
+          origin_status="$(curl -sS --resolve "avinaq.com:443:$VPS_HOST" \
+            --max-redirs 0 --max-time 20 -o /dev/null -w '%{http_code}' \
+            https://avinaq.com/)"
+          test "$origin_status" = "401"
