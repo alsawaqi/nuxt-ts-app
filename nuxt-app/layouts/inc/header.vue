@@ -39,7 +39,7 @@ function gotoProduct(item: any) {
   }
 
   if (item.Slug) {
-    router.push(localePath(`/product/${item.Slug}`))
+    router.push({ path: localePath(`/product/${item.Slug}`), query: item.Vendor_Offer_Id ? { vendor_offer_id: item.Vendor_Offer_Id } : {} })
     return
   }
 

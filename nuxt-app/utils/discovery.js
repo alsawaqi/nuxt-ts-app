@@ -51,6 +51,7 @@ export const filterAndSortProducts = (products, options = {}) => {
 const recentlyViewedProduct = (product) => Object.fromEntries(
   Object.entries({
     id: product?.id,
+    vendor_offer_id: product?.vendor_offer_id ?? product?.Vendor_Offer_Id,
     slug: product?.slug || product?.Slug,
     name: product?.name || product?.Product_Name,
     name_ar: product?.name_ar || product?.Product_Name_Ar,

@@ -164,7 +164,7 @@ const clearAllFilters = () => {                            // clear all groups
 
 
 
-const goProduct = (slug: string) => router.push(localePath(`/product/${slug}`))
+const goProduct = (slug: string, offerId?: number | null) => router.push({ path: localePath(`/product/${slug}`), query: offerId ? { vendor_offer_id: offerId } : {} })
 
 
 
@@ -969,7 +969,7 @@ onBeforeUnmount(() => {
 
           <div v-else-if="subsubdepartment?.View_Options === true && visibleRows.length"
             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            <article v-for="row in visibleRows" :key="row.id" @click="goProduct(row.slug)" @keydown.enter="goProduct(row.slug)" @keydown.space.prevent="goProduct(row.slug)"
+            <article v-for="row in visibleRows" :key="row.listing_key || row.id" @click="goProduct(row.slug, row.vendor_offer_id)" @keydown.enter="goProduct(row.slug, row.vendor_offer_id)" @keydown.space.prevent="goProduct(row.slug, row.vendor_offer_id)"
               role="link" tabindex="0" :aria-label="t('listing.viewProduct', { name: productName(row) })"
               class="group relative rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 hover:shadow-lg hover:-translate-y-[2px] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50">
               <!-- top image -->
@@ -986,6 +986,7 @@ onBeforeUnmount(() => {
                 <div class="flex items-start justify-between gap-3">
                   <h3 class="text-[15px] font-semibold text-slate-900 line-clamp-2">
                     {{ productName(row) }}
+                    <span class="block text-xs font-normal text-slate-500">{{ row.seller_name || 'ISC' }}</span>
                   </h3>
                   <div class="text-right shrink-0">
                     <div
@@ -1006,7 +1007,7 @@ onBeforeUnmount(() => {
                   <span class="flex text-amber-500" aria-hidden="true">
                     <span
                       v-for="(state, starIndex) in starStates(row.review_summary?.average_rating)"
-                      :key="`${row.id}-star-${starIndex}`"
+                      :key="`${row.listing_key || row.id}-star-${starIndex}`"
                       :class="state === 'empty' ? 'text-slate-300' : 'text-amber-500'"
                     >★</span>
                   </span>
@@ -1068,12 +1069,12 @@ onBeforeUnmount(() => {
               </thead>
 
               <tbody class="divide-y divide-slate-100 text-[13px]">
-	                <tr v-for="row in visibleRows" :key="row.id" @click="goProduct(row.slug)" @keydown.enter="goProduct(row.slug)" @keydown.space.prevent="goProduct(row.slug)"
+	                <tr v-for="row in visibleRows" :key="row.listing_key || row.id" @click="goProduct(row.slug, row.vendor_offer_id)" @keydown.enter="goProduct(row.slug, row.vendor_offer_id)" @keydown.space.prevent="goProduct(row.slug, row.vendor_offer_id)"
 	                  role="row" tabindex="0" :aria-label="t('listing.viewProduct', { name: productName(row) })"
 	                  class="group cursor-pointer odd:bg-white even:bg-slate-50 hover:bg-cyan-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40">
                   <!-- Name -->
 	                  <td class="px-5 py-3 font-medium text-slate-900 whitespace-nowrap truncate" :title="productName(row)">
-	                    <div>{{ productName(row) }}</div>
+	                    <div>{{ productName(row) }}</div><div class="text-xs text-slate-500">{{ row.seller_name || 'ISC' }}</div>
 	                    <div class="mt-1 flex items-center gap-1 text-xs text-slate-500" :aria-label="formatRatingSummary(row.review_summary).label">
 	                      <span class="text-amber-500" aria-hidden="true">★</span>
 	                      <span>{{ formatRatingSummary(row.review_summary).average }}</span>
@@ -1082,7 +1083,7 @@ onBeforeUnmount(() => {
 	                  </td>
 
                   <!-- Dynamic specs -->
-                  <td v-for="h in headers" :key="`${row.id}:${h.id}`"
+                  <td v-for="h in headers" :key="`${row.listing_key || row.id}:${h.id}`"
                     class="px-5 py-3 text-slate-700 whitespace-nowrap truncate" :title="row.specs[h.id]?.label ?? '—'">
                     {{ row.specs[h.id]?.label ?? '—' }}
                   </td>

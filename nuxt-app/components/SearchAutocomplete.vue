@@ -151,7 +151,7 @@ function label(item: any) {
         <ul v-else class="max-h-[56vh] overflow-auto py-1">
           <li
             v-for="(item,i) in results"
-            :key="`${item.Result_Type || 'product'}-${item.id}`"
+            :key="`${item.Result_Type || 'product'}-${item.Listing_Key || item.id}`"
             :aria-selected="i===highlightedIndex"
             role="option"
             @mouseenter="highlightedIndex = i"
@@ -175,6 +175,7 @@ function label(item: any) {
               <div class="font-medium text-slate-800 truncate">{{ label(item).name }}</div>
               <div class="text-[12px] text-slate-500 truncate" v-if="label(item).code">
                 {{ label(item).code }}
+                <span v-if="item.Seller_Name" class="block font-semibold text-slate-700">{{ item.Seller_Name }} · {{ t('common.omr') }} {{ Number(item.Product_Price).toFixed(3) }}</span>
               </div>
             </div>
           </li>

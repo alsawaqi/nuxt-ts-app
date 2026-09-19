@@ -1,4 +1,5 @@
 // stores/cart.ts
+import { offerKey, offerSelection, sameOffer } from "~/utils/offerIdentity.js";
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { useNuxtApp } from "#imports";
@@ -8,6 +9,9 @@ import type { BulkPriceTier } from "~/utils/bulkPricing.js";
 import { createLatestQuantityQueue } from "~/utils/latestQuantityQueue.js";
 
 export interface CartItem {
+  vendorOfferId?: number | null;
+  sellerName?: string;
+  isUnavailable?: boolean;
   id: number;
   slug: string;
   name: string;
@@ -89,6 +93,9 @@ export const useCartStore = defineStore("cart", () => {
 
     return {
       id: Number(row.Products_Id ?? p.id),
+      vendorOfferId: row.Vendor_Offer_Id ?? p.Vendor_Offer_Id ?? null,
+      sellerName: p.Seller_Name ?? "ISC",
+      isUnavailable: Boolean(row.is_unavailable),
       slug: p.Slug ?? p.Product_Slug ?? "",
       name: p.Product_Name ?? "",
       name_ar: p.Product_Name_Ar ?? "",
@@ -169,27 +176,27 @@ export const useCartStore = defineStore("cart", () => {
   const quantitySyncCount = ref(0);
   const quantitySyncPending = computed(() => quantitySyncCount.value > 0);
 
-  let quantityQueue: ReturnType<typeof createLatestQuantityQueue<number, any>>;
+  let quantityQueue: ReturnType<typeof createLatestQuantityQueue<string, any>>;
 
   const setCartFromApiPreservingPending = (
     res: any,
-    excludedProductId?: number
+    excludedProductId?: string
   ) => {
     const nextItems = cartItemsFromApi(res);
 
     for (const [productId, desiredQuantity] of quantityQueue.desiredEntries(excludedProductId)) {
-      const pendingItem = nextItems.find((item) => item.id === productId);
+      const pendingItem = nextItems.find((item) => offerKey(item) === productId);
       if (pendingItem) pendingItem.quantity = desiredQuantity;
     }
 
     cartItems.value = nextItems;
   };
 
-  quantityQueue = createLatestQuantityQueue<number, any>({
+  quantityQueue = createLatestQuantityQueue<string, any>({
     delayMs: 200,
     persist: async (productId, quantity) => $axios.post(
       "/api/cart/item",
-      { product_id: productId, quantity },
+      { ...offerSelection(productId), quantity },
       { withCredentials: true }
     ),
     onResult: (_productId, _quantity, res) => {
@@ -203,7 +210,7 @@ export const useCartStore = defineStore("cart", () => {
         if (state.lastResult) {
           setCartFromApiPreservingPending(state.lastResult, productId);
         } else {
-          const item = cartItems.value.find((candidate) => candidate.id === productId);
+          const item = cartItems.value.find((candidate) => offerKey(candidate) === productId);
           if (item) item.quantity = state.confirmed;
         }
       }
@@ -237,7 +244,7 @@ export const useCartStore = defineStore("cart", () => {
     quantity: number
   ) => {
     if (!isAuthed.value) {
-      const idx = cartItems.value.findIndex((i) => i.id === product.id);
+      const idx = cartItems.value.findIndex((i) => sameOffer(i, product));
       if (idx >= 0 && cartItems.value[idx]) {
         cartItems.value[idx].quantity = quantity;
       } else {
@@ -247,7 +254,7 @@ export const useCartStore = defineStore("cart", () => {
       return;
     }
 
-    const existing = cartItems.value.find((item) => item.id === product.id);
+    const existing = cartItems.value.find((item) => sameOffer(item, product));
     const confirmedQuantity = Number(existing?.quantity ?? quantity);
 
     if (existing) {
@@ -256,17 +263,18 @@ export const useCartStore = defineStore("cart", () => {
       cartItems.value.push({ ...product, quantity });
     }
 
-    await quantityQueue.enqueue(product.id, quantity, confirmedQuantity);
+    await quantityQueue.enqueue(offerKey(product), quantity, confirmedQuantity);
   };
 
-  const removeItem = async (productId: number) => {
+  const removeItem = async (productId: number, vendorOfferId: number | null = null) => {
     if (!isAuthed.value) {
-      cartItems.value = cartItems.value.filter((i) => i.id !== productId);
+      cartItems.value = cartItems.value.filter((i) => !sameOffer(i, { id: productId, vendorOfferId }));
       saveGuest();
       return;
     }
 
     await $axios.delete(`/api/cart/item/${productId}`, {
+      params: { vendor_offer_id: vendorOfferId },
       withCredentials: true,
     });
     await loadCart();
@@ -287,15 +295,11 @@ export const useCartStore = defineStore("cart", () => {
     }
 
     // include current memory cart too (dedupe by id, prefer latest quantity)
-    const mergedMap = new Map<number, number>();
-    for (const i of guest)
-      mergedMap.set(i.id, Math.max(1, Math.floor(Number(i.quantity) || 1)));
-    for (const i of cartItems.value)
-      mergedMap.set(i.id, Math.max(1, Math.floor(Number(i.quantity) || 1)));
-
-    const items = Array.from(mergedMap.entries()).map(
-      ([product_id, quantity]) => ({ product_id, quantity })
-    );
+    const mergedMap = new Map<string, number>();
+    for (const item of [...guest, ...cartItems.value]) {
+      mergedMap.set(offerKey(item), Math.max(1, Math.floor(Number(item.quantity) || 1)));
+    }
+    const items = Array.from(mergedMap.entries()).map(([key, quantity]) => ({ ...offerSelection(key), quantity }));
     if (!items.length) return;
 
     await $axios.post("/api/cart/sync", { items }, { withCredentials: true });
@@ -309,7 +313,7 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
 
   // guest
   if (!isAuthed.value) {
-    const existing = cartItems.value.find(i => i.id === product.id)
+    const existing = cartItems.value.find(i => sameOffer(i, product))
     if (existing) existing.quantity += qtyToAdd
     else cartItems.value.push({ ...product, quantity: qtyToAdd })
     saveGuest()
@@ -319,7 +323,7 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
   // authed → increment in DB
   const res = await $axios.post(
     "/api/cart/add",
-    { product_id: product.id, quantity: qtyToAdd },
+    { product_id: product.id, vendor_offer_id: product.vendorOfferId ?? null, quantity: qtyToAdd },
     { withCredentials: true }
   )
   setCartFromApi(res)
@@ -351,8 +355,8 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
   };
 
   // ✅ set qty by product id (works for guest + logged-in)
-  const updateQuantity = async (productId: number, quantity: number) => {
-    const it = cartItems.value.find((i) => i.id === productId);
+  const updateQuantity = async (productId: number, quantity: number, vendorOfferId: number | null = null) => {
+    const it = cartItems.value.find((i) => sameOffer(i, { id: productId, vendorOfferId }));
     if (!it) return;
 
     const qty = Math.max(1, Math.floor(Number(quantity) || 1));
@@ -361,30 +365,30 @@ const addToCart = async (product: Omit<CartItem, "quantity">, addQty = 1) => {
   };
 
   // ✅ increment/decrement (persisted)
- const incrementQty = async (productId: number) => {
-  const it = cartItems.value.find((i) => i.id === productId);
+ const incrementQty = async (productId: number, vendorOfferId: number | null = null) => {
+  const it = cartItems.value.find((i) => sameOffer(i, { id: productId, vendorOfferId }));
   if (!it) return;
 
   // Check stock limit
   if (it.quantity < it.Product_Stock) {
-    await updateQuantity(productId, it.quantity + 1);
+    await updateQuantity(productId, it.quantity + 1, vendorOfferId);
   } else {
      
   }
 };
 
-const decrementQty = async (productId: number) => {
-  const it = cartItems.value.find((i) => i.id === productId);
+const decrementQty = async (productId: number, vendorOfferId: number | null = null) => {
+  const it = cartItems.value.find((i) => sameOffer(i, { id: productId, vendorOfferId }));
   if (!it) return;
 
   if (it.quantity > 1) {
-    await updateQuantity(productId, it.quantity - 1);
+    await updateQuantity(productId, it.quantity - 1, vendorOfferId);
   }
 };
 
   // ✅ keep old names used by your page
-  const removeFromCart = async (productId: number) => {
-    await removeItem(productId);
+  const removeFromCart = async (productId: number, vendorOfferId: number | null = null) => {
+    await removeItem(productId, vendorOfferId);
   };
 
   const clearCart = async () => {
@@ -422,7 +426,7 @@ const decrementQty = async (productId: number) => {
     bulkTierFor,
     hasBulkPricing,
     effectiveUnitPrice,
-    isQuantitySyncing: (productId: number) => quantityQueue.isPending(productId),
+    isQuantitySyncing: (productId: number, vendorOfferId: number | null = null) => quantityQueue.isPending(offerKey({ id: productId, vendorOfferId })),
     updateQuantity,
     incrementQty,
 

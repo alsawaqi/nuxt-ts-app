@@ -84,6 +84,8 @@ interface RelSubSubDepartment {
 }
 
 interface Product {
+  Vendor_Offer_Id?: number | null;
+  Seller_Name?: string;
   id: number;
   Product_Name: string;
   Product_Name_Ar?: string;
@@ -207,6 +209,7 @@ const goSubSub = () => {
 }
 
 
+const sellerOffers = ref<Array<{ vendor_offer_id: number | null; seller_name: string; price: number; stock: number }>>([])
 const product = ref<Product | null>(null)
 const specifications = ref<SpecificationGroup[]>([])
 const reviewSummary = ref<ReviewSummary>({ average_rating: '0.00', review_count: 0, distribution: {} })
@@ -390,7 +393,7 @@ const decrementQty = () => {
 
 
 const addToCart = async () => {
-  if (!product.value) return;
+  if (!product.value || offerLoading.value) return;
 
   const stock = Number(product.value.Product_Stock ?? 0)
   if (stock <= 0) {
@@ -402,6 +405,8 @@ const addToCart = async () => {
     await cart.addToCart(
       {
         id: product.value.id,
+        vendorOfferId: product.value.Vendor_Offer_Id ?? null,
+        sellerName: product.value.Seller_Name ?? "ISC",
         slug: product.value.Slug,
         name: productName(product.value),
         name_ar: product.value.Product_Name_Ar,
@@ -461,7 +466,7 @@ const productCardSlug = (item: any) => item?.slug || item?.Slug
 const openProductCard = (item: any) => {
   const nextSlug = productCardSlug(item)
   if (!nextSlug) return
-  router.push(localePath(`/product/${nextSlug}`))
+  router.push({ path: localePath(`/product/${nextSlug}`), query: item.vendor_offer_id ? { vendor_offer_id: item.vendor_offer_id } : {} })
 }
 
 const loadRecentlyViewedProducts = () => {
@@ -478,6 +483,7 @@ const rememberRecentlyViewedProduct = () => {
   const current = {
     id: product.value.id,
     slug: product.value.Slug,
+    vendor_offer_id: product.value.Vendor_Offer_Id ?? null,
     name: product.value.Product_Name,
     name_ar: product.value.Product_Name_Ar,
     image: product.value.images?.[0]?.Image_Path,
@@ -506,19 +512,27 @@ const fetchRelatedProducts = async () => {
 
 
 
+const offerLoading = ref(false)
+let productRequest = 0
 const getProducts = async (): Promise<void> => {
+  const requestId = ++productRequest
+  offerLoading.value = true
   try {
-    const response = await $axios.get(`/api/products/details/${slug.value}`)
+    const response = await $axios.get(`/api/products/details/${slug.value}`, { params: { vendor_offer_id: route.query.vendor_offer_id || undefined } })
  
+    if (requestId !== productRequest) return
     product.value = {
       ...response.data.product,
       price: parseFloat(response.data.product.price),
     }
+    sellerOffers.value = response.data.offers || []
     specifications.value = response.data.specifications
     reviewSummary.value = response.data.review_summary || reviewSummary.value
     await fetchRelatedProducts()
  
   } catch (error: any) {
+    if (requestId !== productRequest) return
+    product.value = null
     const status = Number(error?.response?.status || error?.statusCode || error?.status || 0)
     if (status === 404) {
       throw createError({
@@ -531,6 +545,8 @@ const getProducts = async (): Promise<void> => {
       statusCode: 503,
       statusMessage: 'Product information is temporarily unavailable',
     })
+  } finally {
+    if (requestId === productRequest) offerLoading.value = false
   }
 }
 
@@ -654,6 +670,8 @@ onMounted(async(): Promise<void> => {
   ])
   rememberRecentlyViewedProduct()
 })
+watch(() => route.query.vendor_offer_id, async () => { quantity.value = 1; await getProducts() })
+
 watch(slug, async (nextSlug, previousSlug) => {
   if (!previousSlug || nextSlug === previousSlug) return
 
@@ -945,6 +963,16 @@ watch(slug, async (nextSlug, previousSlug) => {
               </div>
             </div>
 
+            <fieldset v-if="sellerOffers.length" class="my-4 rounded-xl border border-slate-200 p-3">
+              <legend class="px-1 text-sm font-semibold">{{ locale === 'ar' ? 'اختر البائع' : 'Choose a seller' }}</legend>
+              <label v-for="offer in sellerOffers" :key="offer.vendor_offer_id ?? 'own'" class="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-50">
+                <input :disabled="offerLoading" type="radio" name="seller-offer" :checked="(product?.Vendor_Offer_Id ?? null) === offer.vendor_offer_id"
+                  @change="router.replace({ path: route.path, query: { ...route.query, vendor_offer_id: offer.vendor_offer_id || undefined } })" />
+                <span class="flex-1">{{ offer.seller_name }}</span>
+                <span class="font-semibold">{{ t('common.omr') }} {{ Number(offer.price).toFixed(3) }}</span>
+                <span class="text-xs text-slate-500">{{ offer.stock > 0 ? (locale === 'ar' ? 'متوفر' : 'In stock') : (locale === 'ar' ? 'غير متوفر' : 'Out of stock') }}</span>
+              </label>
+            </fieldset>
             <!-- Mobile compact row -->
             <div class="md:hidden">
               <div class="flex items-center justify-between text-sm">
@@ -1030,6 +1058,7 @@ watch(slug, async (nextSlug, previousSlug) => {
             <!-- Add to cart -->
             <button
               v-if="!isOutOfStock"
+              :disabled="offerLoading"
               @click="addToCart"
               class="mt-4 w-full bg-gradient-to-r from-[#00bfa5] to-[#00e676] hover:from-[#00a388] hover:to-[#00c853]
                      text-white text-sm font-semibold py-2.5 rounded-xl shadow transition"

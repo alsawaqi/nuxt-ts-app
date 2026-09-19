@@ -13,11 +13,12 @@ const fromBaisa = value => Number((value / 1000).toFixed(3))
 export const normalizeCheckoutItems = (items = []) => items
   .map(item => ({
     id: Number(item?.id ?? item?.product_id),
+    ...(item?.vendor_offer_id || item?.vendorOfferId ? { vendor_offer_id: Number(item.vendor_offer_id ?? item.vendorOfferId) } : {}),
     quantity: Number(item?.quantity ?? item?.qty),
     price: money(item?.price ?? item?.unit_price),
   }))
   .filter(item => Number.isInteger(item.id) && item.id > 0 && Number.isInteger(item.quantity) && item.quantity > 0 && item.price !== null)
-  .sort((a, b) => a.id - b.id)
+  .sort((a, b) => a.id - b.id || (a.vendor_offer_id || 0) - (b.vendor_offer_id || 0))
 
 export const checkoutItemsMatch = (savedItems = [], currentItems = []) => (
   JSON.stringify(normalizeCheckoutItems(savedItems)) === JSON.stringify(normalizeCheckoutItems(currentItems))

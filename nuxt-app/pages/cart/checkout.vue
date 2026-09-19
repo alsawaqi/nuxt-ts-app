@@ -394,7 +394,7 @@ const checkoutDisplayItems = computed(() => {
   if (cart.cartItems.length > 0) return cart.cartItems
   return Array.isArray(saved.value?.items) ? saved.value.items : []
 })
-const displayItemKey = (item: any) => Number(item?.product_id ?? item?.id)
+const displayItemKey = (item: any) => `${item?.product_id ?? item?.id}:${item?.vendor_offer_id ?? item?.vendorOfferId ?? 'own'}`
 const displayItemName = (item: any) => item?.product_name || productName(item)
 const displayItemImage = (item: any) => item?.image_path || item?.image || ''
 const displayItemQuantity = (item: any) => Number(item?.quantity ?? item?.qty ?? 0)
@@ -432,23 +432,6 @@ const canSubmit = computed(() => currentCheckoutReconciled.value && shippingOk.v
 const transferInvalid = computed(() => triedSubmit.value && paymentMethod.value === 'transfer' && !transferValid.value)
 
 // ---------------------
-// Qty handlers (unchanged)
-// ---------------------
-const incrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item) item.quantity++
-}
-const decrementQty = (id: number) => {
-  const item = cart.cartItems.find(i => i.id === id)
-  if (item && item.quantity > 1) item.quantity--
-}
-const onQtyInputChange = (event: Event, id: number) => {
-  const value = parseInt((event.target as HTMLInputElement).value)
-  const item = cart.cartItems.find(i => i.id === id)
-  if (!item) return
-  item.quantity = isNaN(value) || value < 1 ? 1 : value
-}
-
 // Keep address in sync if method flips
 watch(() => cart.deliveryMethod, (val) => {
   if (val !== 'ship') selectedAddress.value = null
@@ -616,6 +599,7 @@ const pendingAmwalOrderIsOwnedByThisTab = (pending: PendingAmwalOrder | null | u
 
 const currentCheckoutItems = () => cart.cartItems.map(item => ({
   id: item.id,
+  vendor_offer_id: item.vendorOfferId ?? null,
   quantity: item.quantity,
   price: cart.effectiveUnitPrice(item),
 }))
@@ -629,6 +613,7 @@ const buildPendingOrderSnapshot = (responseData: any) => {
     : cart.cartItems.map(item => ({
       ...item,
       product_id: item.id,
+        vendor_offer_id: item.vendorOfferId ?? null,
       quantity: item.quantity,
       unit_price: cart.effectiveUnitPrice(item),
       product_name: productName(item),
@@ -1581,6 +1566,7 @@ const submitOrder = async () => {
 
       cart_items: cart.cartItems.map(item => ({
         product_id: item.id,
+        vendor_offer_id: item.vendorOfferId ?? null,
         quantity: item.quantity,
         // Effective unit price (bulk tier wins over product discounts); the server
         // recomputes pricing authoritatively in place(), this keeps display == server.
@@ -2012,6 +1998,7 @@ onBeforeUnmount(() => {
 	                  <img :src="`${$r2Url}/${displayItemImage(item)}`" :alt="displayItemName(item)" class="w-16 h-16 object-cover rounded border" />
                   <div class="text-sm">
                     <p class="font-semibold text-gray-800">{{ displayItemName(item) }}</p>
+                    <p v-if="item.seller_name || item.sellerName" class="text-xs text-gray-500">{{ item.seller_name || item.sellerName }}</p>
 
                     <!-- Quantity + Buttons -->
                     <div class="flex items-center space-x-2 mt-1">

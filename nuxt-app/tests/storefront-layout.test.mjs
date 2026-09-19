@@ -64,7 +64,7 @@ test('cart quantity writes remain optimistic while checkout waits for confirmati
   const cartPage = await source('pages/cart/index.vue')
 
   const optimisticUpdate = cartStore.indexOf('existing.quantity = quantity')
-  const queuedWrite = cartStore.indexOf('quantityQueue.enqueue(product.id, quantity, confirmedQuantity)')
+  const queuedWrite = cartStore.indexOf('quantityQueue.enqueue(offerKey(product), quantity, confirmedQuantity)')
 
   assert.ok(optimisticUpdate >= 0)
   assert.ok(queuedWrite > optimisticUpdate)

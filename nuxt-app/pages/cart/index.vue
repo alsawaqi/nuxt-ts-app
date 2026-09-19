@@ -686,7 +686,7 @@ const requestQuotes = async () => {
 
 
 const quoteKey = computed(() => {
-  const itemsKey = cart.cartItems.map(i => `${i.id}:${i.quantity}`).join('|')
+  const itemsKey = cart.cartItems.map(i => `${i.id}:${i.vendorOfferId ?? 'own'}:${i.quantity}`).join('|')
   return `${cart.deliveryMethod}|${cart.selectedAddressId ?? ''}|${itemsKey}`
 })
 
@@ -834,13 +834,13 @@ const runQuantityMutation = async (action: () => Promise<void>) => {
   })
 }
 
-const onQtyInputChange = async (e: Event, id: number) => {
+const onQtyInputChange = async (e: Event, id: number, vendorOfferId: number | null = null) => {
   const v = (e.target as HTMLInputElement).valueAsNumber
-  if (v > 0) await runQuantityMutation(() => cart.updateQuantity(id, v))
+  if (v > 0) await runQuantityMutation(() => cart.updateQuantity(id, v, vendorOfferId))
 }
 
-const incrementQty = async (id: number) => await runQuantityMutation(() => cart.incrementQty(id))
-const decrementQty = async (id: number) => await runQuantityMutation(() => cart.decrementQty(id))
+const incrementQty = async (id: number, vendorOfferId: number | null = null) => await runQuantityMutation(() => cart.incrementQty(id, vendorOfferId))
+const decrementQty = async (id: number, vendorOfferId: number | null = null) => await runQuantityMutation(() => cart.decrementQty(id, vendorOfferId))
 
 const loadCountries = async () => {
   try {
@@ -946,8 +946,8 @@ const onClearCart = async () => {
   await runCartMutation(() => cart.clearCart())
 }
 
-const onRemoveItem = async (id: number) => {
-  await runCartMutation(() => cart.removeFromCart(id))
+const onRemoveItem = async (id: number, vendorOfferId: number | null = null) => {
+  await runCartMutation(() => cart.removeFromCart(id, vendorOfferId))
 }
 
 
@@ -1190,21 +1190,22 @@ onBeforeUnmount(() => {
           <p class="sr-only" role="status" aria-live="polite">
             {{ cart.quantitySyncPending ? t('cart.updatingCart') : '' }}
           </p>
-          <div v-for="item in cart.cartItems" :key="item.id"
+          <div v-for="item in cart.cartItems" :key="`${item.id}:${item.vendorOfferId ?? 'own'}`"
             class="px-3 sm:px-5 py-3 sm:py-4 border-b last:border-b-0 bg-white/90">
             <div class="grid grid-cols-[64px_1fr_auto] sm:grid-cols-[84px_1fr_auto] gap-3 sm:gap-4 items-start">
               <!-- image -->
-              <NuxtLink :to="`/product/${item.slug}`" class="block rounded-lg overflow-hidden ring-1 ring-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" :aria-label="t('listing.viewProduct', { name: productName(item) })">
+              <NuxtLink :to="{ path: `/product/${item.slug}`, query: item.vendorOfferId ? { vendor_offer_id: item.vendorOfferId } : {} }" class="block rounded-lg overflow-hidden ring-1 ring-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" :aria-label="t('listing.viewProduct', { name: productName(item) })">
                 <img :src="`${$r2Url}/${item.image}`" :alt="productName(item)" class="w-16 h-16 sm:w-20 sm:h-20 object-cover" />
               </NuxtLink>
 
               <!-- info -->
               <div class="min-w-0">
                 <h3 class="text-sm sm:text-base font-medium text-gray-900 truncate">{{ productName(item) }}</h3>
-                <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5">Item #{{ item.id }}</p>
+                <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5">Item #{{ item.id }} · {{ item.sellerName || 'ISC' }}</p>
+                <p v-if="item.isUnavailable" class="text-red-700 text-xs">{{ locale === 'ar' ? 'عرض هذا البائع غير متاح، يرجى إزالته.' : 'This seller offer is unavailable. Please remove it.' }}</p>
                 <button
                   type="button"
-                  @click.prevent="onRemoveItem(item.id)"
+                  @click.prevent="onRemoveItem(item.id, item.vendorOfferId)"
                   :disabled="cartActionBlocked"
                   :aria-label="t('cart.removeItem', { name: productName(item) })"
                   class="mt-1.5 text-xs text-[#00bfa5] hover:underline">
@@ -1214,31 +1215,31 @@ onBeforeUnmount(() => {
 
               <!-- qty + price -->
               <div class="text-right">
-                <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1" :for="`cart-qty-${item.id}`">{{ t('cart.qty') }}</label>
+                <label class="block text-[11px] sm:text-xs font-semibold text-gray-600 mb-1" :for="`cart-qty-${item.id}-${item.vendorOfferId ?? 'own'}`">{{ t('cart.qty') }}</label>
                 <div
                   class="flex items-center justify-end gap-1"
                   role="group"
-                  :aria-busy="cart.isQuantitySyncing(item.id)"
+                  :aria-busy="cart.isQuantitySyncing(item.id, item.vendorOfferId)"
                   :aria-label="t('cart.quantityFor', { name: productName(item) })"
                 >
 	                  <button
 	                    type="button"
-	                    @click="decrementQty(item.id)"
+	                    @click="decrementQty(item.id, item.vendorOfferId)"
 	                    :disabled="cartMutationInFlight || pendingRecoveryBlocked || Number(item.quantity || 1) <= 1"
 	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
 	                    :aria-label="quantityButtonLabel('decrease', productName(item), Number(item.quantity || 1) - 1, locale)">−</button>
-                  <input :id="`cart-qty-${item.id}`" type="number" min="1" v-model.number="item.quantity"
-                    @change="onQtyInputChange($event, item.id)" class="w-14 h-7 border rounded-md text-center text-sm"
+                  <input :id="`cart-qty-${item.id}-${item.vendorOfferId ?? 'own'}`" type="number" min="1" v-model.number="item.quantity"
+                    @change="onQtyInputChange($event, item.id, item.vendorOfferId)" class="w-14 h-7 border rounded-md text-center text-sm"
                      :max="item.Product_Stock"
-                    readonly :aria-describedby="`cart-qty-${item.id}-hint`" />
+                    readonly :aria-describedby="`cart-qty-${item.id}-${item.vendorOfferId ?? 'own'}-hint`" />
 	                  <button
 	                    type="button"
-	                    @click="incrementQty(item.id)"
+	                    @click="incrementQty(item.id, item.vendorOfferId)"
 	                    :disabled="cartMutationInFlight || pendingRecoveryBlocked || Number(item.quantity || 0) >= Number(item.Product_Stock || 0)"
 	                    class="h-7 w-7 grid place-items-center bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
 	                    :aria-label="quantityButtonLabel('increase', productName(item), Number(item.quantity || 1) + 1, locale)">+</button>
                 </div>
-                <p :id="`cart-qty-${item.id}-hint`" class="sr-only">{{ t('cart.quantityHint') }}</p>
+                <p :id="`cart-qty-${item.id}-${item.vendorOfferId ?? 'own'}-hint`" class="sr-only">{{ t('cart.quantityHint') }}</p>
                 <p class="text-xs sm:text-sm text-emerald-700 font-semibold mt-1.5">
                   {{ t('common.omr') }} {{ cart.effectiveUnitPrice(item).toFixed(3) }}
                   <span class="text-[10px] sm:text-xs text-gray-500 font-normal">/ {{ t('product.each') }}</span>
