@@ -1013,6 +1013,7 @@ const persistCheckout = () => {
 
     items: cart.cartItems.map(i => ({
       id: i.id,
+      vendor_offer_id: i.vendorOfferId ?? null,
       slug: i.slug,
       qty: i.quantity,
       // Effective unit price: bulk-tier price when a tier matches the quantity (tier wins,

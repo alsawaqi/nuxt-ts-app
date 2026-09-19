@@ -106,7 +106,7 @@ interface SavedCheckoutPrefill {
     loyalty_discount?: number
     grand: number
   }
-  items: { id: number; slug?: string; qty: number; price: number; original_price?: number; discount_amount?: number; active_discount?: any | null }[]
+  items: { id: number; vendor_offer_id?: number | null; slug?: string; qty: number; price: number; original_price?: number; discount_amount?: number; active_discount?: any | null }[]
   savedAt: string
 }
 
