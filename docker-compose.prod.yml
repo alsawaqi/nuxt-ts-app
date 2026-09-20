@@ -9,10 +9,13 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       NITRO_PORT: 3000
+      NUXT_API_BASE_INTERNAL: http://laravel-api-nginx-1
       NUXT_PUBLIC_API_BASE: https://app.avinaq.com
       NUXT_PUBLIC_UPLOADS_URL: https://app.avinaq.com/storage
       NUXT_PUBLIC_R2_URL: https://app.avinaq.com/storage
       NUXT_PUBLIC_SITE_URL: https://avinaq.com
+    volumes:
+      - isc_uploads_public:/app/.output/public/catalog:ro
     networks:
       - proxy_network
    
@@ -43,4 +46,8 @@ services:
 
 networks:
   proxy_network:
+    external: true
+
+volumes:
+  isc_uploads_public:
     external: true

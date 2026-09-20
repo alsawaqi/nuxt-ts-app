@@ -6,7 +6,7 @@ export default defineNuxtPlugin(() => {
   const router = useRouter()
 
   const instance = axios.create({
-    baseURL: config.public.apiBase,   // Prefer SAME-ORIGIN proxy like https://app.example.com/api
+    baseURL: import.meta.server ? (config.apiBaseInternal || config.public.apiBase) : config.public.apiBase,
     withCredentials: true,
   })
 

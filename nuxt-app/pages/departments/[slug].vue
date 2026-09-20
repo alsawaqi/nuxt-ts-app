@@ -44,42 +44,6 @@ const subsubdepartment = ref<SubSubDepartment | null>(null)
 
 
 
-// fetch names for the breadcrumb, using your existing endpoints
-async function resolveBreadcrumbNames() {
-  try {
-    if (parentDeptId.value) {
-      // you already use this endpoint on index.vue
-      const { data: depts } = await $axios.get('/api/productdepartment')
-      const dept = (depts || []).find((d: any) => Number(d.id) === parentDeptId.value)
-      if (dept) parentDeptRecord.value = dept
-    }
-
-    if (parentDeptId.value && parentSubId.value) {
-      // gets subs for a department; then pick the one by id
-      const { data: subs } = await $axios.get(`/api/categories/${parentDeptId.value}/subcategories`)
-      const sub = (subs || []).find((s: any) => Number(s.id) === parentSubId.value)
-      if (sub) parentSubRecord.value = sub
-    }
-
-    // Fallback: if your /api/subsubdepartments/{slug} already includes parent names,
-    // use them when query is missing (optional).
-    const d: any = subsubdepartment.value
-    if (d) {
-      if (!parentDeptRecord.value && d.Product_Department_Name) parentDeptRecord.value = d
-      if (!parentSubRecord.value && d.Sub_Department_Name) parentSubRecord.value = d
-    }
-  } catch { /* ignore */ }
-}
-
-
-
-// run when we have either query ids or the subsubdepartment loaded
-watch(
-  [parentDeptId, parentSubId, () => subsubdepartment.value],
-  resolveBreadcrumbNames,
-  { immediate: true }
-)
-
 // breadcrumb navigation helpers (send query so index.vue restores state)
 const goDept = () => router.push({
   path: localePath('/'),
@@ -392,57 +356,18 @@ const categoryPageError = (error: any) => {
   })
 }
 
-const getSlugId = async () => {
-  try {
-    const res = await $axios.get(`/api/subsubdepartments/slug/${slug.value}`)
-    const payload = res.data
-    const id = Number(payload?.data?.id ?? payload?.id ?? payload)
-    slugId.value = Number.isFinite(id) ? id : null
-
-  } catch (error) {
-    console.error('Error fetching slug ID:', error)
-    slugId.value = null
-    return null
-  }
+const applyDepartmentData = (payload: any) => {
+  subsubdepartment.value = payload?.data ?? null
+  view_option.value = Boolean(payload?.data?.View_Options)
+  slugId.value = Number(payload?.data?.id) || null
+  filters.value = (payload?.filters ?? []).map((f: any) => ({
+    id: Number(f.id), name: String(f.Product_Specification_Description_Name ?? ''),
+    type: f.input_type ?? 'select',
+    values: (f.values ?? []).map((v: any) => ({ id: Number(v.id), value: String(v.value) })),
+  }))
+  selectedFilters.value = Object.fromEntries(filters.value.map(f => [f.id, []]))
+  isloadingsubsubdepartments.value = false
 }
-
-
-const getDepartment = async () => {
-  isloadingsubsubdepartments.value = true
-  filtersError.value = ''
-  try {
-    const res = await $axios.get(`/api/subsubdepartments/${slug.value}`)
-
-    // ✅ store the whole object for title/breadcrumb fallbacks
-    subsubdepartment.value = res.data?.data ?? null
-
-    // tolerate API casing: View_Options vs view_options
-    view_option.value = res.data?.data?.View_Options;
-
-    const apiFilters = res.data.filters as any[]
-
-    filters.value = apiFilters.map((f) => ({
-      id: Number(f.id),
-      name: String(f.Product_Specification_Description_Name ?? ''),
-      type: (f.input_type ?? 'select') as 'text' | 'number' | 'select' | 'multiselect' | 'boolean',
-      values: (f.values ?? []).map((v: any) => ({
-        id: Number(v.id),
-        value: String(v.value),
-      })),
-    }))
-
-    selectedFilters.value = filters.value.reduce((acc, f) => {
-      acc[f.id] = [] as number[]
-      return acc
-    }, {} as Record<number, number[]>)
-  } catch (error: any) {
-    filtersError.value = t('listing.filtersError')
-    throw categoryPageError(error)
-  } finally {
-    isloadingsubsubdepartments.value = false
-  }
-}
-
 
 const getProducts = async (fatal = false) => {
   isloadingproducts.value = true
@@ -478,7 +403,7 @@ const getProducts = async (fatal = false) => {
 watch(selectedFilters, async () => {
   if (categoryRouteLoading) return
   queueProductsFetch()
-}, { deep: true })
+}, { deep: true, flush: 'sync' })
 
 watch([priceMin, priceMax], () => {
   if (!import.meta.client) return
@@ -514,44 +439,42 @@ const resetCategoryPage = () => {
   priceFilterActive.value = false
 }
 
-const loadCategoryPage = async () => {
+// Return a serializable payload instead of mutating plain refs during SSR.
+// The browser hydrates it once; filters still fetch live prices when changed.
+const categoryKey = computed(() => `storefront-category:${slug.value}:${parentDeptId.value || ''}:${parentSubId.value || ''}`)
+const { data: categoryData, error: categoryError } = await useAsyncData(categoryKey, async () => {
+  try {
+    const [department, productResponse, departments, subs] = await Promise.all([
+      $axios.get(`/api/subsubdepartments/${slug.value}`),
+      $axios.get(`/api/products/${slug.value}`, { params: { filters: '{}' } }),
+      parentDeptId.value ? $axios.get('/api/productdepartment') : Promise.resolve({ data: [] }),
+      parentDeptId.value && parentSubId.value
+        ? $axios.get(`/api/categories/${parentDeptId.value}/subcategories`)
+        : Promise.resolve({ data: [] }),
+    ])
+    return {
+      department: department.data,
+      products: productResponse.data,
+      parentDept: departments.data.find((d: any) => Number(d.id) === parentDeptId.value) || null,
+      parentSub: subs.data.find((d: any) => Number(d.id) === parentSubId.value) || null,
+    }
+  } catch (error) { throw categoryPageError(error) }
+})
+if (categoryError.value) throw categoryError.value
+watch(categoryData, (data) => {
+  if (!data) return
   categoryRouteLoading = true
   resetCategoryPage()
-
-  try {
-    await getDepartment()
-    await Promise.all([
-      getProducts(true),
-      getSlugId(),
-    ])
-  } finally {
-    categoryRouteLoading = false
-  }
-}
-
-if (import.meta.server) {
-  await loadCategoryPage()
-}
-
-onMounted(async () => {
-  if (!subsubdepartment.value) {
-    try {
-      await loadCategoryPage()
-    } catch (error) {
-      showError(error as any)
-    }
-  }
-})
-
-watch(slug, async (nextSlug, previousSlug) => {
-  if (!previousSlug || nextSlug === previousSlug) return
-
-  try {
-    await loadCategoryPage()
-  } catch (error) {
-    showError(error as any)
-  }
-})
+  applyDepartmentData(data.department)
+  parentDeptRecord.value = data.parentDept || (data.department?.data?.Product_Department_Name ? data.department.data : null)
+  parentSubRecord.value = data.parentSub || (data.department?.data?.Sub_Department_Name ? data.department.data : null)
+  headers.value = data.products.headers ?? []
+  rows.value = data.products.products ?? []
+  syncPriceBounds(data.products.price_range)
+  isloadingproducts.value = false
+  categoryRouteLoading = false
+}, { immediate: true, flush: 'sync' })
+watch(categoryError, (error) => { if (error) showError(error) })
 
 onBeforeUnmount(() => {
   if (productsTimer) clearTimeout(productsTimer)
@@ -908,7 +831,7 @@ onBeforeUnmount(() => {
           <div class="border rounded p-4 flex flex-col items-center text-center">
 
 
-            <img :src="`${$r2Url}/` + subsubdepartment?.Image_Path" alt="Insulated" class="h-16 mb-2">
+            <StorefrontImage sizes="64px" :width="128" :height="128" loading="eager" :src="`${$r2Url}/` + subsubdepartment?.Image_Path" alt="Insulated" class="h-16 mb-2" />
 
           </div>
 
@@ -974,7 +897,7 @@ onBeforeUnmount(() => {
               class="group relative rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 hover:shadow-lg hover:-translate-y-[2px] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/50">
               <!-- top image -->
               <div class="aspect-[4/3] overflow-hidden bg-slate-50">
-                <img :src="row.image?.Image_Path" :alt="productName(row)"
+                <StorefrontImage sizes="80px" :width="160" :height="160" :src="row.image?.Image_Path" :alt="productName(row)"
                   class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                   loading="lazy" />
 

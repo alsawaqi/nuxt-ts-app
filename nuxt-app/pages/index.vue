@@ -929,7 +929,7 @@ onMounted(async () => {
                   <foreignObject x="48" y="55" width="144" height="130">
                     <div class="flex h-full w-full flex-col items-center justify-center px-2 text-center pointer-events-none">
                       <div class="mb-2 grid h-11 w-11 place-items-center overflow-hidden rounded-2xl bg-slate-50 ring-1 ring-slate-200">
-                        <img v-if="selectedPieImage" :src="selectedPieImage" alt="" class="h-full w-full object-contain p-1" />
+                        <StorefrontImage v-if="selectedPieImage" :src="selectedPieImage" alt="" class="h-full w-full object-contain p-1"  />
                         <ChartPieIcon v-else class="h-5 w-5 text-[#07B6C6]" />
                       </div>
                       <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
@@ -985,7 +985,7 @@ onMounted(async () => {
               <div v-if="viewMode === 'grid'">
                 <TransitionGroup name="cat" tag="div"
                   class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  <button v-for="department in prodcutsDepartments" :key="department.id"
+                  <button v-for="(department, imageIndex) in prodcutsDepartments" :key="department.id"
                     @click="fetchSubCategories(department.id)" :aria-label="categoryName(department)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                                       hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
                                       focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
@@ -993,7 +993,7 @@ onMounted(async () => {
                       <!-- Image area -->
                       <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                                               ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + department.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
+                        <StorefrontImage :src="`${$r2Url}/` + department.Image_path" alt="" :loading="imageIndex < 2 ? 'eager' : 'lazy'" :fetchpriority="imageIndex === 0 ? 'high' : 'auto'" class="absolute inset-0 h-full w-full object-contain p-1"  />
                       </div>
 
                       <!-- Title -->
@@ -1013,9 +1013,9 @@ onMounted(async () => {
 
               <!-- List Mode -->
               <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-                <div v-for="department in prodcutsDepartments" :key="department.id" @click="fetchSubCategories(department.id)"
+                <div v-for="(department, imageIndex) in prodcutsDepartments" :key="department.id" @click="fetchSubCategories(department.id)"
                   class="flex items-center gap-4 p-4 cursor-pointer hover:bg-gray-50">
-                  <img :src="`${$r2Url}/` + department.Image_path" alt="" class="h-16 w-16 object-contain" />
+                  <StorefrontImage :src="`${$r2Url}/` + department.Image_path" alt="" class="h-16 w-16 object-contain"  />
                   <span class="text-base font-medium text-gray-800">{{ categoryName(department) }}</span>
                 </div>
               </div>
@@ -1027,14 +1027,14 @@ onMounted(async () => {
               <!-- GRID mode -->
               <div v-if="viewMode === 'grid'" class="">
                 <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
+                  <button v-for="(sub, imageIndex) in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
                     :aria-label="categoryName(sub)" class="group relative text-left rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm
                   hover:shadow-md hover:ring-slate-300 transition-all duration-200 focus:outline-none
                   focus-visible:ring-2 focus-visible:ring-[#07B6C6] focus-visible:ring-offset-1 h-full">
                     <div class="flex h-full flex-col p-4">
                       <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
+                        <StorefrontImage :src="`${$r2Url}/` + sub.Image_path" alt="" :loading="imageIndex < 2 ? 'eager' : 'lazy'" :fetchpriority="imageIndex === 0 ? 'high' : 'auto'" class="absolute inset-0 h-full w-full object-contain p-1"  />
                       </div>
 
                       <h3 class="mt-3 min-h-10 text-[13px] sm:text-[14px] leading-5 font-semibold text-slate-800 line-clamp-2">
@@ -1052,9 +1052,9 @@ onMounted(async () => {
 
               <!-- LIST mode -->
               <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-                <button v-for="sub in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
+                <button v-for="(sub, imageIndex) in subCategories" :key="sub.id" @click="fetchSubSubCategories(sub.id)"
                   class="flex items-center gap-4 p-4 text-left hover:bg-gray-50">
-                  <img :src="`${$r2Url}/` + sub.Image_path" alt="" class="h-16 w-16 object-contain" />
+                  <StorefrontImage :src="`${$r2Url}/` + sub.Image_path" alt="" class="h-16 w-16 object-contain"  />
                   <span class="text-base font-medium text-gray-800">{{ categoryName(sub) }}</span>
                 </button>
               </div>
@@ -1068,7 +1068,7 @@ onMounted(async () => {
               <!-- GRID mode -->
               <div v-if="viewMode === 'grid'">
                 <div class="grid gap-4 sm:gap-5 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-                  <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
+                  <NuxtLink v-for="(subSub, imageIndex) in subSubCategories" :key="subSub.id" :to="{
                     path: localePath(`/departments/${subSub.Slug}`),
                     query: {
                       deptId: selectedDepartment ?? undefined,
@@ -1080,7 +1080,7 @@ onMounted(async () => {
                     <div class="flex h-full flex-col p-4">
                       <div class="aspect-[5/4] w-full rounded-xl bg-slate-50 relative grid place-items-center
                           ring-1 ring-slate-100 overflow-hidden">
-                        <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="absolute inset-0 h-full w-full object-contain p-1" />
+                        <StorefrontImage :src="`${$r2Url}/` + subSub.Image_Path" alt="" :loading="imageIndex < 2 ? 'eager' : 'lazy'" :fetchpriority="imageIndex === 0 ? 'high' : 'auto'" class="absolute inset-0 h-full w-full object-contain p-1"  />
                       </div>
 
                       <h3 class="mt-3 min-h-10 text-[13px] sm:text-[14px] leading-5 font-semibold text-slate-800 line-clamp-2">
@@ -1098,7 +1098,7 @@ onMounted(async () => {
 
               <!-- LIST mode -->
               <div v-else class="flex flex-col divide-y divide-gray-200 bg-white rounded-md ring-1 ring-gray-300">
-                <NuxtLink v-for="subSub in subSubCategories" :key="subSub.id" :to="{
+                <NuxtLink v-for="(subSub, imageIndex) in subSubCategories" :key="subSub.id" :to="{
                   path: localePath(`/departments/${subSub.Slug}`),
                   query: {
                     deptId: selectedDepartment ?? undefined,
@@ -1106,7 +1106,7 @@ onMounted(async () => {
                     subSubId: subSub.id
                   }
                 }" class="flex items-center gap-4 p-4 hover:bg-gray-50">
-                  <img :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="h-16 w-16 object-contain" />
+                  <StorefrontImage :src="`${$r2Url}/` + subSub.Image_Path" alt="" class="h-16 w-16 object-contain"  />
                   <span class="text-base font-medium text-gray-800">
                     {{ categoryName(subSub) }}
                   </span>
@@ -1134,7 +1134,7 @@ onMounted(async () => {
 
         <div v-for="brand in productBrands"
           class="flex-shrink-0 w-32 h-20 bg-white rounded shadow flex items-center justify-center p-2">
-          <img :src="`${$r2Url}/` + brand.Brands_Image_Path" alt="DeWalt" class="h-full object-contain">
+          <StorefrontImage :src="`${$r2Url}/` + brand.Brands_Image_Path" alt="DeWalt" class="h-full object-contain" />
         </div>
 
 

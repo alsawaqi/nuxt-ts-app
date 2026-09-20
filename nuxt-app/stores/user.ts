@@ -17,7 +17,8 @@ export const useUserStore = defineStore('user', () => {
 
   const clearUser = () => {
     user.value = null
-    fetched.value = false
+    fetched.value = true
+    customer.value = null
     if (import.meta.client) useLoyaltyStore().clear()
   }
 

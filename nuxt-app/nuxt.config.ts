@@ -15,7 +15,13 @@ export default defineNuxtConfig({
 
   css: ['assets/css/storefront-rtl.css'],
 
-  modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
+  modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxt/image'],
+  image: { provider: 'ipx', quality: 78, format: ['webp'], domains: [] },
+  routeRules: {
+    '/**': { headers: { 'cache-control': 'private, no-store' } },
+    '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/_ipx/**': { headers: { 'cache-control': 'public, max-age=3600' } },
+  },
   components: true,
 
   devtools: {
@@ -49,6 +55,7 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    apiBaseInternal: '',
     public: {
       apiBase,
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',

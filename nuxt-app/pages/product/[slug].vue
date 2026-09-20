@@ -772,11 +772,11 @@ watch(slug, async (nextSlug, previousSlug) => {
         class="bg-white cursor-zoom-in"
       >
         <div class="aspect-[4/3] md:aspect-[5/4] flex items-center justify-center bg-slate-50">
-          <img
+          <StorefrontImage :width="900" :height="900" sizes="90vw md:45vw lg:600px"
             :src="`${$r2Url}/${img.Image_Path}`"
             :alt="productName(product) || 'Product image'"
             class="block max-h-[420px] w-auto object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"
-            loading="lazy"
+            :loading="i === 0 ? 'eager' : 'lazy'" :fetchpriority="i === 0 ? 'high' : 'auto'"
              
           />
         </div>
@@ -826,7 +826,7 @@ watch(slug, async (nextSlug, previousSlug) => {
         : 'ring-slate-200 hover:ring-[#07B6C6]'"
       :title="`Preview ${i+1}`"
     >
-      <img
+      <StorefrontImage :width="144" :height="144" sizes="72px"
         :src="`${$r2Url}/${img.Image_Path}`"
         :alt="`Thumbnail ${i+1}`"
         class="w-full h-full object-cover"
