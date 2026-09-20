@@ -772,7 +772,7 @@ watch(slug, async (nextSlug, previousSlug) => {
         class="bg-white cursor-zoom-in"
       >
         <div class="aspect-[4/3] md:aspect-[5/4] flex items-center justify-center bg-slate-50">
-          <StorefrontImage :width="900" :height="900" sizes="90vw md:45vw lg:600px"
+          <StorefrontImage :width="900" :height="900" sizes="xs:90vw sm:90vw md:45vw lg:600px"
             :src="`${$r2Url}/${img.Image_Path}`"
             :alt="productName(product) || 'Product image'"
             class="block max-h-[420px] w-auto object-contain transition-transform duration-500 ease-out group-hover:scale-[1.03]"

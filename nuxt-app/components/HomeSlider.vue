@@ -98,7 +98,7 @@ import 'swiper/css/pagination'
       >
         <SwiperSlide v-for="(s, index) in slides" :key="s.id">
           <NuxtLink v-if="s.Link_Url" :to="s.Link_Url" class="relative block home-slide">
-            <StorefrontImage :src="img(s)" :width="1600" :height="600" sizes="100vw" fallback="/images/banners.jpg" :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(s) || 'Advertisement slider'" />
+            <StorefrontImage :src="img(s)" :width="1600" :height="600" sizes="xs:100vw sm:100vw md:100vw lg:100vw xl:1280px" fallback="/images/banners.jpg" :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(s) || 'Advertisement slider'" />
             <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-900/48 to-transparent"></div>
             <div aria-hidden="true" class="absolute inset-0 hero-wash [mask-image:radial-gradient(80%_60%_at_20%_40%,black,transparent)] bg-[linear-gradient(to_right,#c2ff4a33,#22d3ee33_35%,transparent_70%)]"></div>
             <div class="absolute inset-0 flex items-center">
@@ -119,7 +119,7 @@ import 'swiper/css/pagination'
           </NuxtLink>
 
           <div v-else class="relative block home-slide">
-            <StorefrontImage :src="img(s)" :width="1600" :height="600" sizes="100vw" fallback="/images/banners.jpg" :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(s) || 'Advertisement slider'" />
+            <StorefrontImage :src="img(s)" :width="1600" :height="600" sizes="xs:100vw sm:100vw md:100vw lg:100vw xl:1280px" fallback="/images/banners.jpg" :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(s) || 'Advertisement slider'" />
             <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-900/48 to-transparent"></div>
             <div aria-hidden="true" class="absolute inset-0 hero-wash [mask-image:radial-gradient(80%_60%_at_20%_40%,black,transparent)] bg-[linear-gradient(to_right,#c2ff4a33,#22d3ee33_35%,transparent_70%)]"></div>
             <div class="absolute inset-0 flex items-center">
@@ -140,7 +140,7 @@ import 'swiper/css/pagination'
 
       <template #fallback>
         <div v-if="slides[0]" class="relative block home-slide">
-          <StorefrontImage :src="img(slides[0])" :width="1600" :height="600" sizes="100vw" fallback="/images/banners.jpg" loading="eager" fetchpriority="high" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(slides[0]) || 'ISC Depot industrial supplies'" />
+          <StorefrontImage :src="img(slides[0])" :width="1600" :height="600" sizes="xs:100vw sm:100vw md:100vw lg:100vw xl:1280px" fallback="/images/banners.jpg" loading="eager" fetchpriority="high" class="w-full h-[220px] md:h-[300px] lg:h-[360px] object-cover" :alt="slideTitle(slides[0]) || 'ISC Depot industrial supplies'" />
           <div aria-hidden="true" class="absolute inset-0 bg-gradient-to-r from-slate-950/88 via-slate-900/48 to-transparent"></div>
           <div class="absolute inset-0 flex items-center">
             <div class="max-w-screen-xl mx-auto w-full px-4">
